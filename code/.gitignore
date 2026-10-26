@@ -1,0 +1,8 @@
+# 构建与发布产物
+bin/
+obj/
+publish/
+*.user
+# WebView2 运行时用户数据目录（随 exe 生成）
+*.WebView2/
+.vs/
