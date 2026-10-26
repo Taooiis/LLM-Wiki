@@ -1,0 +1,229 @@
+using System.Globalization;
+using System.IO;
+using System.Text;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using S = DocumentFormat.OpenXml.Spreadsheet;
+using W = DocumentFormat.OpenXml.Wordprocessing;
+
+namespace LlmWiki.App.Services;
+
+/// <summary>
+/// Office→Markdown 转换（spec 02 §6.2）。
+/// 纯函数：任何异常都返回 error，不产生半成品文件；调用方负责成对落盘。
+/// </summary>
+public static class OfficeConverter
+{
+    // xlsx 大表截断阈值（spec 02 §6.2）
+    private const int MaxRowsPerSheet = 200;
+
+    /// <summary>docx → Markdown：标题/列表/加粗斜体/表格；不可转换元素记入"转换损失"注释。</summary>
+    public static (string? md, string error) ConvertDocx(string filename, byte[] content)
+    {
+        try
+        {
+            using var ms = new MemoryStream(content);
+            using var doc = WordprocessingDocument.Open(ms, false);
+            var body = doc.MainDocumentPart?.Document?.Body
+                ?? throw new InvalidDataException("docx 无正文");
+
+            var losses = new List<string>();
+            var sb = new StringBuilder();
+            var lastWasBlock = true;
+
+            foreach (var child in body.ChildElements)
+            {
+                switch (child)
+                {
+                    case W.Paragraph p: AppendParagraph(sb, p, losses, filename, ref lastWasBlock); break;
+                    case W.Table t: AppendTable(sb, t, ref lastWasBlock); break;
+                    default:
+                        if (losses.Count == 0 || losses[^1] != child.LocalName)
+                            losses.Add(child.LocalName);
+                        break;
+                }
+            }
+
+            var md = sb.ToString().TrimEnd() + "\n";
+            if (losses.Count > 0)
+                md = $"<!-- 转换损失（{filename}）：{string.Join("、", losses.Distinct())} -->\n" + md;
+            return (md, "");
+        }
+        catch (Exception e)
+        {
+            return (null, "Word 转换失败：" + e.Message);
+        }
+    }
+
+    // 段落：标题样式 → #；带 numPr → 列表项；加粗斜体内联
+    private static void AppendParagraph(StringBuilder sb, W.Paragraph p, List<string> losses, string filename, ref bool lastWasBlock)
+    {
+        int heading = 0;
+        var style = p.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
+        if (style != null)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(style, @"Heading(\d)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (m.Success) heading = int.Parse(m.Groups[1].Value);
+        }
+
+        var text = RunsToMarkdown(p.ChildElements);
+        if (heading > 0 && text.Trim().Length > 0)
+        {
+            sb.Append('\n').Append('#', Math.Min(heading, 6)).Append(' ').Append(text.Trim()).Append("\n\n");
+            lastWasBlock = true;
+            return;
+        }
+
+        bool isListItem = p.ParagraphProperties?.NumberingProperties != null;
+        var line = isListItem ? "- " + text.Trim() : text.TrimEnd();
+
+        if (line.Length > 0)
+        {
+            if (isListItem)
+            {
+                sb.Append(line).Append('\n');
+            }
+            else
+            {
+                if (!lastWasBlock) sb.Append('\n');
+                sb.Append(line).Append("\n\n");
+            }
+        }
+        else if (!lastWasBlock)
+        {
+            sb.Append('\n');
+        }
+        lastWasBlock = true;
+    }
+
+    // 一组 run → md（加粗 **…** / 斜体 *…*，同段落内整句聚合）
+    private static string RunsToMarkdown(IEnumerable<OpenXmlElement> elements)
+    {
+        var sb = new StringBuilder();
+        foreach (var el in elements)
+        {
+            if (el is W.Run r)
+            {
+                var text = r.InnerText;
+                if (text.Length == 0) continue;
+                var props = r.RunProperties;
+                var bold = props?.Bold?.Val?.Value ?? props?.Bold != null;
+                var italic = props?.Italic?.Val?.Value ?? props?.Italic != null;
+                if (bold && italic) sb.Append("***").Append(text).Append("***");
+                else if (bold) sb.Append("**").Append(text).Append("**");
+                else if (italic) sb.Append('*').Append(text).Append('*');
+                else sb.Append(text);
+            }
+            else if (el.LocalName == "hyperlink")
+            {
+                // 超链接保留文字，目标 URL 不展开（内链文档不动）
+                sb.Append(el.InnerText);
+            }
+            else if (el.LocalName is "proofErr" or "bookmarkStart" or "bookmarkEnd" or "proofErr")
+            {
+                // 标记类节点直接跳过
+            }
+            else if (el.LocalName is "t" or "br" or "tab" or "instrText" or "fldChar" or "noBreakHyphen")
+            {
+                sb.Append(el.InnerText);
+            }
+        }
+        return sb.ToString();
+    }
+
+    // 表格 → md 表格（首行当表头）
+    private static void AppendTable(StringBuilder sb, W.Table t, ref bool lastWasBlock)
+    {
+        var rows = t.Elements<W.TableRow>().ToList();
+        if (rows.Count > 0)
+        {
+            sb.Append('\n');
+            foreach (var (row, i) in rows.Select((r, i) => (r, i)))
+            {
+                var cells = row.Elements<W.TableCell>()
+                    .Select(c => string.Join("<br>", c.Elements<W.Paragraph>().Select(p => RunsToMarkdown(p.ChildElements).Trim())))
+                    .ToList();
+                sb.Append("| ").Append(string.Join(" | ", cells)).Append(" |\n");
+                if (i == 0) sb.AppendLine(string.Join("", cells.Select(_ => "| --- "))) ;
+            }
+        }
+        lastWasBlock = true;
+    }
+
+    /// <summary>xlsx → Markdown：每 sheet 一个 ##；公式读缓存值；>200 行截断并指回原件（spec 02 §6.2）。</summary>
+    public static (string? md, string error) ConvertXlsx(string filename, byte[] content)
+    {
+        try
+        {
+            using var ms = new MemoryStream(content);
+            using var doc = SpreadsheetDocument.Open(ms, false);
+            var workbookPart = doc.WorkbookPart ?? throw new InvalidDataException("xlsx 无工作簿");
+            var sharedStrings = LoadSharedStrings(workbookPart);
+
+            var sb = new StringBuilder();
+            var sheets = workbookPart.Workbook?.Sheets?.Elements<S.Sheet>().ToList() ?? [];
+            foreach (var sheet in sheets)
+            {
+                var name = sheet.Name?.Value ?? "Sheet";
+                sb.Append("\n## ").Append(name).Append("\n\n");
+                if (sheet.Id?.Value is not string id || workbookPart.GetPartById(id) is not WorksheetPart wsPart)
+                    continue;
+
+                var data = wsPart.Worksheet?.GetFirstChild<S.SheetData>();
+                if (data == null) continue;
+
+                var rows = data.Elements<S.Row>().ToList();
+                var took = Math.Min(rows.Count, MaxRowsPerSheet);
+                for (var i = 0; i < took; i++)
+                {
+                    var cells = RowCells(rows[i], sharedStrings);
+                    sb.Append("| ").Append(string.Join(" | ", cells)).Append(" |\n");
+                    if (i == 0)
+                    {
+                        var sep = cells.Count == 0 ? 1 : cells.Count;
+                        sb.Append('|').Append(string.Concat(Enumerable.Repeat(" --- |", sep))).Append('\n');
+                    }
+                }
+                if (rows.Count > MaxRowsPerSheet)
+                    sb.Append($"\n> 已截断 {rows.Count - MaxRowsPerSheet} 行，原件见 raw/original/{filename}\n");
+            }
+            return (sb.ToString().TrimStart() + "\n", "");
+        }
+        catch (Exception e)
+        {
+            return (null, "Excel 转换失败：" + e.Message);
+        }
+    }
+
+    private static List<string> LoadSharedStrings(WorkbookPart wb)
+    {
+        var sst = wb.SharedStringTablePart?.SharedStringTable;
+        if (sst == null) return [];
+        return [.. sst.Elements<S.SharedStringItem>().Select(item => item.InnerText)];
+    }
+
+    // 一行 → 单元格文本清单（共享字符串/内联串/数值；公式有缓存值读缓存，spec 02 §6.2）
+    private static List<string> RowCells(S.Row row, List<string> sharedStrings)
+    {
+        var result = new List<string>();
+        foreach (var cell in row.Elements<S.Cell>())
+        {
+            string text;
+            // DataType 在此 SDK 版本为枚举包装：一律走字符串比对（kinds: inlineStr / s，数字无 t 属性）
+            var kind = cell.DataType?.ToString();
+            if (kind == "inlineStr")
+                text = cell.InlineString?.InnerText ?? "";
+            else if (cell.CellValue != null && cell.CellValue.InnerText.Length > 0)
+            {
+                text = cell.CellValue.InnerText;
+                if (kind == "s"
+                    && int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx)
+                    && idx >= 0 && idx < sharedStrings.Count)
+                    text = sharedStrings[idx];
+            }
+            else text = "";
+            result.Add(text.Replace("|", "\\|").Replace("\n", "<br>"));
+        }
+        return result;
+    }
+}

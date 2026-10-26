@@ -118,8 +118,8 @@ public class FileBridgeTests : IDisposable
     [Fact]
     public void HashUtil_StableSha256()
     {
-        Assert.Equal(HashUtil.Sha256Text("abc"),
-            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+        Assert.Equal("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            HashUtil.Sha256Text("abc"));
         Assert.Equal(64, HashUtil.Sha256Text("").Length);
     }
 
