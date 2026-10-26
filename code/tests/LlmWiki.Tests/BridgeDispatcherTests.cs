@@ -11,15 +11,16 @@ public class BridgeDispatcherTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "llmwiki-br-" + Guid.NewGuid().ToString("N"));
     private readonly BridgeDispatcher _bridge;
+    private readonly ConfigService _cfg;
     private readonly string _wikis;
 
     public BridgeDispatcherTests()
     {
         _wikis = Path.Combine(_root, "wikis");
         Directory.CreateDirectory(_wikis);
-        var cfg = new ConfigService(_root);
-        cfg.SetWikisDir(_wikis, out _);
-        _bridge = new BridgeDispatcher(cfg, new KbService(_wikis), new FileBridge(_wikis), new UploadService(_wikis));
+        _cfg = new ConfigService(_root);
+        _cfg.SetWikisDir(_wikis, out _);
+        _bridge = new BridgeDispatcher(_cfg);
     }
 
     public void Dispose() { try { Directory.Delete(_root, true); } catch { } }
@@ -47,7 +48,7 @@ public class BridgeDispatcherTests : IDisposable
     public async Task Kbs_Create_List_RoundTrip()
     {
         var created = JsonNode.Parse(await _bridge.HandleAsync("kbs-create", Args(("name", "桥库"), ("scene", "研究")).ToString()))!;
-        Assert.Equal(true, created["ok"]!.GetValue<bool>());
+        Assert.True(created["ok"]!.GetValue<bool>());
 
         var list = JsonNode.Parse(await _bridge.HandleAsync("kbs-list", new JsonObject().ToString()))!;
         Assert.Contains("桥库", list["kbs"]!.AsArray().Select(n => n!.ToString()));
@@ -58,8 +59,8 @@ public class BridgeDispatcherTests : IDisposable
     {
         await _bridge.HandleAsync("kbs-create", Args(("name", "删库")).ToString());
         var r = JsonNode.Parse(await _bridge.HandleAsync("kbs-delete", Args(("name", "删库")).ToString()))!;
-        Assert.Equal(true, r["ok"]!.GetValue<bool>());
-        Assert.True(Directory.Exists(_wikis) is false || !Directory.EnumerateDirectories(_wikis).Any());
+        Assert.True(r["ok"]!.GetValue<bool>());
+        Assert.True(!Directory.Exists(_wikis) || !Directory.EnumerateDirectories(_wikis).Any());
     }
 
     [Fact]
@@ -84,7 +85,7 @@ public class BridgeDispatcherTests : IDisposable
         var b64 = Convert.ToBase64String("# 内容"u8.ToArray());
         var json = JsonNode.Parse(await _bridge.HandleAsync("upload",
             new JsonObject { ["kb"] = "上传库", ["filename"] = "桥上传.md", ["b64"] = b64 }.ToString()))!;
-        Assert.Equal(true, json["ok"]!.GetValue<bool>());
+        Assert.True(json["ok"]!.GetValue<bool>());
         Assert.True(File.Exists(Path.Combine(_wikis, "上传库", "raw", "sources", "桥上传.md")));
     }
 
@@ -95,5 +96,57 @@ public class BridgeDispatcherTests : IDisposable
         Assert.True(pc["pcs"]!.AsArray().Count >= 0); // 形状核心：有 pcs 数组（net view 失败也空数组不 5xx）
         var sh = JsonNode.Parse(await _bridge.HandleAsync("net-shares", Args(("pc", "不存在的主机xyz")).ToString()))!;
         Assert.NotNull(sh["shares"]);
+    }
+
+    // ---------- 提示词命令（Task 7） ----------
+
+    [Fact]
+    public async Task Prompt_Query_ReturnsFilledPromptWithAbsoluteRoot()
+    {
+        await _bridge.HandleAsync("kbs-create", Args(("name", "提示库")).ToString());
+        var json = JsonNode.Parse(await _bridge.HandleAsync("prompt",
+            new JsonObject { ["kind"] = "query", ["kb"] = "提示库", ["question"] = "什么是知识库" }.ToString()))!;
+        Assert.Null(json["error"]);
+        var prompt = json["prompt"]!.ToString();
+        Assert.Contains("什么是知识库", prompt);
+        Assert.Contains(_wikis + "\\提示库", prompt);
+    }
+
+    [Fact]
+    public async Task Prompt_UnknownKind_ReturnsError()
+    {
+        var json = JsonNode.Parse(await _bridge.HandleAsync("prompt",
+            new JsonObject { ["kind"] = "nope", ["kb"] = "x" }.ToString()))!;
+        Assert.NotNull(json["error"]);
+    }
+
+    [Fact]
+    public async Task Prompt_Clean_ExpandsRealPath()
+    {
+        await _bridge.HandleAsync("kbs-create", Args(("name", "清理库")).ToString());
+        var json = JsonNode.Parse(await _bridge.HandleAsync("prompt",
+            new JsonObject { ["kind"] = "clean", ["kb"] = "清理库", ["file"] = "raw/sources/a.md" }.ToString()))!;
+        var prompt = json["prompt"]!.ToString();
+        Assert.Contains(_wikis + "\\清理库", prompt);
+        Assert.DoesNotContain("{{abs_root}}", prompt);
+    }
+
+    // ---------- 回归：改存储路径后必须立即生效 ----------
+
+    [Fact]
+    public async Task Settings_Set_NewPath_TakesEffectImmediately()
+    {
+        await _bridge.HandleAsync("kbs-create", Args(("name", "旧库")).ToString());
+        var before = JsonNode.Parse(await _bridge.HandleAsync("kbs-list", new JsonObject().ToString()))!;
+        Assert.Contains("旧库", before["kbs"]!.AsArray().Select(n => n!.ToString()));
+
+        // 切到新目录：库列表必须跟着变（服务不能绑定启动时的旧路径）
+        var newDir = Path.Combine(_root, "wikis2");
+        var set = JsonNode.Parse(await _bridge.HandleAsync("settings-set", Args(("wikisDir", newDir)).ToString()))!;
+        Assert.True(set["ok"]!.GetValue<bool>());
+
+        var after = JsonNode.Parse(await _bridge.HandleAsync("kbs-list", new JsonObject().ToString()))!;
+        Assert.DoesNotContain("旧库", after["kbs"]!.AsArray().Select(n => n!.ToString()));
+        Assert.Equal(newDir, after["root"]!.ToString());
     }
 }

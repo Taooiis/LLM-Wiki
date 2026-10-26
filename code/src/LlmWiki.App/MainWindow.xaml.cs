@@ -13,7 +13,7 @@ namespace LlmWiki.App;
 /// </summary>
 public partial class MainWindow : Window
 {
-    private BridgeDispatcher _dispatcher;
+    private BridgeDispatcher _dispatcher = null!;
 
     public MainWindow()
     {
@@ -42,29 +42,23 @@ public partial class MainWindow : Window
         string js = await File.ReadAllTextAsync(Path.Combine(wwwroot, "bridge.js"));
         await BridgeWebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(js);
 
-        // 2. 注册消息接收
+        // 2. 注册消息接收（协议见 Bridge/BridgeProtocol.cs）
         BridgeWebView.CoreWebView2.WebMessageReceived += async (_, e) =>
         {
-            var msg = JsonSerializer.Deserialize<BridgeMessage>(e.WebMessageAsJson);
+            var msg = BridgeProtocol.ParseRequest(e.WebMessageAsJson);
             if (msg == null) return;
 
             var result = await _dispatcher.HandleAsync(msg.Cmd, msg.Args);
-            
-            var resp = new { requestId = msg.RequestId, result = result };
-            BridgeWebView.CoreWebView2.PostWebMessageAsString(JsonSerializer.Serialize(resp));
+            BridgeWebView.CoreWebView2.PostWebMessageAsString(
+                BridgeProtocol.CreateResponse(msg.RequestId, result));
         };
 
-        // 3. 初始化后端分发器
+        // 3. 初始化后端分发器（服务按当前存储路径现取，改路径立即生效）
         var cfg = new ConfigService(AppContext.BaseDirectory);
-        var kb = new KbService(cfg.WikisDir);
-        var fb = new FileBridge(cfg.WikisDir);
-        var up = new UploadService(cfg.WikisDir);
-        _dispatcher = new BridgeDispatcher(cfg, kb, fb, up);
+        _dispatcher = new BridgeDispatcher(cfg);
 
         BridgeWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
             "app.local", wwwroot, CoreWebView2HostResourceAccessKind.Allow);
         BridgeWebView.CoreWebView2.Navigate("https://app.local/index.html");
     }
-
-    private record BridgeMessage(string Cmd, string Args, string RequestId);
 }

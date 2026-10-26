@@ -9,10 +9,17 @@ namespace LlmWiki.App.Bridge;
 /// <summary>
 /// JS↔C# 命令分发（Task 6）：语义逐条对齐 Demo server.js 路由表（spec 02 §4）。
 /// 入参/出参形状与 /api 一致，前端移植时只换传输不换形状。
+/// 服务按请求从 config.WikisDir 现取：改存储路径后立即生效（不绑定启动时旧路径）。
 /// </summary>
-public class BridgeDispatcher(ConfigService config, KbService kb, FileBridge fb, UploadService upload)
+public class BridgeDispatcher(ConfigService config)
 {
     private static readonly JsonSerializerOptions J = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
+    // 当前存储根下的服务（每次请求现取，避免路径切换后指向旧目录）
+    private KbService Kb => new(config.WikisDir);
+    private FileBridge Fb => new(config.WikisDir);
+    private UploadService Upload => new(config.WikisDir);
+    private PromptEngine Prompts => new(config, Fb);
 
     public async Task<string> HandleAsync(string name, string jsonArgs)
     {
@@ -43,31 +50,31 @@ public class BridgeDispatcher(ConfigService config, KbService kb, FileBridge fb,
                 // ---------- 知识库 ----------
                 case "kbs-list":
                     if (!Directory.Exists(config.WikisDir)) Directory.CreateDirectory(config.WikisDir);
-                    return Ok(new JsonObject { ["kbs"] = new JsonArray([.. kb.ListKbs().Select(n => (JsonNode?)n)]), ["root"] = config.WikisDir });
+                    return Ok(new JsonObject { ["kbs"] = new JsonArray([.. Kb.ListKbs().Select(n => (JsonNode?)n)]), ["root"] = config.WikisDir });
 
                 case "kbs-create":
                     try
                     {
-                        var p = kb.CreateKb(S("name"), string.IsNullOrWhiteSpace(S("scene")) ? "通用" : S("scene"));
+                        var p = Kb.CreateKb(S("name"), string.IsNullOrWhiteSpace(S("scene")) ? "通用" : S("scene"));
                         return Ok(new JsonObject { ["ok"] = true, ["path"] = p });
                     }
                     catch (ArgumentException e) { return Error(e.Message); }
 
                 case "kbs-delete":
-                    var (dok, derror) = kb.ValidateDelete(S("name"));
+                    var (dok, derror) = Kb.ValidateDelete(S("name"));
                     if (!dok) return Error("拒绝删除：" + derror);
-                    kb.DeleteKb(S("name"));
+                    Kb.DeleteKb(S("name"));
                     return Ok(new JsonObject { ["ok"] = true });
 
                 // ---------- 目录与文件 ----------
-                case "tree": return Ok(new JsonObject { ["tree"] = JsonObjectifyTree(fb.Tree(S("kb"))) });
+                case "tree": return Ok(new JsonObject { ["tree"] = JsonObjectifyTree(Fb.Tree(S("kb"))) });
 
                 case "file-read":
-                    var content = fb.ReadText(S("kb"), S("path"), out var readErr);
+                    var content = Fb.ReadText(S("kb"), S("path"), out var readErr);
                     return readErr.Length == 0 ? Ok(new JsonObject { ["content"] = content }) : Error(readErr);
 
                 case "file-write":
-                    return fb.WriteText(S("kb"), S("path"), S("content"), out var wErr)
+                    return Fb.WriteText(S("kb"), S("path"), S("content"), out var wErr)
                         ? Ok(new JsonObject { ["ok"] = true })
                         : Error(wErr);
 
@@ -75,20 +82,20 @@ public class BridgeDispatcher(ConfigService config, KbService kb, FileBridge fb,
                     // raw/sources 下经上传面（office 成对删除）；其他走 FileBridge（仅 md/txt）
                     var delRel = S("path").Replace('\\', '/');
                     if (delRel.StartsWith("raw/sources/"))
-                        return upload.DeleteSource(S("kb"), delRel).ok ? Ok(new JsonObject { ["ok"] = true }) : Error("删除失败");
-                    return fb.Delete(S("kb"), delRel, out var dErr) ? Ok(new JsonObject { ["ok"] = true }) : Error(dErr);
+                        return Upload.DeleteSource(S("kb"), delRel).ok ? Ok(new JsonObject { ["ok"] = true }) : Error("删除失败");
+                    return Fb.Delete(S("kb"), delRel, out var dErr) ? Ok(new JsonObject { ["ok"] = true }) : Error(dErr);
 
                 // ---------- 源与变更 ----------
-                case "sources": return Ok(new JsonObject { ["files"] = new JsonArray([.. fb.Sources(S("kb")).Select(n => (JsonNode?)n)]) });
+                case "sources": return Ok(new JsonObject { ["files"] = new JsonArray([.. Fb.Sources(S("kb")).Select(n => (JsonNode?)n)]) });
 
                 case "changes":
                     var list = new JsonArray();
-                    foreach (var c in fb.Changes(S("kb")))
+                    foreach (var c in Fb.Changes(S("kb")))
                         list.Add(new JsonObject { ["file"] = c.File, ["action"] = c.Action, ["time"] = c.Time, ["hash"] = c.Hash });
                     return Ok(new JsonObject { ["changes"] = list });
 
                 case "changes-clear":
-                    fb.ClearChanges(S("kb"), SA("files"));
+                    Fb.ClearChanges(S("kb"), SA("files"));
                     return Ok(new JsonObject { ["ok"] = true });
 
                 // ---------- 上传（base64 传输，office 由 UploadService 分派） ----------
@@ -96,10 +103,38 @@ public class BridgeDispatcher(ConfigService config, KbService kb, FileBridge fb,
                     try
                     {
                         var bytes = Convert.FromBase64String(S("b64"));
-                        var (ok, uerr, _) = upload.Upload(S("kb"), S("filename"), bytes);
+                        var (ok, uerr, _) = Upload.Upload(S("kb"), S("filename"), bytes);
                         return ok ? Ok(new JsonObject { ["ok"] = true }) : Error(uerr);
                     }
                     catch (FormatException) { return Error("文件内容不是合法 base64"); }
+
+                // ---------- 提示词生成（Task 7：六类 + 边界说明） ----------
+                case "prompt":
+                    var pe = Prompts;
+                    var kbName = S("kb");
+                    switch (S("kind"))
+                    {
+                        case "boundary":
+                            return Ok(new JsonObject { ["prompt"] = pe.Boundary(kbName) });
+                        case "ingest":
+                            // files 省略或空数组 = 列出本库全部源文档
+                            var files = SA("files");
+                            return Ok(new JsonObject { ["prompt"] = pe.Ingest(kbName, files.Length == 0 ? null : files) });
+                        case "ingest-changes":
+                            // 只传选中的变更文件名；hash 由后端从当前变更清单取（权威值）
+                            var selected = Fb.Changes(kbName).Where(c => SA("files").Contains(c.File)).ToArray();
+                            return Ok(new JsonObject { ["prompt"] = pe.IngestChanges(kbName, selected) });
+                        case "query":
+                            return Ok(new JsonObject { ["prompt"] = pe.Query(kbName, S("question")) });
+                        case "lint":
+                            return Ok(new JsonObject { ["prompt"] = pe.Lint(kbName) });
+                        case "compare":
+                            return Ok(new JsonObject { ["prompt"] = pe.Compare(kbName, S("topic")) });
+                        case "clean":
+                            return Ok(new JsonObject { ["prompt"] = pe.Clean(kbName, S("file")) });
+                        default:
+                            return Error("未知提示词类型：" + S("kind"));
+                    }
 
                 // ---------- 路径选择器 ----------
                 case "drives":
@@ -166,7 +201,7 @@ public class BridgeDispatcher(ConfigService config, KbService kb, FileBridge fb,
                 .Select(m => m.Groups[1].Value).Distinct().ToList();
         }
         catch (Exception e) { error = "没找到局域网电脑：" + e.Message; }
-        
+
         var o = new JsonObject { ["pcs"] = new JsonArray([.. pcs.Select(n => (JsonNode?)n)]) };
         if (error != null) o["error"] = error;
         return o;
@@ -187,7 +222,8 @@ public class BridgeDispatcher(ConfigService config, KbService kb, FileBridge fb,
                     var m = System.Text.RegularExpressions.Regex.Match(line, @"^(\S+)\s+磁盘\s*");
                     if (m.Success && !m.Groups[1].Value.EndsWith('$')) shares.Add(m.Groups[1].Value);
                 }
-            } catch (Exception e) { error = e.Message; }
+            }
+            catch (Exception e) { error = e.Message; }
         }
         else { error = "无效的主机名"; }
 
