@@ -1,6 +1,10 @@
 ﻿using System.IO;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Windows;
 using Microsoft.Web.WebView2.Core;
+using LlmWiki.App.Bridge;
+using LlmWiki.App.Services;
 
 namespace LlmWiki.App;
 
@@ -9,16 +13,16 @@ namespace LlmWiki.App;
 /// </summary>
 public partial class MainWindow : Window
 {
+    private BridgeDispatcher _dispatcher;
+
     public MainWindow()
     {
         InitializeComponent();
         Loaded += async (_, _) => await InitWebViewAsync();
     }
 
-    // 初始化 WebView2：本地 wwwroot 映射为 https://app.local 虚拟主机后加载面板
     private async Task InitWebViewAsync()
     {
-        // 依赖检测：缺 WebView2 运行时给明确提示（spec 04 §4）
         string? available = CoreWebView2Environment.GetAvailableBrowserVersionString();
         if (string.IsNullOrEmpty(available))
         {
@@ -34,9 +38,33 @@ public partial class MainWindow : Window
         var env = await CoreWebView2Environment.CreateAsync();
         await BridgeWebView.EnsureCoreWebView2Async(env);
 
-        // 把磁盘目录挂成虚拟主机（面板内用相对路径取资源，无跨域问题）
+        // 1. 注入 Bridge JS 垫片
+        string js = await File.ReadAllTextAsync(Path.Combine(wwwroot, "bridge.js"));
+        await BridgeWebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(js);
+
+        // 2. 注册消息接收
+        BridgeWebView.CoreWebView2.WebMessageReceived += async (_, e) =>
+        {
+            var msg = JsonSerializer.Deserialize<BridgeMessage>(e.WebMessageAsJson);
+            if (msg == null) return;
+
+            var result = await _dispatcher.HandleAsync(msg.Cmd, msg.Args);
+            
+            var resp = new { requestId = msg.RequestId, result = result };
+            BridgeWebView.CoreWebView2.PostWebMessageAsString(JsonSerializer.Serialize(resp));
+        };
+
+        // 3. 初始化后端分发器
+        var cfg = new ConfigService(AppContext.BaseDirectory);
+        var kb = new KbService(cfg.WikisDir);
+        var fb = new FileBridge(cfg.WikisDir);
+        var up = new UploadService(cfg.WikisDir);
+        _dispatcher = new BridgeDispatcher(cfg, kb, fb, up);
+
         BridgeWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
             "app.local", wwwroot, CoreWebView2HostResourceAccessKind.Allow);
         BridgeWebView.CoreWebView2.Navigate("https://app.local/index.html");
     }
+
+    private record BridgeMessage(string Cmd, string Args, string RequestId);
 }
