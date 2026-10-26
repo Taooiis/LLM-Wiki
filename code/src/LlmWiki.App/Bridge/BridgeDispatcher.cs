@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using LlmWiki.App.Services;
+using LlmWiki.App.Share;
 
 namespace LlmWiki.App.Bridge;
 
@@ -20,6 +21,9 @@ public class BridgeDispatcher(ConfigService config)
     private FileBridge Fb => new(config.WikisDir);
     private UploadService Upload => new(config.WikisDir);
     private PromptEngine Prompts => new(config, Fb);
+    // ShareService 单例（维持服务器监听状态）
+    private ShareService? _share;
+    private ShareService Share => _share ??= new ShareService(config, new FileBridge(config.WikisDir), new KbService(config.WikisDir));
 
     public async Task<string> HandleAsync(string name, string jsonArgs)
     {
@@ -150,6 +154,39 @@ public class BridgeDispatcher(ConfigService config)
                 // ---------- 局域网选择器（server.js net view 的 C# 复刻） ----------
                 case "net-pc": return NetPcs().ToJsonString(J);
                 case "net-shares": return NetShares(S("pc")).ToJsonString(J);
+
+                // ---------- 只读分享服务（Task 8） ----------
+                case "share-status":
+                    return Ok(new JsonObject
+                    {
+                        ["running"] = Share.Running,
+                        ["port"] = Share.Running ? Share.Port : 0,
+                        ["localAddress"] = Share.Running ? Share.LocalAddress() : "",
+                        ["lanAddresses"] = Share.Running ? new JsonArray([.. Share.LanAddresses().Select(n => (JsonNode?)n)]) : new JsonArray(),
+                    });
+
+                case "share-start":
+                    var portStr = S("port");
+                    int port = 0;
+                    if (portStr.Length > 0 && !int.TryParse(portStr, out port))
+                        return Error("端口号无效");
+                    if (Share.Running)
+                    {
+                        port = Share.Port;
+                    }
+                    else if (!Share.Start(port, out var sErr))
+                        return Error(sErr);
+                    return Ok(new JsonObject
+                    {
+                        ["ok"] = true,
+                        ["port"] = Share.Port,
+                        ["localAddress"] = Share.LocalAddress(),
+                        ["lanAddresses"] = new JsonArray([.. Share.LanAddresses().Select(n => (JsonNode?)n)]),
+                    });
+
+                case "share-stop":
+                    Share.Stop();
+                    return Ok(new JsonObject { ["ok"] = true, ["running"] = false });
 
                 default: return Error("未知命令：" + name);
             }

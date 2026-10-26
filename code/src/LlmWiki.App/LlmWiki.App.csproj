@@ -18,4 +18,9 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
   </ItemGroup>
 
+  <!-- Kestrel 只读分享服务（spec 03 §3） -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <None Include="wwwroot-share\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

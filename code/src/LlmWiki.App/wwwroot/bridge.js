@@ -25,6 +25,8 @@ window.api = (async (path, options = {}) => {
     '/api/net-pc': 'net-pc',
     '/api/net-shares': 'net-shares',
     '/api/prompt': 'prompt',
+    '/api/share': options.method === 'POST' ? 'share-start' : 'share-status',
+    '/api/share/stop': 'share-stop',
   };
 
   // 处理带 Query 的路径 (e.g., /api/sources?kb=...)

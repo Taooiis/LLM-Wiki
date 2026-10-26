@@ -108,8 +108,9 @@
   <button class="active" onclick="tab(0)">源文档</button>
   <button onclick="tab(1)">路径浏览</button>
   <button onclick="tab(2)">工作流（复制提示词）</button>
-  <button onclick="tab(3)">配置</button>
-  <button onclick="tab(4)">小白指南</button>
+  <button onclick="tab(3)">分享</button>
+  <button onclick="tab(4)">配置</button>
+  <button onclick="tab(5)">小白指南</button>
 </div>
 
 <main>
@@ -207,6 +208,21 @@
   </div>
 
   <div class="panel" id="p3">
+    <div class="hint">只读分享服务：局域网设备浏览你的知识库。默认关闭，开启后 Kestrel 监听 0.0.0.0。</div>
+    <div class="row">
+      <label style="font-size:13px;">端口：<input id="sharePort" type="number" value="8765" min="1024" max="65535" style="width:100px;"></label>
+      <button class="primary" onclick="startShare()">开启分享</button>
+      <button class="ghost" onclick="stopShare()">关闭分享</button>
+    </div>
+    <div id="shareStatus" class="hint" style="margin:8px 0;">未开启</div>
+    <div style="font-size:13px;color:#334"><b>手机或其它设备访问：</b></div>
+    <div id="shareLinks" style="font-family:monospace;background:#f1f5f9;padding:10px;border-radius:8px;">
+      <span style="color:#94a3b8">尚未开启</span>
+    </div>
+    <div class="hint" style="margin-top:8px;">手机浏览器扫描二维码访问；二维码只在本地生成。</div>
+  </div>
+
+  <div class="panel" id="p4">
     <div class="hint">purpose.md <b>必须你自己写</b>（AI 猜不到你要研究什么）；schema.md 建库时已填好默认值，<b>一般不用动</b>。上传文档后 AI 自动总结的是 overview / index / log 和实体概念页，不是这两个文件。</div>
     <h4>purpose.md（目标、关键问题、范围） <button class="mini-btn" onclick="openCfg('purpose.md')">编辑</button></h4>
     <pre id="purposeView">切换到本页自动加载</pre>
@@ -214,7 +230,7 @@
     <pre id="schemaView">切换到本页自动加载</pre>
   </div>
 
-  <div class="panel" id="p4">
+  <div class="panel" id="p5">
     <h3>小白指南（分类速查 · 完整版见使用说明.md）</h3>
     <details open>
       <summary><b>一、快速上手三步</b></summary>
@@ -285,7 +301,8 @@ function tab(i) {
   document.querySelectorAll('.panel').forEach((p, j) => p.classList.toggle('active', j === i));
   if (i === 1) loadTree();
   if (i === 2) loadChanges();
-  if (i === 3) loadCfg();
+  if (i === 3) loadShare();
+  if (i === 4) loadCfg();
 }
 function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 
@@ -310,6 +327,42 @@ async function resetPath() {
   if (data.error) { toast(data.error, 'err'); return; }
   toast('已恢复默认路径', 'ok');
   loadKbs();
+}
+
+// ---- 只读分享服务 (spec 03 §3) ----
+async function loadShare() {
+  const r = await api('/api/share');
+  const data = await r.json();
+  if (data.error) { toast(data.error, 'err'); return; }
+  updateShareUi(data);
+}
+function updateShareUi(data) {
+  const s = document.getElementById('shareStatus');
+  const links = document.getElementById('shareLinks');
+  if (data.running) {
+    s.textContent = '运行中 · 端口 ' + data.port;
+    s.style.color = '#16a34a';
+    links.innerHTML = data.lanAddresses.map(a => '<div>' + a + '</div>').join('') +
+      '<div style="margin-top:6px">扫描二维码或复制链接到手机浏览器</div>';
+  } else {
+    s.textContent = '未开启'; s.style.color = '#94a3b8';
+    links.innerHTML = '<span style="color:#94a3b8">点击开启后显示访问地址</span>';
+  }
+}
+async function startShare() {
+  const port = document.getElementById('sharePort').value;
+  const r = await api('/api/share', { method: 'POST', body: JSON.stringify({ port: parseInt(port) }) });
+  const data = await r.json();
+  if (data.error) { toast(data.error, 'err'); return; }
+  updateShareUi(data);
+  toast('只读分享已开启：' + data.localAddress, 'ok');
+}
+async function stopShare() {
+  const r = await api('/api/share/stop', { method: 'POST' });
+  const data = await r.json();
+  if (data.error) { toast(data.error, 'err'); return; }
+  updateShareUi(data);
+  toast('分享已关闭', 'ok');
 }
 
 // ---- 知识库 ----
