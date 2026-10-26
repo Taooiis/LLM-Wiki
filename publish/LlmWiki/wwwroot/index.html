@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Wiki 桌面知识库管理</title>
+<script src="prompt-templates.js"></script>
+<style>
+  :root { --brand: #4f46e5; --brand-dark: #4338ca; --bg: #eef0f6; --card: #ffffff; --line: #e5e7f0; --muted: #6b7280; }
+  * { box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; margin: 0; background: var(--bg); color: #1f2430; }
+  header { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 60%, #2563eb 100%); color: #fff; padding: 22px 24px; box-shadow: 0 2px 12px rgba(79,70,229,.35); }
+  header h1 { margin: 0; font-size: 22px; letter-spacing: 1px; }
+  header p { margin: 6px 0 0; font-size: 13px; opacity: .92; }
+  .bar { background: var(--card); padding: 14px 24px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; box-shadow: 0 1px 4px rgba(30,30,60,.05); }
+  .bar select, .bar input, .row input { padding: 8px 12px; font-size: 14px; border: 1px solid #d4d8e3; border-radius: 8px; outline: none; }
+  .bar select:focus, .bar input:focus, .row input:focus, textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
+  .bar button { padding: 8px 14px; cursor: pointer; }
+  #kbPath { font-size: 12px; color: var(--muted); width: 100%; }
+  .tabs { display: flex; gap: 6px; background: var(--card); padding: 10px 24px 0; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 10; }
+  .tabs button { border: none; background: none; padding: 10px 18px; font-size: 15px; cursor: pointer; color: var(--muted); border-bottom: 3px solid transparent; border-radius: 8px 8px 0 0; }
+  .tabs button:hover { background: #f1f2fa; color: var(--brand); }
+  .tabs button.active { color: var(--brand); border-color: var(--brand); font-weight: bold; background: #f4f3ff; }
+  main { padding: 20px 24px 40px; max-width: 1100px; margin: 0 auto; }
+  .panel { display: none; background: var(--card); border-radius: 12px; padding: 20px; box-shadow: 0 2px 10px rgba(30,30,60,.06); }
+  .panel.active { display: block; }
+  textarea { width: 100%; font-family: Consolas, "Courier New", monospace; font-size: 13px; padding: 10px 12px; border: 1px solid #d4d8e3; border-radius: 8px; line-height: 1.6; resize: vertical; }
+  pre { background: #f6f7fb; border: 1px solid var(--line); border-radius: 8px; padding: 12px; white-space: pre-wrap; word-break: break-all; max-height: 320px; overflow: auto; line-height: 1.6; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; align-items: center; }
+  button.primary { background: var(--brand); color: #fff; border: none; border-radius: 8px; padding: 9px 18px; cursor: pointer; font-size: 14px; transition: background .15s; }
+  button.primary:hover { background: var(--brand-dark); }
+  button.ghost { background: #fff; border: 1px solid #d4d8e3; border-radius: 8px; padding: 8px 14px; cursor: pointer; font-size: 14px; transition: all .15s; }
+  button.ghost:hover { border-color: var(--brand); color: var(--brand); }
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 12px 0; background: #fbfbfe; }
+  .card:hover { box-shadow: 0 2px 8px rgba(79,70,229,.08); }
+  .card h3 { margin: 0 0 8px; font-size: 16px; }
+  .card h3::before { content: "⚙ "; }
+  ul.tree, ul.tree ul { list-style: none; padding-left: 20px; }
+  ul.tree li { margin: 4px 0; font-size: 14px; padding: 2px 6px; border-radius: 6px; }
+  ul.tree li.dir { font-weight: bold; color: #374151; }
+  ul.tree a { cursor: pointer; color: var(--brand); text-decoration: none; }
+  ul.tree a:hover { text-decoration: underline; }
+  .hint { font-size: 13px; color: #6b5d2b; background: #fffbeb; border: 1px solid #fde68a; padding: 10px 12px; border-radius: 8px; margin: 10px 0; }
+  table.list { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.list td { border-bottom: 1px solid #f0f1f6; padding: 8px 6px; }
+  table.list tr:hover td { background: #f6f5ff; }
+  h4 { margin: 16px 0 8px; font-size: 15px; }
+  details { border: 1px solid var(--line); border-radius: 10px; margin: 10px 0; background: #fbfbfe; }
+  details summary { cursor: pointer; padding: 10px 14px; font-size: 15px; border-radius: 10px; }
+  details summary:hover { background: #f1f0ff; }
+  details p { margin: 6px 0; padding: 0 14px; font-size: 14px; line-height: 1.7; }
+  details p:last-child { padding-bottom: 10px; }
+  #modalOverlay { display: none; position: fixed; inset: 0; background: rgba(25,25,50,.5); z-index: 100; align-items: center; justify-content: center; padding: 16px; }
+  #modalOverlay.open { display: flex; }
+  #pickOverlay { display: none; position: fixed; inset: 0; background: rgba(25,25,50,.5); z-index: 110; align-items: center; justify-content: center; padding: 16px; }
+  #pickOverlay.open { display: flex; }
+  #pickList div { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f0f1f6; font-size: 14px; }
+  #pickList div:hover { background: #f6f5ff; }
+  #modalBox { background: #fff; border-radius: 14px; width: 860px; max-width: 100%; max-height: 92vh; display: flex; flex-direction: column; box-shadow: 0 12px 40px rgba(0,0,0,.25); overflow: hidden; }
+  #modalHead { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: #f6f5ff; }
+  #modalTitle { font-weight: bold; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #modalDirty { font-size: 12px; color: #b45309; }
+  #modalName { margin: 12px 16px 0; width: auto; padding: 8px 12px; font-size: 14px; border: 1px solid #d4d8e3; border-radius: 8px; }
+  #modalEditor { margin: 10px 16px; min-height: 300px; flex: 1; }
+  #modalFoot { display: flex; gap: 8px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--line); }
+  #modalMsg { font-size: 13px; color: #15803d; }
+  #toastBox { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .toast { background: #1f2430; color: #fff; padding: 10px 20px; border-radius: 24px; font-size: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.25); animation: fadeUp .2s ease; }
+  .toast.ok { background: #15803d; }
+  .toast.err { background: #b91c1c; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } }
+  .mini-btn { border: 1px solid #d4d8e3; background: #fff; border-radius: 6px; padding: 3px 10px; font-size: 12px; cursor: pointer; margin-left: 6px; white-space: nowrap; }
+  .mini-btn:hover { border-color: var(--brand); color: var(--brand); }
+  .mini-btn.danger:hover { border-color: #b91c1c; color: #b91c1c; }
+</style>
+</head>
+<body>
+<header>
+  <h1>LLM Wiki 桌面知识库管理</h1>
+  <p>管理源文档 · 可视化文件路径 · 复制提示词到任意 AI 工具 · 在线编辑保存 · 表单改配置 —— 小白三步即用</p>
+</header>
+
+<div class="bar">
+  <label>知识库：</label>
+  <select id="kbSel"></select>
+  <button onclick="loadKbs()">刷新</button>
+  <input id="newKb" placeholder="新知识库名（中文/英文）">
+  <select id="newKbScene" style="padding: 8px; border-radius: 8px; border: 1px solid #d4d8e3;">
+    <option value="通用">通用</option>
+    <option value="研究">研究</option>
+    <option value="读书">读书</option>
+    <option value="业务">业务</option>
+  </select>
+  <button class="primary" onclick="createKb()">新建知识库</button>
+  <button class="ghost" onclick="deleteKb()">删除知识库</button>
+  <div id="kbPath"></div>
+  <div class="row" style="width:100%;margin:6px 0 0;">
+    <label style="font-size:13px;">存储路径：</label>
+    <input id="storePath" style="flex:1;min-width:260px;" placeholder="如 D:\我的知识库 或 wikis">
+    <button class="ghost" onclick="openPicker()">浏览…</button>
+    <button class="ghost" onclick="savePath()">更改路径</button>
+    <button class="ghost" onclick="resetPath()">恢复默认</button>
+  </div>
+  <div style="font-size:12px;color:#888;width:100%;">更改立即生效，重启也保持；旧位置的文件不会自动搬移，需要时手动复制到新位置。</div>
+</div>
+
+<div class="tabs">
+  <button class="active" onclick="tab(0)">源文档</button>
+  <button onclick="tab(1)">路径浏览</button>
+  <button onclick="tab(2)">工作流（复制提示词）</button>
+  <button onclick="tab(3)">分享</button>
+  <button onclick="tab(4)">配置</button>
+  <button onclick="tab(5)">小白指南</button>
+</div>
+
+<main>
+  <div class="panel active" id="p0">
+    <div class="hint">只支持 .md / .txt / .docx / .xlsx。点“编辑”弹窗修改，保存即落盘；或新建/上传。</div>
+    <div class="card" id="chgCard" style="display:none;border-color:#f59e0b;">
+      <h3>待处理变更（只 Ingest 改动文档）</h3>
+      <div id="chgList"></div>
+      <div class="row">
+        <button class="primary" onclick="genChangesPrompt('chgList')">生成选中Ingest提示词</button>
+        <button class="ghost" onclick="clearChanges(false)">标记选中已处理</button>
+        <button class="ghost" onclick="clearChanges(true)">全部已处理</button>
+      </div>
+      <div style="font-size:12px;color:#888;">执行完 Ingest 后点“标记已处理”，下次只列新改动。</div>
+    </div>
+    <div class="row">
+      <button class="primary" onclick="openNewDoc()">＋ 新建文档</button>
+      <button class="ghost" onclick="loadSources()">刷新列表</button>
+      <input type="file" id="upFile" accept=".md,.txt,.docx,.xlsx">
+      <button class="ghost" onclick="upload()">上传</button>
+    </div>
+    <table class="list" id="srcTable"></table>
+  </div>
+
+  <div class="panel" id="p1">
+    <div class="row"><button class="ghost" onclick="loadTree()">刷新目录树</button></div>
+    <div id="treeBox">点击刷新查看 wikis/知识库/ 全结构（purpose / schema / raw / wiki/...）。</div>
+    <h4>文件预览 <span id="viewName" style="font-weight:normal;color:#666;"></span></h4>
+    <pre id="preview">点击树中的 .md 文件弹窗编辑，内容同步显示在这里</pre>
+  </div>
+
+  <div class="panel" id="p2">
+    <div class="hint">通用流程：<b>先做第 1 步接入</b>（边界说明写入 Agent 配置，一次即可）→ 再按需生成 Ingest / Query / Lint / Compare 提示词 → 复制去 AI 工具粘贴执行 → 回面板刷新看结果。</div>
+    <div class="card">
+      <h3>1. 边界说明（先接入 Agent，只做一次）</h3>
+      <div class="hint" style="margin:0 0 8px;">生成本库的位置、结构和读取约定，复制后粘贴进你的 Agent 配置（如全局 AGENTS.md），它就能直接找到并读取本知识库。文件清单是快照（最多 120 项，大改后重新生成覆盖）。</div>
+      <div class="row"><button class="primary" onclick="genBoundary()">生成边界说明</button></div>
+    </div>
+    <div class="card">
+      <h3>2. Ingest 处理新文档（支持批量）</h3>
+      <div class="row"><input id="ingFile" placeholder="如 xxx.md，多个用逗号分隔；留空=全部源文档" style="flex:1"></div>
+      <div class="row"><button class="primary" onclick="genPrompt('ingest')">生成提示词</button></div>
+    </div>
+    <div class="card">
+      <h3>3. Query 知识查询</h3>
+      <div class="row"><input id="qText" placeholder="你的问题，如 RAG和LLM Wiki的区别？" style="flex:1"></div>
+      <div class="row"><button class="primary" onclick="genPrompt('query')">生成提示词</button></div>
+    </div>
+    <div class="card">
+      <h3>4. Lint 健康检查</h3>
+      <div class="row"><button class="primary" onclick="genPrompt('lint')">生成提示词</button></div>
+    </div>
+    <div class="card">
+      <h3>5. Compare 对比页面</h3>
+      <div class="row"><input id="cText" placeholder="对比什么，如 Cursor vs Copilot" style="flex:1"></div>
+      <div class="row"><button class="primary" onclick="genPrompt('compare')">生成提示词</button></div>
+    </div>
+    <div class="card">
+      <h3>6. 变更文档 Ingest（只处理新增/改动/删除）</h3>
+      <div class="hint" style="margin:0 0 8px;">自动列出本库未处理的变更，勾选后只生成这些文档的 Ingest 提示词，不用全库重跑。执行完记得回源文档页“标记已处理”。</div>
+      <div id="chgListW"><span style="color:#888;font-size:13px;">切换到本页自动加载…</span></div>
+      <div class="row">
+        <button class="ghost" onclick="loadChanges()">刷新变更</button>
+        <button class="primary" onclick="genChangesPrompt('chgListW')">生成选中Ingest提示词</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>7. Clean 级联清理（源文档已删除时用）</h3>
+      <div class="hint" style="margin:0 0 8px;">删了源文档后，wiki 里的摘要页、索引条目、失效 [[链接]] 不会自动清。选一个已删除的文档生成清理提示词，交给 Agent 执行级联清理。</div>
+      <div class="row">
+        <select id="cleanFile" style="padding:8px 12px;border:1px solid #d4d8e3;border-radius:8px;font-size:14px;min-width:320px;"></select>
+        <button class="primary" onclick="genCleanPrompt()">生成 Clean 提示词</button>
+      </div>
+      <div id="cleanHint" style="font-size:12px;color:#888;">没有已删除的文档时，可在源文档页删除文件后再回来生成。</div>
+    </div>
+    <div class="card">
+      <h3>8. 提示词模板原文（手工套用）</h3>
+      <div class="hint" style="margin:0 0 8px;">离线模板原文（对应 Demo 的 prompts/*.md），自己套用时可照抄这份。</div>
+      <div class="row">
+        <select id="tplSel" onchange="showTemplate()" style="padding:8px 12px;border:1px solid #d4d8e3;border-radius:8px;font-size:14px;">
+          <option value="boundary">边界说明</option>
+          <option value="ingest">Ingest</option>
+          <option value="ingestChanges">增量 Ingest</option>
+          <option value="query">Query</option>
+          <option value="lint">Lint</option>
+          <option value="compare">Compare</option>
+          <option value="clean">Clean</option>
+        </select>
+      </div>
+      <textarea id="tplOut" rows="10" readonly></textarea>
+    </div>
+    <h4>提示词（复制去工具里用）</h4>
+    <textarea id="promptOut" rows="10"></textarea>
+    <div class="row"><button class="primary" onclick="copyPrompt()">一键复制</button><span id="copyMsg"></span></div>
+  </div>
+
+  <div class="panel" id="p3">
+    <div class="hint">只读分享服务：局域网设备浏览你的知识库。默认关闭，开启后 Kestrel 监听 0.0.0.0。</div>
+    <div class="row">
+      <label style="font-size:13px;">端口：<input id="sharePort" type="number" value="8765" min="1024" max="65535" style="width:100px;"></label>
+      <button class="primary" onclick="startShare()">开启分享</button>
+      <button class="ghost" onclick="stopShare()">关闭分享</button>
+    </div>
+    <div id="shareStatus" class="hint" style="margin:8px 0;">未开启</div>
+    <div style="font-size:13px;color:#334"><b>手机或其它设备访问：</b></div>
+    <div id="shareLinks" style="font-family:monospace;background:#f1f5f9;padding:10px;border-radius:8px;">
+      <span style="color:#94a3b8">尚未开启</span>
+    </div>
+    <div class="hint" style="margin-top:8px;">手机浏览器扫描二维码访问；二维码只在本地生成。</div>
+  </div>
+
+  <div class="panel" id="p4">
+    <div class="hint">purpose.md <b>必须你自己写</b>（AI 猜不到你要研究什么）；schema.md 建库时已填好默认值，<b>一般不用动</b>。上传文档后 AI 自动总结的是 overview / index / log 和实体概念页，不是这两个文件。</div>
+    <h4>purpose.md（目标、关键问题、范围） <button class="mini-btn" onclick="openCfg('purpose.md')">编辑</button></h4>
+    <pre id="purposeView">切换到本页自动加载</pre>
+    <h4>schema.md（结构规则、页类型） <button class="mini-btn" onclick="openCfg('schema.md')">编辑</button></h4>
+    <pre id="schemaView">切换到本页自动加载</pre>
+  </div>
+
+  <div class="panel" id="p5">
+    <h3>小白指南（分类速查 · 完整版见使用说明.md）</h3>
+    <details open>
+      <summary><b>一、快速上手三步</b></summary>
+      <p>1. 运行程序，面板会自动打开在浏览器中。用完直接关闭即可。</p>
+      <p>2. 新建知识库 → 源文档页上传 .md / .docx / .xlsx → 配置页填写目标和规则。</p>
+      <p>3. 工作流页<b>先做第 1 步接入</b>（边界说明进 Agent 配置）→ 再生成 Ingest 等提示词 → 粘贴执行 → 回面板刷新看 wiki/ 成果。</p>
+    </details>
+    <details>
+      <summary><b>二、日常使用：文档与编辑</b></summary>
+      <p>源文档页：<b>＋新建文档</b> / 上传 / 点<b>编辑</b>弹窗修改 / 删除。只收 .md/.txt。</p>
+      <p>改了哪些不用记：顶部<b>待处理变更</b>自动列出，勾选 → 生成选中 Ingest → 执行完<b>标记已处理</b>。</p>
+      <p>路径浏览页：刷新目录树，点文件名弹窗编辑，下方同步预览。</p>
+      <p>弹窗通用操作：改后标题栏 <b>● 未保存</b>提醒；<b>Ctrl+S</b> 保存；<b>Esc</b> 关闭（未保存会确认）；底部 toast 提示结果。</p>
+      <p><b>重要规则：</b>源文档的新增/修改/删除只写文件并自动记入 <b>wiki/log.md</b>，wiki 页面不会自己变——保存后按 toast 提醒去工作流页<b>重新 Ingest 该文档</b>。</p>
+    </details>
+    <details>
+      <summary><b>三、管理与配置</b></summary>
+      <p>存储路径：点<b>浏览…</b>（直达桌面/文档/程序目录、地址栏直达、面包屑直跳、点进子目录）或手填，点更改路径立即生效；旧文件不会自动搬移，需手动复制。</p>
+      <p>配置页：点 purpose.md / schema.md 旁<b>编辑</b>，弹窗改目标规则，保存即生效。</p>
+      <p>目录：<b>库名/</b> 下 purpose.md、schema.md、raw/sources/、wiki/（index/log/overview/entities/concepts/...）。</p>
+    </details>
+    <details>
+      <summary><b>四、AI 协作：工作流与边界说明</b></summary>
+      <p><b>第一步先接入：</b>点“生成边界说明”→ 复制 → 粘贴进 Agent 配置（全局 AGENTS.md 等），新会话可直接读库；换库或大改后重新生成覆盖。</p>
+      <p>工作流页：Ingest（填源文件名，支持批量留空全选）/ Query（填问题）/ Lint / Compare / <b>变更文档 Ingest（只处理新增/改动/删除）</b> → 生成 → 一键复制 → 粘贴到已接入的 AI 工具执行 → 回来刷新。</p>
+      <p>不开面板可用 <b>prompts/</b> 下离线模板（ingest/query/lint/compare/context）。</p>
+    </details>
+    <details>
+      <summary><b>五、运行与网络</b></summary>
+      <p>改完代码行为没变：先重启程序确保生效。</p>
+      <p>局域网：同一 WiFi 下用局域网地址访问；防火墙弹窗点允许。</p>
+      <p>多电脑（库在 A，B 要用）：B 直接用浏览器打开 A 的面板可看可改；B 想自己跑 AI，A 把 wikis 文件夹共享，B 面板点<b>浏览… → 🌐 局域网</b>一路点选共享，路径自动填入。双方别同时改同一文件。</p>
+    </details>
+  </div>
+</main>
+
+<div id="modalOverlay">
+  <div id="modalBox">
+    <div id="modalHead"><span id="modalTitle">编辑</span><span id="modalDirty"></span><button class="ghost" onclick="closeModal()">✕ 关闭</button></div>
+    <input id="modalName" placeholder="文件名，如 notes.md（新建时填写，需 .md/.txt 结尾）">
+    <textarea id="modalEditor" placeholder="在此编辑"></textarea>
+    <div id="modalFoot"><button class="primary" onclick="saveModal()">保存（Ctrl+S）</button><span id="modalMsg"></span><span style="flex:1"></span><span style="font-size:12px;color:#888;">Esc 关闭 · 未保存会提醒</span></div>
+  </div>
+</div>
+
+<div id="pickOverlay">
+  <div id="modalBox" style="width:640px;">
+    <div id="modalHead"><span style="font-weight:bold;flex:1;">选择存储文件夹</span><button class="ghost" onclick="closePicker()">✕ 关闭</button></div>
+    <div style="padding:12px 16px 0;display:flex;gap:8px;align-items:center;">
+      <input id="pickAddr" style="flex:1;" placeholder="粘贴或输入路径后点前往，如 D:\我的知识库">
+      <button class="ghost" onclick="pickGoAddr()">前往</button>
+    </div>
+    <div id="pickPlaces" style="padding:8px 16px 0;display:flex;gap:8px;flex-wrap:wrap;"></div>
+    <div style="padding:8px 16px 0;font-size:13px;word-break:break-all;" id="pickCur"></div>
+    <div id="pickList" style="margin:10px 16px;max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:8px;"></div>
+    <div id="modalFoot"><button class="ghost" onclick="pickUp()">⬆ 上一级</button><button class="ghost" onclick="pickDrives()">💽 磁盘</button><button class="ghost" onclick="pickNet()">🌐 局域网</button><span style="flex:1"></span><button class="primary" onclick="pickOk()">用这个文件夹</button></div>
+  </div>
+</div>
+
+<div id="toastBox"></div>
+
+<script>
+// ---- 基础 ----
+function kb() { return document.getElementById('kbSel').value; }
+let kbRoot = ''; 
+function tab(i) {
+  document.querySelectorAll('.tabs button').forEach((b, j) => b.classList.toggle('active', j === i));
+  document.querySelectorAll('.panel').forEach((p, j) => p.classList.toggle('active', j === i));
+  if (i === 1) loadTree();
+  if (i === 2) loadChanges();
+  if (i === 3) loadShare();
+  if (i === 4) loadCfg();
+}
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+
+// ---- 存储路径 ----
+async function loadSettings() {
+  const r = await api('/api/settings');
+  const data = await r.json();
+  if (data.wikisDir) document.getElementById('storePath').value = data.wikisDir;
+}
+async function savePath() {
+  const v = document.getElementById('storePath').value.trim();
+  if (!v) { toast('路径不能为空，恢复默认请点“恢复默认”', 'err'); return; }
+  const r = await api('/api/settings', { method: 'POST', body: JSON.stringify({ wikisDir: v }) });
+  const data = await r.json();
+  if (data.error) { toast(data.error, 'err'); return; }
+  toast('已切换到：' + data.wikisDir, 'ok');
+  loadKbs();
+}
+async function resetPath() {
+  const r = await api('/api/settings', { method: 'POST', body: JSON.stringify({ wikisDir: 'wikis' }) });
+  const data = await r.json();
+  if (data.error) { toast(data.error, 'err'); return; }
+  toast('已恢复默认路径', 'ok');
+  loadKbs();
+}
+
+// ---- 只读分享服务 (spec 03 §3) ----
+async function loadShare() {
+  const r = await api('/api/share');
+  const data = await r.json();
+  if (data.error) { toast(data.error, 'err'); return; }
+  updateShareUi(data);
+}
+function updateShareUi(data) {
+  const s = document.getElementById('shareStatus');
+  const links = document.getElementById('shareLinks');
+  if (data.running) {
+    s.textContent = '运行中 · 端口 ' + data.port;
+    s.style.color = '#16a34a';
+    links.innerHTML = data.lanAddresses.map(a => '<div>' + a + '</div>').join('') +
+      '<div style="margin-top:6px">扫描二维码或复制链接到手机浏览器</div>';
+  } else {
+    s.textContent = '未开启'; s.style.color = '#94a3b8';
+    links.innerHTML = '<span style="color:#94a3b8">点击开启后显示访问地址</span>';
+  }
+}
+async function startShare() {
+  const port = document.getElementById('sharePort').value;
+  const r = await api('/api/share', { method: 'POST', body: JSON.stringify({ port: parseInt(port) }) });
+  const data = await r.json();
+  if (data.error) { toast(data.error, 'err'); return; }
+  updateShareUi(data);
+  toast('只读分享已开启：' + data.localAddress, 'ok');
+}
+async function stopShare() {
+  const r = await api('/api/share/stop', { method: 'POST' });
+  const data = await r.json();
+  if (data.error) { toast(data.error, 'err'); return; }
+  updateShareUi(data);
+  toast('分享已关闭', 'ok');
+}
+
+// ---- 知识库 ----
+// 删除知识库：必须输入库名二次确认（spec D7，整库永久删除不可恢复）
+async function deleteKb() {
+  const name = kb();
+  if (!name) { toast('先选择要删除的知识库', 'err'); return; }
+  const typed = prompt('删除知识库「' + name + '」会永久删除整个目录（含 raw/original 原件），不可恢复。\n请输入库名确认：');
+  if (typed === null) return;
+  if (typed.trim() !== name) { toast('输入的库名不一致，已取消', 'err'); return; }
+  const r = await api('/api/kbs/delete', { method: 'POST', body: JSON.stringify({ name: name }) });
+  const data = await r.json();
+  if (data.error) { toast(data.error, 'err'); return; }
+  toast('已删除知识库 ' + name, 'ok');
+  await loadKbs();
+}
+async function loadKbs() {
+  const r = await api('/api/kbs');
+  const data = await r.json();
+  kbRoot = data.root || '';
+  const sel = document.getElementById('kbSel');
+  sel.innerHTML = (data.kbs || []).map(k => `<option>${esc(k)}</option>`).join('') || '<option value="">（空）先新建</option>';
+  document.getElementById('kbPath').textContent = '本地根目录：' + (data.root || '') + '  → 当前：' + (sel.value ? data.root + '\\' + sel.value : '');
+  if (sel.value) { loadSources(); }
+}
+async function createKb() {
+  const name = document.getElementById('newKb').value.trim();
+  const scene = document.getElementById('newKbScene').value;
+  if (!name) { toast('先输入知识库名', 'err'); return; }
+  const r = await api('/api/kbs', { method: 'POST', body: JSON.stringify({ name, scene }) });
+  const data = await r.json();
+  if (data.error) { toast(data.error, 'err'); return; }
+  document.getElementById('newKb').value = '';
+  await loadKbs();
+  document.getElementById('kbSel').value = name;
+  loadSources();
+}
+
+// ---- toast ----
+function toast(msg, cls) {
+  const box = document.getElementById('toastBox');
+  const d = document.createElement('div');
+  d.className = 'toast' + (cls ? ' ' + cls : '');
+  d.textContent = msg;
+  box.appendChild(d);
+  setTimeout(() => d.remove(), 2600);
+}
+
+// ---- 弹窗编辑器 ----
+let modalCtx = null; 
+function openModal(o) {
+  modalCtx = o;
+  document.getElementById('modalTitle').textContent = (o.mode === 'new' ? '新建文档' : '编辑 ') + (o.path || o.dir || '');
+  const nm = document.getElementById('modalName');
+  nm.value = o.filename || '';
+  nm.disabled = o.mode !== 'new';
+  document.getElementById('modalEditor').value = o.content || '';
+  document.getElementById('modalDirty').textContent = '';
+  document.getElementById('modalMsg').textContent = '';
+  document.getElementById('modalOverlay').classList.add('open');
+  setTimeout(() => document.getElementById(o.mode === 'new' ? 'modalName' : 'modalEditor').focus(), 50);
+}
+function markModalDirty() {
+  if (!modalCtx) return;
+  document.getElementById('modalDirty').textContent = '● 未保存';
+  document.getElementById('modalMsg').textContent = '';
+}
+function closeModal() {
+  if (modalCtx && document.getElementById('modalDirty').textContent && !confirm('有未保存的修改，确定关闭？')) return;
+  document.getElementById('modalOverlay').classList.remove('open');
+  modalCtx = null;
+}
+async function saveModal() {
+  if (!modalCtx) return;
+  const content = document.getElementById('modalEditor').value;
+  let r;
+  if (modalCtx.mode === 'new') {
+    const fn = document.getElementById('modalName').value.trim();
+    if (!fn || !/\.(md|txt)$/i.test(fn)) { toast('文件名需以 .md/.txt 结尾', 'err'); return; }
+    
+    // 新版上传：读取文件为 base64 传给 bridge
+    const b64 = await fileToBase64(content);
+    r = await api('/api/upload', { method: 'POST', body: JSON.stringify({ kb: kb(), filename: fn, b64 }) });
+  } else {
+    r = await api('/api/file', { method: 'POST', body: JSON.stringify({ kb: kb(), path: modalCtx.path, content }) });
+  }
+  const data = await r.json();
+  if (data.error) { toast(data.error, 'err'); return; }
+  document.getElementById('modalDirty').textContent = '';
+  document.getElementById('modalMsg').textContent = '已保存 ' + new Date().toLocaleTimeString();
+  toast('已保存', 'ok');
+  if (modalCtx.path && modalCtx.path.replace(/\\/g, '/').startsWith('raw/sources/'))
+    toast('源文档已变更，去工作流页重新 Ingest 该文档', 'ok');
+  loadSources();
+  if (document.getElementById('p1').classList.contains('active')) loadTree();
+  const pv = document.getElementById('preview');
+  if (pv && modalCtx.path) pv.textContent = content;
+  if (modalCtx.path === 'purpose.md' || modalCtx.path === 'schema.md') loadCfg();
+}
+async function fileToBase64(text) {
+  // 模拟将文本转为 base64，实际上 BridgeDispatcher 处理的是 bytes
+  return btoa(unescape(encodeURIComponent(text)));
+}
+function openNewDoc() {
+  if (!kb()) { toast('先选择或新建知识库', 'err'); return; }
+  openModal({ mode: 'new', dir: 'raw/sources/', filename: '', content: '' });
+}
+function openCfg(file) { viewAny(file); }
+
+// ---- 源文档 ----
+let srcFiles = [];
+async function loadSources() {
+  if (!kb()) return;
+  const r = await api('/api/sources?kb=' + encodeURIComponent(kb()));
+  const data = await r.json();
+  srcFiles = data.files || [];
+  const t = document.getElementById('srcTable');
+  t.innerHTML = srcFiles.map((f, i) => `<tr><td>📄 ${esc(f)}</td><td style="text-align:right;white-space:nowrap;"><button class="mini-btn" onclick="openSrcIdx(${i})">编辑</button><button class="mini-btn danger" onclick="delSrcIdx(${i})">删除</button></td></tr>`).join('') || '<tr><td>暂无文档，先新建或上传</td></tr>';
+  loadChanges();
+}
+let chgItems = [];
+async function loadChanges() {
+  if (!kb()) return;
+  const r = await api('/api/changes?kb=' + encodeURIComponent(kb())).catch(() => ({ json: async () => ({ changes: [] }) }));
+  const data = await r.json();
+  chgItems = data.changes || [];
+  const card = document.getElementById('chgCard');
+  if (!chgItems.length) {
+    card.style.display = 'none';
+    const w = document.getElementById('chgListW');
+    if (w) w.innerHTML = '<span style="color:#888;font-size:13px;">暂无未处理变更，全部干净。</span>';
+    return;
+  }
+  card.style.display = 'block';
+  renderChgList('chgList');
+  if (document.getElementById('chgListW')) renderChgList('chgListW');
+  // Clean 卡片下拉：只列已删除的文档（spec 02 §8 级联清理入口）
+  const delSel = document.getElementById('cleanFile');
+  if (delSel) {
+    const dels = chgItems.filter(c => c.action === '删除');
+    delSel.innerHTML = dels.map(c => `<option value="${esc(c.file)}">${esc(c.file)}</option>`).join('')
+      || '<option value="">（暂无已删除的文档）</option>';
+    const hint = document.getElementById('cleanHint');
+    if (hint) hint.textContent = dels.length
+      ? `已删除 ${dels.length} 个文档可选；选一个生成级联清理提示词。`
+      : '没有已删除的文档时，可在源文档页删除文件后再回来生成。';
+  }
+}
+const ACT_LABEL = { '上传': '新增', '更新': '更新', '编辑': '编辑', '删除': '删除' };
+function renderChgList(elId) {
+  document.getElementById(elId).innerHTML = chgItems.map((c, i) => `<label style="display:block;margin:4px 0;font-size:14px;"><input type="checkbox" data-i="${i}" checked> 📄 ${esc(c.file)} <span style="color:#b45309;">${esc(ACT_LABEL[c.action] || c.action || '')}</span> <span style="color:#888;font-size:12px;">${esc(c.time || '')}</span></label>`).join('');
+}
+function selChanges(listId) {
+  return [...document.querySelectorAll('#' + (listId || 'chgList') + ' input:checked')].map(b => chgItems[+b.dataset.i]).filter(Boolean);
+}
+async function genChangesPrompt(listId) {
+  const sel = selChanges(listId);
+  if (!sel.length) { toast('先勾选要处理的文档', 'err'); return; }
+  const ups = sel.filter(c => c.action !== '删除');
+  const dels = sel.filter(c => c.action === '删除');
+  tab(2); // 输出在工作流页，跳过去让用户直接看到
+  // 增量 Ingest：后端按当前变更清单取权威 hash（spec 02 §7）
+  const prompt = await askPrompt('ingest-changes', { files: sel.map(c => c.file) });
+  if (prompt === null) return;
+  document.getElementById('promptOut').value = prompt;
+  // 已删除的文档另附 Clean 提示词（级联清理，spec 02 §8）
+  if (dels.length) {
+    const cleanPrompts = [];
+    for (const d of dels) {
+      const cp = await askPrompt('clean', { file: d.file });
+      if (cp) cleanPrompts.push(cp);
+    }
+    document.getElementById('promptOut').value += '\n\n' + cleanPrompts.join('\n\n');
+  }
+  document.getElementById('copyMsg').textContent = '';
+  toast(ups.length ? '已按勾选生成（含 hash 跳过说明），执行完记得标记已处理' : '已生成 Clean 清理提示词，执行完记得标记已处理', 'ok');
+}
+async function clearChanges(all, listId) {
+  const files = all ? [] : selChanges(listId).map(c => c.file);
+  if (!all && !files.length) { toast('先勾选', 'err'); return; }
+  await api('/api/changes/clear', { method: 'POST', body: JSON.stringify({ kb: kb(), files }) });
+  toast('已标记为已处理', 'ok');
+  loadChanges();
+}
+function openSrcIdx(i) { viewAny('raw/sources/' + srcFiles[i]); }
+async function delSrcIdx(i) {
+  const name = srcFiles[i];
+  if (!confirm('确定删除 ' + name + '？')) return;
+  await api('/api/delete', { method: 'POST', body: JSON.stringify({ kb: kb(), path: 'raw/sources/' + name }) });
+  toast('已删除 ' + name);
+  loadSources();
+}
+async function upload() {
+  const f = document.getElementById('upFile').files[0];
+  if (!f) { toast('先选择 .md/.txt/.docx/.xlsx 文件', 'err'); return; }
+  
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const b64 = reader.result.split(',')[1]; // 截取 base64 内容
+    const r = await api('/api/upload', { method: 'POST', body: JSON.stringify({ kb: kb(), filename: f.name, b64 }) });
+    const data = await r.json();
+    if (data.error) { toast(data.error, 'err'); return; }
+    document.getElementById('upFile').value = '';
+    toast('已上传 ' + f.name, 'ok');
+    loadSources();
+  };
+  reader.readAsDataURL(f);
+}
+
+// ---- 文件夹选择器 ----
+let pickCur = '';
+let pickDirs = [];
+let crumbPaths = [];
+async function openPicker() {
+  document.getElementById('pickOverlay').classList.add('open');
+  const r = await api('/api/places');
+  const pl = await r.json();
+  const box = document.getElementById('pickPlaces');
+  box.innerHTML = (pl.places || []).map((p, i) => `<button class="mini-btn" data-i="${i}">📍 ${esc(p.name)}</button>`).join('');
+  box.querySelectorAll('button').forEach((b) => { b.onclick = () => pickBrowse(pl.places[+b.dataset.i].path); });
+  const s = await api('/api/settings');
+  const sData = await s.json();
+  pickBrowse(sData.wikisDir || '');
+}
+function closePicker() { document.getElementById('pickOverlay').classList.remove('open'); }
+function crumbs(dir) {
+  const out = [];
+  const parts = dir.replace(/[\\/]+$/, '').split(/[\\/]/);
+  let acc = '';
+  for (const seg of parts) {
+    if (!seg) continue;
+    if (/^[A-Za-z]:$/.test(seg)) { acc = seg + '\\'; out.push({ name: acc, path: acc }); continue; }
+    acc += (acc.endsWith('\\') || acc.endsWith('/') ? '' : '\\') + seg;
+    out.push({ name: seg, path: acc });
+  }
+  return out;
+}
+function pickJump(i) { pickBrowse(crumbPaths[i]); }
+function pickGoAddr() {
+  const v = document.getElementById('pickAddr').value.trim();
+  if (!v) { toast('先输入路径', 'err'); return; }
+  pickBrowse(v);
+}
+async function pickDrives() {
+  const r = await api('/api/drives');
+  const data = await r.json();
+  pickCur = '';
+  crumbPaths = [];
+  document.getElementById('pickCur').textContent = '选择磁盘：';
+  document.getElementById('pickList').innerHTML = (data.drives || []).map(d => `<div onclick="pickBrowse('${esc(d)}')">💽 ${esc(d)}</div>`).join('') || '<div>无可用磁盘</div>';
+}
+async function pickBrowse(dir) {
+  const r = await api('/api/browse?dir=' + encodeURIComponent(dir));
+  const data = await r.json();
+  if (data.error) { toast(data.error, 'err'); return; }
+  pickCur = data.dir;
+  pickDirs = data.dirs || [];
+  crumbPaths = crumbs(data.dir).map(c => c.path);
+  document.getElementById('pickAddr').value = data.dir;
+  document.getElementById('pickCur').innerHTML = '当前：' + crumbs(data.dir).map((c, i) => `<a href="#" onclick="pickJump(${i});return false;" style="color:var(--brand);">${esc(c.name)}</a>`).join('<span style="color:#999;"> / </span>');
+  document.getElementById('pickList').innerHTML = pickDirs.map((d, i) => `<div onclick="pickGo(${i})">📁 ${esc(d)}</div>`).join('') || '<div style="color:#888;">（空文件夹，可直接使用）</div>';
+}
+function pickGo(i) {
+  const sep = pickCur.endsWith('\\') || pickCur.endsWith('/') ? '' : '\\';
+  pickBrowse(pickCur + sep + pickDirs[i]);
+}
+function pickUp() {
+  if (!pickCur) { pickDrives(); return; }
+  const p = pickCur.replace(/[\\/]+$/, '');
+  const i = Math.max(p.lastIndexOf('\\'), p.lastIndexOf('/'));
+  if (i < 0) { pickDrives(); return; }
+  pickBrowse(p.slice(0, i + 1));
+}
+async function pickNet() {
+  document.getElementById('pickCur').textContent = '正在查找局域网电脑…';
+  document.getElementById('pickList').innerHTML = '';
+  const r = await api('/api/netpc');
+  const data = await r.json();
+  pickCur = '';
+  crumbPaths = [];
+  if (!data.pcs || !data.pcs.length) {
+    document.getElementById('pickCur').textContent = '局域网';
+    document.getElementById('pickList').innerHTML = `<div style="color:#888;">${esc(data.error || '没找到局域网电脑')}</div>`;
+    return;
+  }
+  document.getElementById('pickCur').textContent = '局域网：选一台电脑';
+  document.getElementById('pickList').innerHTML = data.pcs.map(pc => `<div onclick="pickNetShares('${esc(pc)}')">🖥 ${esc(pc)}</div>`).join('');
+}
+async function pickNetShares(pc) {
+  document.getElementById('pickCur').textContent = '正在读取 ' + pc + ' 的共享…';
+  document.getElementById('pickList').innerHTML = '';
+  const r = await api('/api/netshares?pc=' + encodeURIComponent(pc));
+  const data = await r.json();
+  if (data.error) { toast(data.error, 'err'); return; }
+  if (!data.shares || !data.shares.length) {
+    document.getElementById('pickCur').textContent = '\\\\' + pc;
+    document.getElementById('pickList').innerHTML = `<div style="color:#888;">${esc(data.error || '该电脑没有可用的共享文件夹')}</div>`;
+    return;
+  }
+  document.getElementById('pickCur').textContent = '\\\\' + pc + '：选一个共享文件夹';
+  document.getElementById('pickList').innerHTML = data.shares.map(s => `<div data-pc="${esc(pc)}" data-s="${esc(s)}">📁 ${esc(s)}</div>`).join('');
+  document.querySelectorAll('#pickList div[data-s]').forEach(d => { d.onclick = () => pickBrowse('\\\\' + d.dataset.pc + '\\' + d.dataset.s); });
+}
+function pickOk() {
+  if (!pickCur) { toast('先选一个文件夹', 'err'); return; }
+  document.getElementById('storePath').value = pickCur;
+  closePicker();
+  savePath();
+}
+
+// ---- 目录树 ----
+async function loadTree() {
+  if (!kb()) return;
+  const r = await api('/api/tree?kb=' + encodeURIComponent(kb()));
+  const data = await r.json();
+  document.getElementById('treeBox').innerHTML = renderTree(data.tree || [], '');
+}
+function renderTree(nodes, base) {
+  let h = '<ul class="tree">';
+  for (const n of nodes) {
+    if (n.type === 'dir') h += `<li class="dir">📁 ${esc(n.name)}` + renderTree(n.children || [], base + n.name + '/') + '</li>';
+    else h += `<li>📄 <a onclick="viewAnyDecode('${encodeURIComponent(base + n.name)}')">${esc(n.name)}</a></li>`;
+  }
+  return h + '</ul>';
+}
+function viewAnyDecode(e) { viewAny(decodeURIComponent(e)); }
+async function viewAny(rel) {
+  const r = await api('/api/file?kb=' + encodeURIComponent(kb()) + '&path=' + encodeURIComponent(rel));
+  const data = await r.json();
+  if (data.error) { toast(data.error, 'err'); return; }
+  document.getElementById('preview').textContent = data.content || '';
+  document.getElementById('viewName').textContent = '— ' + rel;
+  openModal({ mode: 'exist', path: rel, filename: rel.split('/').pop(), content: data.content || '' });
+}
+
+// ---- 工作流：提示词由 C# PromptEngine 生成（绝对路径/哈希/清单都是后端权威数据） ----
+async function askPrompt(kind, extra) {
+  const body = Object.assign({ kind: kind, kb: kb() }, extra || {});
+  const r = await api('/api/prompt', { method: 'POST', body: JSON.stringify(body) });
+  const data = await r.json();
+  if (data.error) { toast(data.error, 'err'); return null; }
+  return data.prompt;
+}
+async function genPrompt(kind) {
+  if (!kb()) { toast('先选择知识库', 'err'); return; }
+  let extra = {};
+  if (kind === 'ingest') {
+    // 批量：逗号分隔多文件名；留空=自动带上本库全部源文档
+    const raw = document.getElementById('ingFile').value.trim();
+    extra.files = raw ? raw.split(/[,，\n]+/).map(s => s.trim()).filter(Boolean) : [];
+  } else if (kind === 'query') {
+    extra.question = document.getElementById('qText').value.trim();
+  } else if (kind === 'compare') {
+    extra.topic = document.getElementById('cText').value.trim();
+  }
+  const prompt = await askPrompt(kind, extra);
+  if (prompt === null) return;
+  document.getElementById('promptOut').value = prompt;
+  document.getElementById('copyMsg').textContent = '';
+}
+function copyPrompt() {
+  const el = document.getElementById('promptOut');
+  el.select();
+  const done = () => { document.getElementById('copyMsg').textContent = '已复制，去你的工具里粘贴执行'; };
+  if (navigator.clipboard) navigator.clipboard.writeText(el.value).then(done);
+  else { document.execCommand('copy'); done(); }
+}
+async function genBoundary() {
+  if (!kb()) { toast('先选择知识库', 'err'); return; }
+  toast('正在汇总知识库边界…');
+  const prompt = await askPrompt('boundary');
+  if (prompt === null) return;
+  document.getElementById('promptOut').value = prompt;
+  document.getElementById('copyMsg').textContent = '';
+  toast('边界说明已生成，点“一键复制”', 'ok');
+}
+// Clean：级联清理已删除源文档（spec 02 §8）
+async function genCleanPrompt() {
+  if (!kb()) { toast('先选择知识库', 'err'); return; }
+  const f = document.getElementById('cleanFile').value;
+  if (!f) { toast('先选一个已删除的文档', 'err'); return; }
+  const prompt = await askPrompt('clean', { file: f });
+  if (prompt === null) return;
+  document.getElementById('promptOut').value = prompt;
+  document.getElementById('copyMsg').textContent = '';
+  toast('Clean 提示词已生成', 'ok');
+}
+// 模板原文展示（离线模板，手工套用时照抄）
+function showTemplate() {
+  const kind = document.getElementById('tplSel').value;
+  const tpl = (window.PROMPT_TEMPLATES || {})[kind] || '';
+  document.getElementById('tplOut').value = tpl;
+}
+
+// ---- 配置 ----
+async function loadCfg() {
+  if (!kb()) return;
+  const p = await api('/api/file?kb=' + encodeURIComponent(kb()) + '&path=purpose.md');
+  const pData = await p.json();
+  const s = await api('/api/file?kb=' + encodeURIComponent(kb()) + '&path=schema.md');
+  const sData = await s.json();
+  document.getElementById('purposeView').textContent = pData.content || pData.error || '';
+  document.getElementById('schemaView').textContent = sData.content || sData.error || '';
+}
+
+document.getElementById('modalOverlay').addEventListener('click', (e) => { if (e.target.id === 'modalOverlay') closeModal(); });
+document.getElementById('pickOverlay').addEventListener('click', (e) => { if (e.target.id === 'pickOverlay') closePicker(); });
+document.getElementById('modalEditor').addEventListener('input', markModalDirty);
+document.getElementById('modalEditor').addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveModal(); }
+  if (e.key === 'Escape') closeModal();
+});
+
+loadSettings();
+loadKbs();
+showTemplate();
+</script>
+</body>
+</html>
