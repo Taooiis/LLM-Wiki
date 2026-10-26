@@ -135,7 +135,9 @@ public class ShareService(ConfigService config, FileBridge files, KbService kbs)
             endpoints.MapGet("/api/tree", ctx =>
             {
                 var kb = ctx.Request.Query["kb"];
-                if (string.IsNullOrWhiteSpace(kb) || !Directory.Exists(Path.Combine(_wikis, kb)))
+                if (string.IsNullOrWhiteSpace(kb))
+                    return Forbidden404(ctx);
+                if (!Directory.Exists(Path.Combine(_wikis, kb!)))
                     return Forbidden404(ctx);
                 var tree = files.Tree(kb!);
                 var node = new JsonObject { ["tree"] = JsonSerializer.SerializeToNode(tree) };
