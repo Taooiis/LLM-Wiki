@@ -4,3 +4,8 @@ obj/
 
 # Published output (use publish.ps1 to regenerate)
 publish/
+
+# IDE
+.vs/
+*.user
+*.suo
