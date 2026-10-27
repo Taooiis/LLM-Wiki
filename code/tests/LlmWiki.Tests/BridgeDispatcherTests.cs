@@ -98,6 +98,50 @@ public class BridgeDispatcherTests : IDisposable
         Assert.NotNull(sh["shares"]);
     }
 
+    // ---------- 桌面原生动作（资源管理器 / 默认程序 / 对话框 / 剪贴板） ----------
+
+    [Fact]
+    public async Task Reveal_RejectsPathOutsideKb()
+    {
+        // 越权路径必须被 PathGuard 挡住，不能让前端定位到库外任意文件
+        var json = JsonNode.Parse(await _bridge.HandleAsync("reveal",
+            new JsonObject { ["kb"] = "上传库", ["path"] = "..\\..\\evil.txt" }.ToString()))!;
+        Assert.NotNull(json["error"]);
+    }
+
+    [Fact]
+    public async Task OpenKbDir_PassesKbRootToHost()
+    {
+        string? opened = null;
+        _bridge.RevealPath = p => { opened = p; return true; };
+        var json = JsonNode.Parse(await _bridge.HandleAsync("open-kb-dir",
+            new JsonObject { ["kb"] = "上传库" }.ToString()))!;
+        Assert.Null(json["error"]);
+        Assert.NotNull(opened);
+        Assert.EndsWith("上传库", opened);
+    }
+
+    [Fact]
+    public async Task DialogCommands_DelegateToHost()
+    {
+        _bridge.ConfirmDialog = (_, _) => true;
+        _bridge.InputDialog = (_, _, _) => "输入的值";
+        _bridge.ClipboardSet = t => t == "内容";
+
+        var confirm = JsonNode.Parse(await _bridge.HandleAsync("dialog-confirm",
+            new JsonObject { ["message"] = "确定？" }.ToString()))!;
+        Assert.True(confirm["ok"]!.GetValue<bool>());
+
+        var input = JsonNode.Parse(await _bridge.HandleAsync("dialog-input",
+            new JsonObject { ["message"] = "输入" }.ToString()))!;
+        Assert.Equal("输入的值", input["value"]!.ToString());
+        Assert.False(input["canceled"]!.GetValue<bool>());
+
+        var clip = JsonNode.Parse(await _bridge.HandleAsync("clipboard-set",
+            new JsonObject { ["text"] = "内容" }.ToString()))!;
+        Assert.True(clip["ok"]!.GetValue<bool>());
+    }
+
     // ---------- 分享：PIN + 二维码 ----------
 
     [Fact]

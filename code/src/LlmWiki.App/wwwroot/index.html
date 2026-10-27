@@ -239,6 +239,7 @@ details.g p { padding: 0 var(--sp-4) var(--sp-2); margin: 0; font-size: var(--fs
         <button type="button" class="btn icon-btn" onclick="loadKbs()" aria-label="刷新知识库列表" title="刷新"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.2 8a5.2 5.2 0 1 1-1.6-3.7"/><path d="M13.4 2.6v3h-3"/></svg></button>
       </div>
       <div id="kbPath" class="kb-path"></div>
+      <button type="button" class="btn btn-quiet btn-block" onclick="openKbDir()">在资源管理器中打开当前库</button>
       <details class="side-more">
         <summary><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>新建 / 存储路径</summary>
         <div class="side-more-body">
@@ -603,12 +604,25 @@ async function stopShare() {
   toast('分享已关闭', 'ok');
 }
 
+// ---- 桌面原生对话框（替代网页 prompt/confirm）----
+// 网页的 prompt()/confirm() 在桌面里像网页：换成宿主弹的 WPF 原生窗口。
+async function nativeConfirm(message, title) {
+  const r = await api('/api/dialog/confirm', { method: 'POST', body: JSON.stringify({ message, title }) });
+  const d = await r.json();
+  return !d.error && d.ok === true;
+}
+async function nativeInput(message, title, defaultValue) {
+  const r = await api('/api/dialog/input', { method: 'POST', body: JSON.stringify({ message, title, defaultValue: defaultValue || '' }) });
+  const d = await r.json();
+  return d.error ? null : (d.canceled ? null : d.value);
+}
+
 // ---- 知识库 ----
 // 删除知识库：必须输入库名二次确认（spec D7，整库永久删除不可恢复）
 async function deleteKb() {
   const name = kb();
   if (!name) { toast('先选择要删除的知识库', 'err'); return; }
-  const typed = prompt('删除知识库「' + name + '」会永久删除整个目录（含 raw/original 原件），不可恢复。\n请输入库名确认：');
+  const typed = await nativeInput('删除知识库「' + name + '」会永久删除整个目录（含 raw/original 原件），不可恢复。\n请输入库名确认：', '删除知识库');
   if (typed === null) return;
   if (typed.trim() !== name) { toast('输入的库名不一致，已取消', 'err'); return; }
   const r = await api('/api/kbs/delete', { method: 'POST', body: JSON.stringify({ name: name }) });
@@ -700,8 +714,12 @@ function markModalDirty() {
   document.getElementById('modalMsg').textContent = '';
   updateTitle(true);
 }
-function closeModal() {
-  if (modalCtx && document.getElementById('modalDirty').textContent && !confirm('有未保存的修改，确定关闭？')) return;
+function closeModal(force) {
+  // force=true：已经确认过，不再二次询问（否则确认后会递归再问一次）
+  if (!force && modalCtx && document.getElementById('modalDirty').textContent) {
+    nativeConfirm('有未保存的修改，确定关闭？', 'LLM Wiki').then(ok => { if (ok) closeModal(true); });
+    return;
+  }
   document.getElementById('modalOverlay').classList.remove('open');
   document.getElementById('modalDirty').textContent = '';
   updateTitle(); // 关闭弹窗后标题恢复到「当前知识库」
@@ -753,7 +771,7 @@ async function loadSources() {
   const data = await r.json();
   srcFiles = data.files || [];
   const t = document.getElementById('srcTable');
-  t.innerHTML = srcFiles.map((f, i) => `<tr><td>${esc(f)}</td><td style="text-align:right;white-space:nowrap;"><button class="mini-btn" onclick="openSrcIdx(${i})">编辑</button><button class="mini-btn danger" onclick="delSrcIdx(${i})">删除</button></td></tr>`).join('') || '<tr><td class="faint">暂无文档，先新建或上传</td></tr>';
+  t.innerHTML = srcFiles.map((f, i) => `<tr><td>${esc(f)}</td><td style="text-align:right;white-space:nowrap;"><button class="mini-btn" onclick="openSrcIdx(${i})">编辑</button><button class="mini-btn" onclick="revealFile('raw/sources/${encodeURIComponent(f).replace(/'/g, "%27")}')">定位</button><button class="mini-btn" onclick="openFile('raw/sources/${encodeURIComponent(f).replace(/'/g, "%27")}')">打开</button><button class="mini-btn danger" onclick="delSrcIdx(${i})">删除</button></td></tr>`).join('') || '<tr><td class="faint">暂无文档，先新建或上传</td></tr>';
   loadChanges();
 }
 let chgItems = [];
@@ -823,10 +841,27 @@ async function clearChanges(all, listId) {
 function openSrcIdx(i) { viewAny('raw/sources/' + srcFiles[i]); }
 async function delSrcIdx(i) {
   const name = srcFiles[i];
-  if (!confirm('确定删除 ' + name + '？')) return;
+  if (!await nativeConfirm('确定删除 ' + name + '？', '删除源文档')) return;
   await api('/api/delete', { method: 'POST', body: JSON.stringify({ kb: kb(), path: 'raw/sources/' + name }) });
   toast('已删除 ' + name);
   loadSources();
+}
+
+// ---- 桌面原生动作：在资源管理器中定位 / 用默认程序打开 ----
+async function revealFile(rel) {
+  const r = await api('/api/reveal', { method: 'POST', body: JSON.stringify({ kb: kb(), path: rel }) });
+  const d = await r.json();
+  if (d.error) toast(d.error, 'err');
+}
+async function openFile(rel) {
+  const r = await api('/api/open-file', { method: 'POST', body: JSON.stringify({ kb: kb(), path: rel }) });
+  const d = await r.json();
+  if (d.error) toast(d.error, 'err');
+}
+async function openKbDir() {
+  const r = await api('/api/open-kb-dir', { method: 'POST', body: JSON.stringify({ kb: kb() }) });
+  const d = await r.json();
+  if (d.error) toast(d.error, 'err');
 }
 /**
  * 桌面原生多选：直接弹系统文件对话框，把真实路径交给 C#（不经过 FileReader / base64）。
@@ -1021,9 +1056,8 @@ async function genPrompt(kind) {
   document.getElementById('promptOut').value = prompt;
   document.getElementById('copyMsg').textContent = '';
 }
-function copyPrompt() {
+async function copyPrompt() {
   const el = document.getElementById('promptOut');
-  el.select();
   const btn = document.querySelector('.prompt-head .btn-primary');
   const done = () => {
     document.getElementById('copyMsg').textContent = '已复制，去你的工具里粘贴执行';
@@ -1031,6 +1065,12 @@ function copyPrompt() {
     btn.textContent = '已复制';
     setTimeout(() => { btn.classList.remove('is-copied'); btn.textContent = '一键复制'; }, 2000);
   };
+  // 走宿主写系统剪贴板：WebView2 里 navigator.clipboard 在窗口失焦时会抛错
+  const r = await api('/api/clipboard', { method: 'POST', body: JSON.stringify({ text: el.value }) });
+  const d = await r.json();
+  if (!d.error && d.ok) { done(); return; }
+  // 兜底：网页剪贴板（静态预览等无宿主场景）
+  el.select();
   if (navigator.clipboard) navigator.clipboard.writeText(el.value).then(done).catch(done);
   else { document.execCommand('copy'); done(); }
 }
@@ -1083,6 +1123,18 @@ document.getElementById('treeBox').addEventListener('keydown', (e) => {
 });
 document.getElementById('pickList').addEventListener('keydown', (e) => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('div[tabindex]')) { e.preventDefault(); e.target.click(); }
+});
+
+// ---- 全局快捷键（桌面应用该有的键盘操作）----
+document.addEventListener('keydown', (e) => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const k = e.key.toLowerCase();
+  // Ctrl+N：新建文档（弹窗开着时不抢）
+  if (k === 'n' && !modalCtx) { e.preventDefault(); openNewDoc(); return; }
+  // Ctrl+E：在资源管理器中打开当前库
+  if (k === 'e' && !modalCtx) { e.preventDefault(); openKbDir(); return; }
+  // Ctrl+S：保存（弹窗开着才生效；没开时是浏览器行为，忽略）
+  if (k === 's' && modalCtx) { e.preventDefault(); saveModal(); return; }
 });
 
 // 宿主桥（bridge.js 由 WebView2 注入）不在时（如静态预览）跳过启动请求

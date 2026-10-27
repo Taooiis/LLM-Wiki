@@ -38,6 +38,17 @@ public class BridgeDispatcher(ConfigService config)
     public UiStateStore? UiStore { get; set; }
     private UiStateStore Ui => UiStore ??= new UiStateStore(AppContext.BaseDirectory);
 
+    // 原生对话框（MainWindow 注入；WPF 窗口实现，测试环境为 null）
+    public Func<string, string, bool>? ConfirmDialog { get; set; }
+    public Func<string, string, string, string?>? InputDialog { get; set; }
+
+    // 写系统剪贴板（MainWindow 注入；需 STA 线程，测试环境为 null）
+    public Func<string, bool>? ClipboardSet { get; set; }
+
+    // 调系统外壳（默认走 ShellOps；测试可注入假实现，避免真的弹资源管理器）
+    public Func<string, bool>? RevealPath { get; set; }
+    public Func<string, bool>? OpenPath { get; set; }
+
     /// <summary>只读分享服务是否在运行（关窗口时决定「退到托盘」还是「真的退出」）。</summary>
     public bool Sharing => _share?.Running == true;
 
@@ -104,6 +115,59 @@ public class BridgeDispatcher(ConfigService config)
                     if (delRel.StartsWith("raw/sources/"))
                         return Upload.DeleteSource(S("kb"), delRel).ok ? Ok(new JsonObject { ["ok"] = true }) : Error("删除失败");
                     return Fb.Delete(S("kb"), delRel, out var dErr) ? Ok(new JsonObject { ["ok"] = true }) : Error(dErr);
+
+                // ---------- 桌面原生动作（资源管理器 / 默认程序 / 系统对话框 / 剪贴板） ----------
+                case "reveal":
+                    {
+                        // 路径先过 SafeJoin：只能定位库内文件
+                        var target = PathGuard.SafeJoin(config.WikisDir, S("kb"), S("path"));
+                        if (target == null) return Error("路径非法");
+                        return (RevealPath ?? ShellOps.Reveal)(target)
+                            ? Ok(new JsonObject { ["ok"] = true })
+                            : Error("文件不存在或无法打开：" + target);
+                    }
+
+                case "open-file":
+                    {
+                        var target = PathGuard.SafeJoin(config.WikisDir, S("kb"), S("path"));
+                        if (target == null) return Error("路径非法");
+                        return (OpenPath ?? ShellOps.Open)(target)
+                            ? Ok(new JsonObject { ["ok"] = true })
+                            : Error("没有关联的打开方式：" + target);
+                    }
+
+                case "open-kb-dir":
+                    {
+                        var dir = PathGuard.SafeJoin(config.WikisDir, S("kb"), null);
+                        if (dir == null) return Error("库名非法");
+                        return (RevealPath ?? ShellOps.Reveal)(dir)
+                            ? Ok(new JsonObject { ["ok"] = true })
+                            : Error("目录不存在：" + dir);
+                    }
+
+                case "dialog-confirm":
+                    {
+                        if (ConfirmDialog == null) return Error("当前环境不支持原生对话框");
+                        return Ok(new JsonObject
+                        {
+                            ["ok"] = ConfirmDialog(S("message"), S("title")),
+                        });
+                    }
+
+                case "dialog-input":
+                    {
+                        if (InputDialog == null) return Error("当前环境不支持原生对话框");
+                        var val = InputDialog(S("message"), S("title"), S("defaultValue"));
+                        return Ok(new JsonObject { ["value"] = val, ["canceled"] = val == null });
+                    }
+
+                case "clipboard-set":
+                    {
+                        if (ClipboardSet == null) return Error("当前环境不支持系统剪贴板");
+                        return ClipboardSet(S("text"))
+                            ? Ok(new JsonObject { ["ok"] = true })
+                            : Error("写入剪贴板失败");
+                    }
 
                 // ---------- 源与变更 ----------
                 case "sources": return Ok(new JsonObject { ["files"] = new JsonArray([.. Fb.Sources(S("kb")).Select(n => (JsonNode?)n)]) });

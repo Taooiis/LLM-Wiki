@@ -31,6 +31,12 @@ window.api = (async (path, options = {}) => {
     '/api/prompt': 'prompt',
     '/api/share': options.method === 'POST' ? 'share-start' : 'share-status',
     '/api/share/stop': 'share-stop',
+    '/api/reveal': 'reveal',
+    '/api/open-file': 'open-file',
+    '/api/open-kb-dir': 'open-kb-dir',
+    '/api/dialog/confirm': 'dialog-confirm',
+    '/api/dialog/input': 'dialog-input',
+    '/api/clipboard': 'clipboard-set',
   };
 
   // 处理带 Query 的路径 (e.g., /api/sources?kb=...)

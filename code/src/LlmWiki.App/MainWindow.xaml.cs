@@ -128,6 +128,10 @@ public partial class MainWindow : Window
         string js = await File.ReadAllTextAsync(Path.Combine(wwwroot, "bridge.js"));
         await BridgeWebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(js);
 
+        // 关掉浏览器自带快捷键：否则 Ctrl+S 会弹「保存网页」、Ctrl+N 会开新窗口。
+        // 页面自己处理 Ctrl+S/N/E（桌面应用该有自己的键位）。
+        BridgeWebView.CoreWebView2.Settings.AreBrowserAcceleratorKeysEnabled = false;
+
         // 2. 注册消息接收（协议见 Bridge/BridgeProtocol.cs）
         BridgeWebView.CoreWebView2.WebMessageReceived += async (_, e) =>
         {
@@ -144,6 +148,24 @@ public partial class MainWindow : Window
         _dispatcher = new BridgeDispatcher(cfg);
         // 界面记忆共享给前端（同一份 ui.json）
         _dispatcher.UiStore = _ui;
+
+        // 原生对话框：替代网页 prompt()/confirm()（桌面应用该用系统控件）
+        _dispatcher.ConfirmDialog = (message, title) =>
+            MessageBox.Show(this, message, title.Length > 0 ? title : "LLM Wiki",
+                MessageBoxButton.OKCancel, MessageBoxImage.Warning) == MessageBoxResult.OK;
+        _dispatcher.InputDialog = (message, title, defaultValue) =>
+            PromptWindow.Show(this, message, title.Length > 0 ? title : "LLM Wiki", defaultValue);
+
+        // 系统剪贴板：WebView2 里的 navigator.clipboard 在无焦点时会失败，交给宿主写更稳
+        _dispatcher.ClipboardSet = text =>
+        {
+            try
+            {
+                Clipboard.SetText(text);
+                return true;
+            }
+            catch { return false; }
+        };
 
         // 标题跟随前端：document.title 由页面按「当前知识库 + 未保存标记」维护
         BridgeWebView.CoreWebView2.DocumentTitleChanged += (_, _) =>
