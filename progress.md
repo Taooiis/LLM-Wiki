@@ -1,6 +1,6 @@
 # LLM Wiki 桌面客户端 — 开发进度
 
-> Status: **全部 9 个 Task 完成** | Branch: `feature/desktop-client`
+> Status: **全部 Task 完成** | Branch: `feature/file-association`
 
 ## 已完成
 
@@ -49,5 +49,57 @@
 - **原生选路径**：桌面应用不再走网页面包屑选择器——`BridgeDispatcher.FolderPicker` + WPF `OpenFolderDialog` 系统对话框（可浏览网络共享），无宿主时前端自动回退旧选择器
 - **UI**：管理面板与分享页整体重设计（现代工作台 + 左侧边栏 + slate 皮肤，见 `design.md`），全部接线与测试锚点保留
 
+## 2026-10-27 文件关联
+
+**100/100 测试通过，0 错误 0 警告**
+
+### 新增文件
+- `Services/FileAssociation.cs` — 注册表 API 封装：`Register()`/`Unregister()`/`IsRegistered()`
+
+### 改动文件
+- `App.xaml.cs` — 命令行参数处理；管道协议扩展为 `show;path1;path2...` 传递文件路径到已运行实例
+- `Bridge/BridgeDispatcher.cs` — 3 新命令 `file-assoc-get`/`file-assoc-register`/`file-assoc-unregister`
+- `MainWindow.xaml.cs` — `PendingFiles` 属性 + `ImportFilesFromCommandLine()`（复用拖拽上传流程）+ `WaitForWebViewReady()`
+- `wwwroot/bridge.js` — 2 新路由 `/api/file-assoc` + `/api/file-assoc/unregister`
+- `wwwroot/index.html` — 设置面板加「文件关联」section + `toggleFileAssoc`/`loadFileAssoc` JS
+- `BridgeDispatcherTests.cs` — 1 新测试
+
+### 验收
+- [x] `dotnet build` 0 错误 0 警告
+- [x] `dotnet test` 100/100 通过
+- [x] Push 到 `origin/feature/file-association`
+- [ ] 手动验证：双击 `.md` 文件 → LLM Wiki 打开并导入；右键「发送到 LLM Wiki」
+
+## 2026-10-27 mDNS 局域网自动发现
+
+**113/113 测试通过，0 错误 0 警告**
+
+### 新增文件
+- `Services/MdnsPacket.cs` — mDNS 纯协议层（RFC 6762 最小子集，只做报文编解码，不碰网络）
+  - `EncodeName` / `BuildResponse` / `FindARecordFor` / `SkipName` / `TryReadName` / `IsResponse`
+  - 只认 A 记录 + 自己的域名，其它查询一律不理（不抢机器上 Bonjour 等服务的流量）
+- `Services/MdnsResponder.cs` — UDP 5353 组播应答器
+  - 只答 `llmwiki.local` 的 A 记录；询问方要单播就单播回，否则组播回
+  - 别人抢同一个域名就自动改名 `llmwiki-2` / `llmwiki-3`…（否则手机会连到别人的机器）
+  - 5353 被占时静默失效，不影响 IP / 二维码路径
+
+### 改动文件
+- `Share/ShareService.cs` — Start/Stop 联动 mDNS 生命周期；新增 `FriendlyAddress()`
+- `Bridge/BridgeDispatcher.cs` — `ShareInfo()` 返回 `friendlyAddress`（同样带 PIN）
+- `wwwroot/index.html` — 分享页把 `llmwiki.local` 友好地址置顶显示
+- `tests/LlmWiki.Tests/MdnsPacketTests.cs` — 12 个协议单测 + 1 个真实组播网络测试
+
+### 关键坑（实测）
+- Windows 上 `IP_MULTICAST_LOOP=false` 会连**收到的**组播也一起收不到 → 必须保持默认开启；自己发出的应答会被 QR 位过滤、冲突检测会认出自己的 IP，不会自问自答
+- Windows 同端口组播只投一个 socket → 测试客户端要绑临时端口 + QCLASS 置 `0x8001`（unicast-response 位）
+- 局域网存在其它 mDNS 流量（实测有 Apple `_companion-link._tcp.local` 查询）→ 按 QR 位区分查询/应答，不受影响
+
+### 验收
+- [x] `dotnet build` 0 错误 0 警告
+- [x] `dotnet test` 113/113 通过（含真实组播问答网络测试）
+- [x] 实测：组播查询 → 收到 `flags=0x8400, QD=1, AN=1` 应答，A 记录 = 本机局域网 IP
+- [ ] 手动验证：分享页出现 `http://llmwiki.local:8765/?pin=XXXX`；手机同网段输该地址能打开
+
 ## 下一步
-- Task 9：发布产物 + 使用说明 (`publish.ps1` + `code/README.md`)
+- 手动验证批次：mDNS 友好地址 + 文件关联双击/右键导入
+- 后续候选：托盘提示优化 / 分享页样式深化 / 多 wiki 切换

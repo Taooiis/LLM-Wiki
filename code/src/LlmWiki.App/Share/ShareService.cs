@@ -30,6 +30,7 @@ public class ShareService(ConfigService config)
     private IApplicationBuilder? _app;
     private int _port;
     private string[] _addresses = []; // 实际绑定的地址（port=0 时从服务器特性读取）
+    private MdnsResponder? _mdns;     // mDNS 应答器（llmwiki.local 免手输 IP）
 
     public bool Running => _host != null;
     public int Port => _port;
@@ -67,6 +68,10 @@ public class ShareService(ConfigService config)
                 .Build();
             _host.Start();
 
+            // mDNS 应答器：让手机用 llmwiki.local:端口 访问，免手输 IP。
+            // 5353 被占（机器上另有 Bonjour 等）时静默跳过，不影响 IP/二维码路径。
+            if (_mdns?.Active != true) _mdns = new MdnsResponder();
+
             // 从绑定的服务器地址读取真实端口（port=0 时）
             _addresses = _app?.ServerFeatures.Get<IServerAddressesFeature>()?.Addresses?.ToArray()
                 ?? [$"http://localhost:{_port}/"];
@@ -93,7 +98,17 @@ public class ShareService(ConfigService config)
             _host = null;
             Pin = "";
         }
+        // mDNS 应答器一起收掉：不在分享就不该应答域名查询
+        _mdns?.Dispose();
+        _mdns = null;
     }
+
+    /// <summary>
+    /// mDNS 友好地址：http://llmwiki.local:端口/（手机输入这个就行）。
+    /// 未启用（5353 被占）时返回空串，前端自动退回显示 IP 地址。
+    /// </summary>
+    public string FriendlyAddress() =>
+        _mdns?.Active == true ? $"http://{_mdns.HostName}.local:{_port}/" : "";
 
     /// <summary>http://localhost:{port}/（客户端用 localhost 连，不连 0.0.0.0）。</summary>
     public string LocalAddress()

@@ -435,6 +435,10 @@ public class BridgeDispatcher(ConfigService config)
         // 优先非 localhost 的局域网地址；没有局域网地址时退回归环地址（本机浏览器预览也能用）
         var qrTarget = urls.FirstOrDefault(u => !u.Contains("localhost")) ?? urls.FirstOrDefault() ?? "";
 
+        // mDNS 友好地址（llmwiki.local）— 同样带 PIN，手机直接输这个就能进
+        var friendly = running ? Share.FriendlyAddress() : "";
+        if (!string.IsNullOrEmpty(friendly)) friendly = Share.AccessUrl(friendly);
+
         return new JsonObject
         {
             ["ok"] = true,
@@ -443,6 +447,7 @@ public class BridgeDispatcher(ConfigService config)
             ["pin"] = running ? Share.Pin : "",
             ["localAddress"] = running ? Share.LocalAddress() : "",
             ["lanAddresses"] = new JsonArray([.. urls.Select(u => (JsonNode?)u)]),
+            ["friendlyAddress"] = friendly,
             ["qr"] = running ? QrSvg.Render(qrTarget) : "",
         };
     }

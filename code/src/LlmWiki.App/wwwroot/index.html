@@ -613,7 +613,14 @@ function updateShareUi(data) {
     document.getElementById('shareQr').innerHTML = data.qr || '';
     document.getElementById('sharePin').textContent = data.pin || '----';
     access.style.display = 'flex';
-    links.innerHTML = data.lanAddresses.map(a => '<div>' + esc(a) + '</div>').join('') +
+
+    // mDNS 友好地址（llmwiki.local）放最前面：手机直接输这个，不用记 IP
+    const friendly = data.friendlyAddress
+      ? '<div style="font-weight:600;margin-bottom:4px">' + esc(data.friendlyAddress) + '</div>' +
+        '<div class="faint" style="margin-bottom:6px">同一网络下手机浏览器直接输入这个地址（免记 IP）</div>'
+      : '';
+    links.innerHTML = friendly +
+      data.lanAddresses.map(a => '<div>' + esc(a) + '</div>').join('') +
       '<div style="margin-top:6px">地址已带上 PIN，直接发给对方即可。手输地址时会被要求输入上面这 4 位数字。</div>';
   } else {
     s.textContent = '未开启'; s.style.color = 'var(--text-3)';
