@@ -263,6 +263,13 @@ details.g p { padding: 0 var(--sp-4) var(--sp-2); margin: 0; font-size: var(--fs
           <p class="side-note">更改立即生效，重启也保持；旧位置的文件不会自动搬移，需要时手动复制到新位置。</p>
         </div>
       </details>
+      <details open>
+        <summary><span class="side-label">文件关联</span></summary>
+        <div class="side-row">
+          <button type="button" class="btn btn-sm" id="assocBtn" onclick="toggleFileAssoc()">注册文件关联</button>
+        </div>
+        <p class="side-note">注册后：双击 .md/.txt/.docx/.xlsx 直接用 LLM Wiki 打开；右键「发送到 LLM Wiki」导入到当前库。</p>
+      </details>
     </div>
   </aside>
 
@@ -560,6 +567,32 @@ async function resetPath() {
   if (data.error) { toast(data.error, 'err'); return; }
   toast('已恢复默认路径', 'ok');
   loadKbs();
+}
+
+// ---- 文件关联 ----
+async function loadFileAssoc() {
+  const r = await api('/api/file-assoc');
+  const data = await r.json();
+  const btn = document.getElementById('assocBtn');
+  if (data.registered) { btn.textContent = '已关联（点解绑）'; btn.classList.add('is-on'); }
+  else { btn.textContent = '注册文件关联'; btn.classList.remove('is-on'); }
+}
+async function toggleFileAssoc() {
+  const check = await api('/api/file-assoc');
+  const data = await check.json();
+  if (data.error) { toast(data.error, 'err'); return; }
+  if (data.registered) {
+    const r2 = await api('/api/file-assoc/unregister');
+    const d = await r2.json();
+    if (d.error) { toast('解绑失败：' + d.error, 'err'); return; }
+    toast('已解除文件关联', 'ok');
+  } else {
+    const r3 = await api('/api/file-assoc', { method: 'POST' });
+    const d = await r3.json();
+    if (d.error) { toast('注册失败：' + d.error, 'err'); return; }
+    toast('已注册：' + JSON.stringify(d), 'ok');
+  }
+  loadFileAssoc();
 }
 
 // ---- 只读分享服务 (spec 03 §3) ----
@@ -1142,6 +1175,7 @@ if (typeof api !== 'undefined') {
   (async () => {
     await loadUiState();     // 先取记忆：lastKb / lastTab
     await loadSettings();
+    await loadFileAssoc();
     await loadKbs();
     // lastKb 已在 loadKbs 里自动设置 sel.value
     if (uiState.lastTab > 0) tab(uiState.lastTab);     // 恢复上次停在的页签

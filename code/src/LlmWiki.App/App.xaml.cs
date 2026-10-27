@@ -2,6 +2,7 @@
 using System.IO.Pipes;
 using System.Threading;
 using System.Windows;
+using LlmWiki.App.Services;
 
 namespace LlmWiki.App;
 
@@ -21,13 +22,16 @@ public partial class App : Application
     private TrayIcon? _tray;
     private CancellationTokenSource? _pipeCts;
 
+    private string[]? _pendingFiles;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         // 1. 单实例判定：拿不到 Mutex 说明已有进程在跑，通知它露脸后本进程退出
         _mutex = new Mutex(true, MutexName, out var isFirst);
         if (!isFirst)
         {
-            SignalExistingInstance();
+            // 第二个进程：把文件路径通过管道发给已有实例
+            SignalExistingInstance(e.Args);
             Shutdown();
             return;
         }
@@ -44,6 +48,10 @@ public partial class App : Application
         // ShutdownMode 是 OnExplicitShutdown：关掉最后一个窗口不会自动退，需要显式结束
         _window.Closed += (_, _) => Shutdown();
         _window.Show();
+
+        // 保存待导入的文件路径（App.xaml.cs 传进来）
+        _pendingFiles = e.Args.Where(File.Exists).ToArray();
+        if (_pendingFiles.Length > 0) _window.PendingFiles = _pendingFiles;
 
         // 3. 监听“第二次启动”，把已有窗口唤到前台
         _pipeCts = new CancellationTokenSource();
@@ -69,7 +77,7 @@ public partial class App : Application
         _window.ReallyExit();
     }
 
-    /// <summary>管道服务：每次连接读一行（内容不关心），然后把窗口唤到前台。</summary>
+    /// <summary>管道服务：每次连接读一行（"show" 或 "show;path1;path2..."），然后把窗口唤到前台。</summary>
     private async Task ListenForActivationAsync(CancellationToken token)
     {
         while (!token.IsCancellationRequested)
@@ -80,8 +88,18 @@ public partial class App : Application
                     PipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
                 await server.WaitForConnectionAsync(token);
                 using var reader = new StreamReader(server);
-                await reader.ReadLineAsync(token);
-                Dispatcher.Invoke(ActivateWindow);
+                var line = await reader.ReadLineAsync(token);
+                Dispatcher.Invoke(() =>
+                {
+                    ActivateWindow();
+                    // 消息带文件路径（"show;path1;path2"）→ 交给 MainWindow 导入
+                    if (line != null && line.StartsWith("show;", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var files = line.Split(';').Skip(1).Where(File.Exists).ToArray();
+                        if (files.Length > 0 && _window is MainWindow w)
+                            _ = w.ImportFilesFromCommandLine(files);
+                    }
+                });
             }
             catch (OperationCanceledException)
             {
@@ -95,9 +113,15 @@ public partial class App : Application
         }
     }
 
-    /// <summary>第二个进程调用：连接已有实例的管道让它显示窗口。连不上就算了，不阻塞用户。</summary>
-    private static void SignalExistingInstance()
+    /// <summary>第二个进程调用：连接已有实例的管道让它显示窗口+导入文件。连不上就算了，不阻塞。</summary>
+    private static void SignalExistingInstance(string[]? args = null)
     {
+        var msg = "show";
+        if (args != null && args.Length > 0)
+        {
+            var files = string.Join(";", args.Where(File.Exists));
+            if (files.Length > 0) msg = "show;" + files;
+        }
         for (var i = 0; i < 20; i++)
         {
             try
@@ -105,7 +129,7 @@ public partial class App : Application
                 using var client = new NamedPipeClientStream(".", PipeName, PipeDirection.Out);
                 client.Connect(200);
                 using var writer = new StreamWriter(client);
-                writer.WriteLine("show");
+                writer.WriteLine(msg);
                 writer.Flush();
                 return;
             }

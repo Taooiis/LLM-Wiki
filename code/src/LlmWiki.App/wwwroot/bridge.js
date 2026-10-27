@@ -37,6 +37,8 @@ window.api = (async (path, options = {}) => {
     '/api/dialog/confirm': 'dialog-confirm',
     '/api/dialog/input': 'dialog-input',
     '/api/clipboard': 'clipboard-set',
+    '/api/file-assoc': options.method === 'POST' ? 'file-assoc-register' : 'file-assoc-get',
+    '/api/file-assoc/unregister': 'file-assoc-unregister',
   };
 
   // 处理带 Query 的路径 (e.g., /api/sources?kb=...)

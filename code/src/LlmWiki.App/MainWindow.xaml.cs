@@ -21,6 +21,9 @@ public partial class MainWindow : Window
     /// <summary>窗口被收进托盘时触发（App 用它弹一次气泡提示）。</summary>
     public event Action? HiddenToTray;
 
+    /// <summary>启动时命令行传入的文件路径（双击文件 / 发送到），WebView2 就绪后导入。</summary>
+    public string[]? PendingFiles { get; set; }
+
     public MainWindow()
     {
         InitializeComponent();
@@ -223,6 +226,10 @@ public partial class MainWindow : Window
         BridgeWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
             "app.local", wwwroot, CoreWebView2HostResourceAccessKind.Allow);
         BridgeWebView.CoreWebView2.Navigate("https://app.local/index.html");
+
+        // 启动时命令行传入的文件：双击关联 / 发送到，导入到当前知识库
+        if (PendingFiles?.Length > 0)
+            await ImportFilesFromCommandLine(PendingFiles);
     }
 
     /// <summary>拖入文件时显示提示层；其它类型（文字等）不接管。</summary>
@@ -283,5 +290,48 @@ public partial class MainWindow : Window
         var raw = await BridgeWebView.ExecuteScriptAsync("document.getElementById('kbSel').value");
         try { return JsonSerializer.Deserialize<string>(raw) ?? ""; }
         catch { return ""; }
+    }
+
+    /// <summary>
+    /// 命令行 / 管道传入的文件：等待 WebView2 就绪 → 读当前知识库 → 调用 upload-path 上传 → 刷新前端。
+    /// 复用拖拽上传的同一个路径，不走 base64。
+    /// </summary>
+    public async Task ImportFilesFromCommandLine(string[] paths)
+    {
+        if (!await WaitForWebViewReady()) return;
+        try
+        {
+            var kb = await ReadActiveKbAsync();
+            if (string.IsNullOrEmpty(kb))
+            {
+                await BridgeWebView.ExecuteScriptAsync("toast('先选择知识库再打开文件','err')");
+                return;
+            }
+
+            var args = new JsonObject
+            {
+                ["kb"] = kb,
+                ["paths"] = new JsonArray([.. paths.Select(p => (JsonNode?)p)]),
+            };
+            var raw = await _dispatcher.HandleAsync("upload-path", args.ToJsonString());
+            await BridgeWebView.ExecuteScriptAsync($"window.onDropResult && window.onDropResult({raw})");
+        }
+        catch (Exception ex)
+        {
+            await BridgeWebView.ExecuteScriptAsync(
+                $"toast({JsonSerializer.Serialize("导入失败：" + ex.Message)},'err')");
+        }
+    }
+
+    /// <summary>等待 WebView2 Core 初始化完成（拖拽/命令行导入都依赖此）。</summary>
+    private async Task<bool> WaitForWebViewReady(int timeoutMs = 5000)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (sw.ElapsedMilliseconds < timeoutMs)
+        {
+            if (BridgeWebView.CoreWebView2 != null) return true;
+            await Task.Delay(100);
+        }
+        return false;
     }
 }

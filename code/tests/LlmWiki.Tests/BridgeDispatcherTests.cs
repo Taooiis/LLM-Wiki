@@ -142,6 +142,19 @@ public class BridgeDispatcherTests : IDisposable
         Assert.True(clip["ok"]!.GetValue<bool>());
     }
 
+    // ---------- 文件关联 ----------
+
+    [Fact]
+    public async Task FileAssoc_Get_ReturnsRegisteredStatusAndExtensions()
+    {
+        var json = JsonNode.Parse(await _bridge.HandleAsync("file-assoc-get", "{}"))!;
+        Assert.True(json["registered"]!.GetValue<bool>() == false || json["registered"]!.GetValue<bool>() == true);
+        var exts = json["extensions"]!.AsArray().Select(n => n!.ToString()).ToList();
+        Assert.Contains(".md", exts);
+        Assert.Contains(".docx", exts);
+        Assert.Contains(".xlsx", exts);
+    }
+
     // ---------- 分享：PIN + 二维码 ----------
 
     [Fact]

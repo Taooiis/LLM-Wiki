@@ -97,6 +97,24 @@ public class BridgeDispatcher(ConfigService config)
                     Kb.DeleteKb(S("name"));
                     return Ok(new JsonObject { ["ok"] = true });
 
+                // ---------- 文件关联 ----------
+                case "file-assoc-get":
+                    return Ok(new JsonObject
+                    {
+                        ["registered"] = FileAssociation.IsRegistered(),
+                        ["extensions"] = new JsonArray([.. FileAssociation.Extensions.Select(e => (JsonNode?)e)]),
+                    });
+
+                case "file-assoc-register":
+                    return FileAssociation.Register()
+                        ? Ok(new JsonObject { ["ok"] = true, ["registered"] = true })
+                        : Error("注册失败");
+
+                case "file-assoc-unregister":
+                    return FileAssociation.Unregister()
+                        ? Ok(new JsonObject { ["ok"] = true, ["registered"] = false })
+                        : Error("解除失败");
+
                 // ---------- 目录与文件 ----------
                 case "tree": return Ok(new JsonObject { ["tree"] = JsonObjectifyTree(Fb.Tree(S("kb"))) });
 
