@@ -1,0 +1,66 @@
+/* LLM Wiki · 现代工作台设计令牌（冷 slate 色阶 + 靛蓝强调；系统字体栈；4px 间距尺度） */
+:root {
+  color-scheme: light;
+
+  /* 间距（4px 尺度） */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+
+  /* 字号（应用密度：14 基准） */
+  --fs-xs: 11px; --fs-sm: 12px; --fs-2: 13px; --fs-md: 14px; --fs-lg: 15px; --fs-xl: 17px; --fs-2xl: 20px;
+
+  /* 冷 slate 中性阶 */
+  --bg: #F6F8FB;
+  --surface: #FFFFFF;
+  --surface-2: #F1F4F9;
+  --surface-3: #E9EDF4;
+  --border: #E3E8EF;
+  --border-strong: #CBD5E4;
+  --border-hover: #AEBDD2;
+
+  /* 文字 */
+  --text-1: #16233A;
+  --text-2: #3E4C63;
+  --text-3: #64748B;
+  --text-faint: #94A3B8;              /* 仅禁用态 */
+
+  /* 强调（靛蓝，只做主操作与当前态） */
+  --accent: #2E6BE6;
+  --accent-hover: #245BD0;
+  --accent-down: #1E4CB8;
+  --accent-subtle: #EAF0FE;
+  --accent-text: #2455C4;
+
+  /* 信号 */
+  --danger: #D92D20;
+  --danger-subtle: #FEECEB;
+  --success: #12805C;
+  --warn-bg: #FFFAEB;
+  --warn-border: #F0DFA8;
+  --warn-text: #7A4D00;
+
+  /* 代码面板（签名元素） */
+  --code-bg: #16181D;
+  --code-border: #2A2D35;
+  --code-text: #DEE1E7;
+  --code-muted: #8B8F9A;
+
+  /* 字体 */
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", -apple-system, "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "Consolas", ui-monospace, "SFMono-Regular", monospace;
+
+  /* 几何 */
+  --r-sm: 7px; --r-md: 9px; --r-lg: 14px;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.05);
+  --shadow-card-hover: 0 2px 4px rgba(16, 24, 40, 0.05), 0 4px 12px rgba(16, 24, 40, 0.08);
+  --shadow-pop: 0 12px 32px rgba(16, 24, 40, 0.16), 0 2px 8px rgba(16, 24, 40, 0.08);
+  --shadow-primary: 0 1px 2px rgba(37, 99, 235, 0.35);
+  --sidebar-w: 224px;
+  --dur-1: 140ms; --dur-2: 220ms;
+  --ease-out: cubic-bezier(0.2, 0.7, 0.3, 1);
+
+  /* 兼容别名：JS 注入片段引用的旧变量名 */
+  --brand: var(--accent);
+  --color-muted: var(--text-3);
+  --color-accent-2: var(--accent-text);
+  --color-success: var(--success);
+}
