@@ -19,9 +19,13 @@ window.api = (async (path, options = {}) => {
     '/api/changes': 'changes',
     '/api/changes/clear': 'changes-clear',
     '/api/upload': 'upload',
+    '/api/pick-files': 'file-pick',
+    '/api/kb-watch': 'kb-watch',
+    '/api/ui-state': options.method === 'POST' ? 'ui-state-set' : 'ui-state-get',
     '/api/drives': 'drives',
     '/api/browse': 'browse',
     '/api/places': 'places',
+    '/api/pick-folder': 'folder-pick',
     '/api/net-pc': 'net-pc',
     '/api/net-shares': 'net-shares',
     '/api/prompt': 'prompt',
@@ -66,4 +70,15 @@ window.api = (async (path, options = {}) => {
     window.addEventListener('message', handler);
     window.chrome.webview.postMessage({ cmd: cmd, args: JSON.stringify(args), requestId: requestId });
   });
+});
+
+/**
+ * 宿主推送通道（无 requestId）：文件变更通知 { type:'fs-change', kb }。
+ * 由 WPF FileWatcher 在 Agent 改完文件后发出，前端据此自动刷新列表。
+ */
+window.chrome?.webview?.addEventListener('message', (event) => {
+  const msg = event.data;
+  if (msg && msg.type === 'fs-change' && typeof window.onFsChange === 'function') {
+    window.onFsChange(msg);
+  }
 });

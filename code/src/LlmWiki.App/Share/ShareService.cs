@@ -20,9 +20,12 @@ namespace LlmWiki.App.Share;
 /// 路由白名单仅 GET；写方法一律 405、越权路径 400、未知路由 404；
 /// 根本不挂写 API，防访探测（spec 03 §4）。
 /// </summary>
-public class ShareService(ConfigService config, FileBridge files, KbService kbs)
+public class ShareService(ConfigService config)
 {
-    private readonly string _wikis = config.WikisDir;
+    // 存储路径与服务实例每次请求现取：改路径后分享立刻跟随新目录（不再固化构造时的旧值）
+    private string Wikis => config.WikisDir;
+    private FileBridge Files => new(config.WikisDir);
+    private KbService Kbs => new(config.WikisDir);
     private IHost? _host;
     private IApplicationBuilder? _app;
     private int _port;
@@ -32,12 +35,22 @@ public class ShareService(ConfigService config, FileBridge files, KbService kbs)
     public int Port => _port;
 
     /// <summary>
+    /// 本次分享的访问 PIN（4 位数字，每次开启重新生成）。
+    /// 只读页与所有 /api 都必须带它（?pin= 或 cookie），防止同一局域网陌生人直接翻库。
+    /// </summary>
+    public string Pin { get; private set; } = "";
+
+    private const string PinCookie = "llmwiki_pin";
+
+    /// <summary>
     /// 启动服务。port=0 时系统分配一个空闲端口。
     /// </summary>
     public bool Start(int port, out string error)
     {
         if (_host != null) { error = "服务已在运行"; return false; }
         _port = port;
+        // 每次开启换新 PIN：关掉再开，旧链接立即失效
+        Pin = Random.Shared.Next(1000, 10000).ToString();
         try
         {
             _host = Host.CreateDefaultBuilder()
@@ -64,6 +77,7 @@ public class ShareService(ConfigService config, FileBridge files, KbService kbs)
         catch (Exception e)
         {
             _host = null;
+            Pin = "";
             error = e.Message;
             return false;
         }
@@ -73,8 +87,11 @@ public class ShareService(ConfigService config, FileBridge files, KbService kbs)
     {
         if (_host != null)
         {
+            try { _host.StopAsync(TimeSpan.FromSeconds(2)).GetAwaiter().GetResult(); }
+            catch { /* 尽力而为：Dispose 兜底 */ }
             _host.Dispose();
             _host = null;
+            Pin = "";
         }
     }
 
@@ -110,6 +127,46 @@ public class ShareService(ConfigService config, FileBridge files, KbService kbs)
             ?? [$"http://localhost:{_port}/"];
         ParseFirstAddress(_addresses.FirstOrDefault());
 
+        // PIN 闸门：必须在 UseRouting 之前，未授权请求直接挡掉，不进任何路由
+        app.Use(async (ctx, next) =>
+        {
+            // 带对了 ?pin=：下发 cookie 并跳回干净 URL（后续请求靠 cookie，不再依赖 URL 里的 PIN）
+            var fromQuery = ctx.Request.Query["pin"].ToString();
+            if (!string.IsNullOrEmpty(fromQuery) && fromQuery == Pin)
+            {
+                ctx.Response.Cookies.Append(PinCookie, Pin, new CookieOptions
+                {
+                    HttpOnly = true, // 页面 JS 不需要读，减少被脚本窃取的窗口
+                    SameSite = SameSiteMode.Lax,
+                    Path = "/",
+                });
+                var clean = new QueryString(
+                    string.Join("&", ctx.Request.Query
+                        .Where(kv => kv.Key != "pin")
+                        .SelectMany(kv => kv.Value.Select(v => $"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(v ?? "")}"))));
+                ctx.Response.Redirect(ctx.Request.Path + clean);
+                return;
+            }
+
+            if (IsAuthorized(ctx))
+            {
+                await next();
+                return;
+            }
+
+            // /api/* 给 401 JSON，页面给 PIN 输入页
+            if (ctx.Request.Path.StartsWithSegments("/api"))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                ctx.Response.ContentType = "application/json; charset=utf-8";
+                await ctx.Response.WriteAsync("{\"error\":\"PIN 不正确或已失效\",\"needPin\":true}");
+                return;
+            }
+
+            ctx.Response.ContentType = "text/html; charset=utf-8";
+            await ctx.Response.WriteAsync(PinGateHtml());
+        });
+
         app.UseRouting();
         app.UseEndpoints(endpoints =>
         {
@@ -126,7 +183,7 @@ public class ShareService(ConfigService config, FileBridge files, KbService kbs)
             {
                 var node = new JsonObject();
                 var arr = new JsonArray();
-                foreach (var k in kbs.ListKbs()) arr.Add(k);
+                foreach (var k in Kbs.ListKbs()) arr.Add(k);
                 node["kbs"] = arr;
                 return WriteJson(ctx, node);
             });
@@ -137,9 +194,9 @@ public class ShareService(ConfigService config, FileBridge files, KbService kbs)
                 var kb = ctx.Request.Query["kb"];
                 if (string.IsNullOrWhiteSpace(kb))
                     return Forbidden404(ctx);
-                if (!Directory.Exists(Path.Combine(_wikis, kb!)))
+                if (!Directory.Exists(Path.Combine(Wikis, kb!)))
                     return Forbidden404(ctx);
-                var tree = files.Tree(kb!);
+                var tree = Files.Tree(kb!);
                 var node = new JsonObject { ["tree"] = JsonSerializer.SerializeToNode(tree) };
                 return WriteJson(ctx, node);
             });
@@ -172,6 +229,49 @@ public class ShareService(ConfigService config, FileBridge files, KbService kbs)
         if (m.Success && int.TryParse(m.Groups[1].Value, out var p)) _port = p;
     }
 
+    /// <summary>带 PIN 的访问地址（二维码与分享链接用）。</summary>
+    public string AccessUrl(string address) =>
+        string.IsNullOrEmpty(Pin) ? address : address + (address.Contains('?') ? "&" : "?") + "pin=" + Pin;
+
+    /// <summary>请求是否已带对 PIN（只认 cookie：URL 里的 ?pin= 在上面已换成 cookie 并重定向）。</summary>
+    private bool IsAuthorized(HttpContext ctx)
+    {
+        if (string.IsNullOrEmpty(Pin)) return false;
+        var cookie = ctx.Request.Cookies[PinCookie];
+        return !string.IsNullOrEmpty(cookie) && cookie == Pin;
+    }
+
+    /// <summary>PIN 输入页：极简表单，输对就带 ?pin= 跳回原地址。</summary>
+    private string PinGateHtml() => $$"""
+        <!doctype html>
+        <html lang="zh-CN">
+        <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>输入 PIN · LLM Wiki 只读页</title>
+        <style>
+          :root { color-scheme: light dark; }
+          body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: #f6f7f9; }
+          @media (prefers-color-scheme: dark) { body { background: #14161a; color: #e8eaed; } }
+          form { background: #fff; padding: 32px 28px; border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,.08); width: min(88vw, 320px); text-align: center; }
+          @media (prefers-color-scheme: dark) { form { background: #1e2126; box-shadow: none; } }
+          h1 { font-size: 17px; margin: 0 0 6px; }
+          p { font-size: 13px; opacity: .65; margin: 0 0 18px; }
+          input { width: 100%; box-sizing: border-box; font-size: 26px; letter-spacing: 10px; text-align: center; padding: 10px 12px; border: 1px solid #ccc; border-radius: 10px; background: transparent; color: inherit; }
+          button { margin-top: 14px; width: 100%; padding: 11px; font-size: 15px; border: 0; border-radius: 10px; background: #2563eb; color: #fff; cursor: pointer; }
+        </style>
+        </head>
+        <body>
+          <form method="get" action="/">
+            <h1>输入 PIN</h1>
+            <p>PIN 显示在电脑端「分享」页面，4 位数字</p>
+            <input name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" autofocus required aria-label="4 位 PIN">
+            <button type="submit">进入</button>
+          </form>
+        </body>
+        </html>
+        """;
+
     private Task Forbidden400(HttpContext ctx)
     {
         ctx.Response.StatusCode = 400;
@@ -191,7 +291,7 @@ public class ShareService(ConfigService config, FileBridge files, KbService kbs)
             return Forbidden400(ctx);
 
         // 路径校验（同 PathGuard，拒绝 .. 越界）
-        var safe = PathGuard.SafeJoin(_wikis, kb, path);
+        var safe = PathGuard.SafeJoin(Wikis, kb, path);
         if (safe == null)
             return Forbidden400(ctx);
 

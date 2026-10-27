@@ -20,6 +20,7 @@ public class ShareServiceTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "llmwiki-share-" + Guid.NewGuid().ToString("N"));
     private readonly string _wikis;
+    private readonly ConfigService _cfg;
     private readonly ShareService _share;
     private readonly HttpClient _client;
 
@@ -27,16 +28,18 @@ public class ShareServiceTests : IDisposable
     {
         _wikis = Path.Combine(_root, "wikis");
         Directory.CreateDirectory(_wikis);
-        var cfg = new ConfigService(_root);
-        cfg.SetWikisDir(_wikis, out _);
+        _cfg = new ConfigService(_root);
+        _cfg.SetWikisDir(_wikis, out _);
         new KbService(_wikis).CreateKb("分享库");
         new FileBridge(_wikis).WriteText("分享库", "raw/sources/说明.md", "# 标题\n\n正文", out _);
 
-        _share = new ShareService(cfg, new FileBridge(_wikis), new KbService(_wikis));
+        _share = new ShareService(_cfg);
         _share.Start(0, out var err); // port=0 随机
         Assert.True(string.IsNullOrEmpty(err), err);
         _client = new HttpClient();
         _client.BaseAddress = new Uri(_share.LocalAddress());
+        // 分享服务要求 4 位 PIN：测试统一用 cookie 认证（等价于扫码进过一次之后的状态）
+        _client.DefaultRequestHeaders.Add("Cookie", "llmwiki_pin=" + _share.Pin);
     }
 
     public void Dispose()
@@ -130,11 +133,117 @@ public class ShareServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Kbs_FollowLiveWikisDir()
+    {
+        // 回归：分享服务曾把存储路径固化在构造时，改路径后局域网看到的还是旧目录
+        var other = Path.Combine(_root, "wikis2");
+        Directory.CreateDirectory(other);
+        new KbService(other).CreateKb("第二库");
+        _cfg.SetWikisDir(other, out _);
+
+        var r = await _client.GetAsync("/api/kbs");
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        var data = await r.Content.ReadFromJsonAsync<JsonObject>();
+        var names = data!["kbs"]!.AsArray().Select(n => n!.ToString()).ToList();
+        Assert.Contains("第二库", names);
+        Assert.DoesNotContain("分享库", names);
+    }
+
+    [Fact]
+    public async Task File_GET_ServesWikiPagesByRelativePath()
+    {
+        // 回归：分享页目录树可点 wiki/ 下页面（此前前端写死 raw/sources/）
+        new FileBridge(_wikis).WriteText("分享库", "wiki/index.md", "# 目录页", out _);
+        var r = await _client.GetAsync("/api/file?kb=分享库&path=wiki/index.md");
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        Assert.Contains("目录页", await r.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public void LanAddresses_DoesNotLoopbackOnly()
     {
         var addrs = _share.LanAddresses();
         Assert.NotNull(addrs);
         // 至少返回 LocalAddress
         Assert.Contains(_share.LocalAddress(), addrs);
+    }
+
+    // ---------- PIN 鉴权 ----------
+
+    /// <summary>不带 PIN 的客户端（模拟同网段陌生人）。</summary>
+    private HttpClient Anonymous()
+    {
+        var c = new HttpClient { BaseAddress = new Uri(_share.LocalAddress()) };
+        return c;
+    }
+
+    [Fact]
+    public async Task NoPin_ApiReturns401()
+    {
+        using var c = Anonymous();
+        var r = await c.GetAsync("/api/kbs");
+        Assert.Equal(HttpStatusCode.Unauthorized, r.StatusCode);
+        Assert.Contains("needPin", await r.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task WrongPin_ApiReturns401()
+    {
+        using var c = Anonymous();
+        var r = await c.GetAsync("/api/kbs?pin=0000");
+        // 0000 几乎不可能等于随机 PIN；万一撞上就跳过（概率 1/9000）
+        if (_share.Pin == "0000") return;
+        Assert.Equal(HttpStatusCode.Unauthorized, r.StatusCode);
+    }
+
+    [Fact]
+    public async Task NoPin_RootServesPinGate()
+    {
+        using var c = Anonymous();
+        var r = await c.GetAsync("/");
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        var html = await r.Content.ReadAsStringAsync();
+        Assert.Contains("输入 PIN", html);
+        // 没验 PIN 前不能拿到只读页内容
+        Assert.DoesNotContain("编辑请到主机", html);
+    }
+
+    [Fact]
+    public async Task QueryPin_SetsCookieAndRedirectsToCleanUrl()
+    {
+        // 关掉自动跳转：要断言的是「带 PIN 会 302 到干净 URL」
+        using var c = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
+        {
+            BaseAddress = new Uri(_share.LocalAddress()),
+        };
+        var r = await c.GetAsync("/?pin=" + _share.Pin);
+        Assert.Equal(HttpStatusCode.Redirect, r.StatusCode);
+        Assert.Equal("/", r.Headers.Location!.ToString());
+        var cookie = r.Headers.GetValues("Set-Cookie").First();
+        Assert.Contains("llmwiki_pin=" + _share.Pin, cookie);
+    }
+
+    [Fact]
+    public async Task Pin_IsRegeneratedOnRestart()
+    {
+        var first = _share.Pin;
+        Assert.Matches("^[0-9]{4}$", first);
+
+        _share.Stop();
+        Assert.Equal("", _share.Pin);
+
+        Assert.True(_share.Start(0, out var err), err);
+        Assert.Matches("^[0-9]{4}$", _share.Pin);
+        Assert.NotEqual(first, _share.Pin);
+    }
+
+    [Fact]
+    public void QrSvg_RendersSvgForUrl()
+    {
+        var svg = QrSvg.Render(_share.AccessUrl(_share.LocalAddress()));
+        Assert.StartsWith("<svg", svg.TrimStart());
+        Assert.Contains("<path", svg);
+        // 二维码内容里带 PIN，扫码即带授权
+        Assert.Contains("pin=" + _share.Pin, _share.AccessUrl(_share.LocalAddress()));
     }
 }

@@ -41,8 +41,13 @@
 
 ## 状态
 - 全部 9 个 Task 完成 ✅
-- 80/80 测试通过，0 错误 0 警告
+- 83/83 测试通过（新增：分享跟随存储路径、分享页 wiki/ 路径、原生选路径桥命令）
 - `dotnet publish` 自包含输出验证可用
+
+## 2026-10-27 实现修复 + UI 重设计
+- **分享未生效根因**：`ShareService` 构造时固化 `config.WikisDir`（含注入的 FileBridge/KbService 实例），改存储路径后局域网仍服务旧目录 → 改为每请求现取；`Stop()` 补 `StopAsync` 优雅释放端口；分享页目录树改为带全路径（wiki/ 页面可点）
+- **原生选路径**：桌面应用不再走网页面包屑选择器——`BridgeDispatcher.FolderPicker` + WPF `OpenFolderDialog` 系统对话框（可浏览网络共享），无宿主时前端自动回退旧选择器
+- **UI**：管理面板与分享页整体重设计（现代工作台 + 左侧边栏 + slate 皮肤，见 `design.md`），全部接线与测试锚点保留
 
 ## 下一步
 - Task 9：发布产物 + 使用说明 (`publish.ps1` + `code/README.md`)

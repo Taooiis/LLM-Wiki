@@ -3,6 +3,9 @@ using System.Text;
 
 namespace LlmWiki.App.Services;
 
+/// <summary>单文件上传结果（拖拽批量上传用）。</summary>
+public record PathUploadResult(string Name, bool Ok, string Error, string? Rel);
+
 /// <summary>
 /// 上传面：四格式分派 + office 成对落盘（原件 raw/original/ + 副本 raw/sources/，spec 02 §6.1）。
 /// 转换失败/重名冲突一律不落盘（不产生孤儿副本，Review Focus 2）。
@@ -83,6 +86,58 @@ public class UploadService(string wikisDir)
         LogWriter.AppendSource(wikisDir, kb, copyRel, "副本生成");
         ChangeStore.Record(wikisDir, kb, copyRel, "上传", HashUtil.Sha256Text(md));
         return (true, "", copyRel);
+    }
+
+    /// <summary>
+    /// 从本地路径直接入库（WPF 拖拽 / 系统文件对话框）。
+    /// 省掉前端 base64 编码与 JSON 大字符串复制；文件夹只展开一层，不递归。
+    /// </summary>
+    public List<PathUploadResult> UploadFromPaths(string kb, IEnumerable<string> paths)
+    {
+        var results = new List<PathUploadResult>();
+
+        // 1) 先把路径展开成待上传清单（目录只取一层支持格式，避免误拖整个目录树）
+        var files = new List<string>();
+        foreach (var p in paths)
+        {
+            if (Directory.Exists(p))
+            {
+                try
+                {
+                    files.AddRange(Directory.EnumerateFiles(p)
+                        .Where(f => FileHelper.IsSourceFile(Path.GetFileName(f))));
+                }
+                catch (Exception e)
+                {
+                    results.Add(new PathUploadResult(p, false, "目录读取失败：" + e.Message, null));
+                }
+            }
+            else if (File.Exists(p)) files.Add(p);
+            else results.Add(new PathUploadResult(p, false, "文件不存在", null));
+        }
+
+        // 2) 逐个入库；单个失败不影响其余文件
+        foreach (var f in files)
+        {
+            var name = Path.GetFileName(f);
+            try
+            {
+                var size = new FileInfo(f).Length;
+                if (size > MaxBytes)
+                {
+                    results.Add(new PathUploadResult(name, false, $"超过 20MB 上限（{size / 1024 / 1024}MB）", null));
+                    continue;
+                }
+                var (ok, error, rel) = Upload(kb, name, File.ReadAllBytes(f));
+                results.Add(new PathUploadResult(name, ok, error, rel));
+            }
+            catch (Exception e)
+            {
+                results.Add(new PathUploadResult(name, false, "读取失败：" + e.Message, null));
+            }
+        }
+
+        return results;
     }
 
     /// <summary>源删除：office 副本成对删原件；纯文本按 FileBridge 语义。</summary>

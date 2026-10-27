@@ -23,7 +23,23 @@ public class BridgeDispatcher(ConfigService config)
     private PromptEngine Prompts => new(config, Fb);
     // ShareService 单例（维持服务器监听状态）
     private ShareService? _share;
-    private ShareService Share => _share ??= new ShareService(config, new FileBridge(config.WikisDir), new KbService(config.WikisDir));
+    private ShareService Share => _share ??= new ShareService(config);
+
+    // 原生系统文件夹选择器（MainWindow 注入；依赖 WPF 窗口，测试环境为 null）
+    public Func<string?>? FolderPicker { get; set; }
+
+    // 原生系统多选文件对话框（同上；返回真实路径，供桌面直接读流）
+    public Func<string[]?>? FilePicker { get; set; }
+
+    // 当前知识库的文件变更监听（MainWindow 注入；测试环境为 null）
+    public FileWatcher? Watcher { get; set; }
+
+    // 界面记忆（MainWindow 注入同一文件；未注入时按应用目录取）
+    public UiStateStore? UiStore { get; set; }
+    private UiStateStore Ui => UiStore ??= new UiStateStore(AppContext.BaseDirectory);
+
+    /// <summary>只读分享服务是否在运行（关窗口时决定「退到托盘」还是「真的退出」）。</summary>
+    public bool Sharing => _share?.Running == true;
 
     public async Task<string> HandleAsync(string name, string jsonArgs)
     {
@@ -112,6 +128,48 @@ public class BridgeDispatcher(ConfigService config)
                     }
                     catch (FormatException) { return Error("文件内容不是合法 base64"); }
 
+                // ---------- 拖拽 / 原生文件对话框上传（真实路径，绕开 base64） ----------
+                case "upload-path":
+                    return UploadByPaths(S("kb"), SA("paths"));
+
+                case "file-pick":
+                    {
+                        if (FilePicker == null) return Error("当前环境不支持原生文件选择");
+                        var filePaths = FilePicker() ?? [];
+                        if (filePaths.Length == 0)
+                            return Ok(new JsonObject { ["ok"] = false, ["canceled"] = true });
+                        return UploadByPaths(S("kb"), filePaths);
+                    }
+
+                // ---------- 界面记忆（上次知识库 / 上次 tab；窗口几何由 WPF 层自己存） ----------
+                case "ui-state-get":
+                    {
+                        var st = Ui.Load();
+                        return Ok(new JsonObject { ["lastKb"] = st.LastKb, ["lastTab"] = st.LastTab });
+                    }
+
+                case "ui-state-set":
+                    {
+                        var lastKb = S("lastKb");
+                        var lastTab = S("lastTab");
+                        Ui.Update(st =>
+                        {
+                            if (lastKb.Length > 0) st.LastKb = lastKb;
+                            if (int.TryParse(lastTab, out var t)) st.LastTab = t;
+                        });
+                        return Ok(new JsonObject { ["ok"] = true });
+                    }
+
+                // ---------- 实时变更监听：前端切换库时改监听目标 ----------
+                case "kb-watch":
+                    {
+                        var watchKb = S("kb");
+                        Watcher?.Watch(string.IsNullOrWhiteSpace(watchKb)
+                            ? null
+                            : Path.Combine(config.WikisDir, watchKb));
+                        return Ok(new JsonObject { ["ok"] = true, ["watching"] = Watcher?.CurrentRoot ?? "" });
+                    }
+
                 // ---------- 提示词生成（Task 7：六类 + 边界说明） ----------
                 case "prompt":
                     var pe = Prompts;
@@ -146,6 +204,14 @@ public class BridgeDispatcher(ConfigService config)
                         .Where(d => { try { return Directory.Exists(d); } catch { return false; } })];
                     return Ok(new JsonObject { ["drives"] = new JsonArray([.. drives.Select(n => (JsonNode?)n)]) });
 
+                // ---------- 原生文件夹选择器（桌面应用走系统对话框；无宿主窗口时回退网页选择器） ----------
+                case "folder-pick":
+                    if (FolderPicker == null) return Ok(new JsonObject { ["ok"] = false });
+                    var picked = FolderPicker();
+                    return picked is null
+                        ? Ok(new JsonObject { ["ok"] = false, ["canceled"] = true })
+                        : Ok(new JsonObject { ["ok"] = true, ["path"] = picked });
+
                 case "browse":
                     return SwitchBrowse(S("dir")).ToJsonString(J);
 
@@ -157,32 +223,16 @@ public class BridgeDispatcher(ConfigService config)
 
                 // ---------- 只读分享服务（Task 8） ----------
                 case "share-status":
-                    return Ok(new JsonObject
-                    {
-                        ["running"] = Share.Running,
-                        ["port"] = Share.Running ? Share.Port : 0,
-                        ["localAddress"] = Share.Running ? Share.LocalAddress() : "",
-                        ["lanAddresses"] = Share.Running ? new JsonArray([.. Share.LanAddresses().Select(n => (JsonNode?)n)]) : new JsonArray(),
-                    });
+                    return Ok(ShareInfo());
 
                 case "share-start":
                     var portStr = S("port");
                     int port = 0;
                     if (portStr.Length > 0 && !int.TryParse(portStr, out port))
                         return Error("端口号无效");
-                    if (Share.Running)
-                    {
-                        port = Share.Port;
-                    }
-                    else if (!Share.Start(port, out var sErr))
+                    if (!Share.Running && !Share.Start(port, out var sErr))
                         return Error(sErr);
-                    return Ok(new JsonObject
-                    {
-                        ["ok"] = true,
-                        ["port"] = Share.Port,
-                        ["localAddress"] = Share.LocalAddress(),
-                        ["lanAddresses"] = new JsonArray([.. Share.LanAddresses().Select(n => (JsonNode?)n)]),
-                    });
+                    return Ok(ShareInfo());
 
                 case "share-stop":
                     Share.Stop();
@@ -290,6 +340,54 @@ public class BridgeDispatcher(ConfigService config)
 
     // TreeItem → JsonNode（children 可空数组显式序列化）
     private static JsonNode? JsonObjectifyTree(TreeItem[] tree) => JsonNode.Parse(JsonSerializer.Serialize(tree, J));
+
+    /// <summary>
+    /// 分享状态 + PIN + 二维码。
+    /// 地址列表统一带上 PIN（对方点开即进，不用手输）；二维码取局域网地址（localhost 手机扫不到）。
+    /// </summary>
+    private JsonObject ShareInfo()
+    {
+        var running = Share.Running;
+        var urls = running ? Share.LanAddresses().Select(Share.AccessUrl).ToArray() : [];
+
+        // 优先非 localhost 的局域网地址；没有局域网地址时退回归环地址（本机浏览器预览也能用）
+        var qrTarget = urls.FirstOrDefault(u => !u.Contains("localhost")) ?? urls.FirstOrDefault() ?? "";
+
+        return new JsonObject
+        {
+            ["ok"] = true,
+            ["running"] = running,
+            ["port"] = running ? Share.Port : 0,
+            ["pin"] = running ? Share.Pin : "",
+            ["localAddress"] = running ? Share.LocalAddress() : "",
+            ["lanAddresses"] = new JsonArray([.. urls.Select(u => (JsonNode?)u)]),
+            ["qr"] = running ? QrSvg.Render(qrTarget) : "",
+        };
+    }
+
+    /// <summary>批量上传真实路径（拖拽与系统文件对话框共用同一套结果形状）。</summary>
+    private string UploadByPaths(string kb, string[] paths)
+    {
+        if (paths.Length == 0) return Error("没有收到文件");
+        if (string.IsNullOrWhiteSpace(kb)) return Error("先选择知识库");
+
+        var rows = Upload.UploadFromPaths(kb, paths);
+        var arr = new JsonArray();
+        foreach (var r in rows)
+            arr.Add(new JsonObject
+            {
+                ["name"] = r.Name,
+                ["ok"] = r.Ok,
+                ["error"] = r.Error,
+                ["rel"] = r.Rel,
+            });
+        return Ok(new JsonObject
+        {
+            ["results"] = arr,
+            ["okCount"] = rows.Count(r => r.Ok),
+            ["failCount"] = rows.Count(r => !r.Ok),
+        });
+    }
 
     private static string Ok(JsonObject o) => o.ToJsonString(J);
     // 分发器返回值是字符串；对象版给内部 JsonObject 返回型方法用

@@ -98,6 +98,37 @@ public class BridgeDispatcherTests : IDisposable
         Assert.NotNull(sh["shares"]);
     }
 
+    // ---------- 分享：PIN + 二维码 ----------
+
+    [Fact]
+    public async Task ShareStart_ReturnsPinQrAndAuthorizedUrls()
+    {
+        // port=0：系统分配空闲端口，测试不占用固定端口
+        var json = JsonNode.Parse(await _bridge.HandleAsync("share-start", Args(("port", "0")).ToString()))!;
+        try
+        {
+            Assert.True(json["running"]!.GetValue<bool>());
+            var pin = json["pin"]!.ToString();
+            Assert.Matches("^[0-9]{4}$", pin);
+
+            // 面板直接内嵌 SVG，不需要额外请求图片
+            Assert.Contains("<svg", json["qr"]!.ToString());
+
+            // 地址都带 PIN：发给对方点开即进
+            var urls = json["lanAddresses"]!.AsArray().Select(n => n!.ToString()).ToList();
+            Assert.NotEmpty(urls);
+            Assert.All(urls, u => Assert.Contains("pin=" + pin, u));
+        }
+        finally
+        {
+            await _bridge.HandleAsync("share-stop", "{}");
+        }
+
+        var stopped = JsonNode.Parse(await _bridge.HandleAsync("share-status", "{}"))!;
+        Assert.False(stopped["running"]!.GetValue<bool>());
+        Assert.Equal("", stopped["pin"]!.ToString()); // 关掉后 PIN 清空，旧链接失效
+    }
+
     // ---------- 提示词命令（Task 7） ----------
 
     [Fact]
@@ -148,5 +179,29 @@ public class BridgeDispatcherTests : IDisposable
         var after = JsonNode.Parse(await _bridge.HandleAsync("kbs-list", new JsonObject().ToString()))!;
         Assert.DoesNotContain("旧库", after["kbs"]!.AsArray().Select(n => n!.ToString()));
         Assert.Equal(newDir, after["root"]!.ToString());
+    }
+
+    // ---------- 原生文件夹选择器（桌面应用系统对话框） ----------
+
+    [Fact]
+    public async Task FolderPick_ReturnsChosenPath_CanceledAndNoHostFallback()
+    {
+        // 宿主注入后回传所选路径
+        _bridge.FolderPicker = () => @"D:\知识库";
+        var picked = JsonNode.Parse(await _bridge.HandleAsync("folder-pick", new JsonObject().ToString()))!;
+        Assert.True(picked["ok"]!.GetValue<bool>());
+        Assert.Equal(@"D:\知识库", picked["path"]!.ToString());
+
+        // 取消：canceled=true
+        _bridge.FolderPicker = () => null;
+        var canceled = JsonNode.Parse(await _bridge.HandleAsync("folder-pick", new JsonObject().ToString()))!;
+        Assert.False(canceled["ok"]!.GetValue<bool>());
+        Assert.True(canceled["canceled"]!.GetValue<bool>());
+
+        // 无宿主（测试/异常环境）：ok=false，前端据此回退内置选择器
+        _bridge.FolderPicker = null;
+        var noHost = JsonNode.Parse(await _bridge.HandleAsync("folder-pick", new JsonObject().ToString()))!;
+        Assert.False(noHost["ok"]!.GetValue<bool>());
+        Assert.Null(noHost["path"]);
     }
 }
