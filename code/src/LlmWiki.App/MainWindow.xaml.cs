@@ -2,6 +2,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows;
+using System.Windows.Shell;
 using Microsoft.Web.WebView2.Core;
 using LlmWiki.App.Bridge;
 using LlmWiki.App.Services;
@@ -17,6 +18,7 @@ public partial class MainWindow : Window
     private BridgeDispatcher _dispatcher = null!;
     private readonly UiStateStore _ui = new(AppContext.BaseDirectory);
     private bool _reallyExit;
+    private System.Windows.Threading.DispatcherTimer? _tbTimer;
 
     /// <summary>窗口被收进托盘时触发（App 用它弹一次气泡提示）。</summary>
     public event Action? HiddenToTray;
@@ -28,6 +30,13 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         RestoreGeometry();
+        
+        // 2.1 任务栏集成：监听分享状态更新进度条
+        _tbTimer = new System.Windows.Threading.DispatcherTimer 
+        { Interval = TimeSpan.FromSeconds(1) };
+        _tbTimer.Tick += (_, _) => UpdateTaskbarProgress();
+        _tbTimer.Start();
+
         Loaded += async (_, _) => await InitWebViewAsync();
         Closing += OnClosing;
     }
@@ -108,6 +117,22 @@ public partial class MainWindow : Window
         _reallyExit = true;
         Close();
         Application.Current.Shutdown();
+    }
+
+    /// <summary>2.1 任务栏集成：同步分享状态到任务栏进度条。</summary>
+    private void UpdateTaskbarProgress()
+    {
+        if (TaskbarItemInfo is not { } tb) return;
+        if (_dispatcher?.Sharing == true)
+        {
+            tb.ProgressState = TaskbarItemProgressState.Indeterminate;
+            tb.Description = "LLM Wiki - 分享服务已启用";
+        }
+        else
+        {
+            tb.ProgressState = TaskbarItemProgressState.None;
+            tb.Description = null;
+        }
     }
 
     private async Task InitWebViewAsync()
