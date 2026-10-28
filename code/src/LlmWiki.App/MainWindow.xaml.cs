@@ -174,11 +174,11 @@ public partial class MainWindow : Window
         switch (type)
         {
             case "refresh":
-                drawing.Geometry = Geometry.Parse(
-                    "M13.5 12.5L11 15L13.5 17.5L12 19L7 14L12 9L13.5 10.5L11 13H15V15H11");
+                drawing.Geometry = Geometry.Parse("M13.5 12.5L11 15L13.5 17.5L12 19L7 14L12 9L13.5 10.5L11 13H15V15H11");
                 break;
             case "share":
-                drawing.Geometry = Geometry.Parse("M8 5A3 3 0 1 8 11A3 3 0 0 0 8 5M4.5 14A2.5 2.5 0 1 1 4.5 19A2.5 2.5 0 0 1 4.5 14M11.5 14A2.5 2.5 0 1 1 11.5 19A2.5 2.5 0 0 1 11.5 14");
+                // 网络信号图标：两个圆 + 辐射线
+                drawing.Geometry = Geometry.Parse("M8 5 A3 3 0 1 0 8 11 M4.5 14 A2.5 2.5 0 1 0 4.5 19 M11.5 14 A2.5 2.5 0 1 0 11.5 19");
                 drawing.Brush = Brushes.Transparent;
                 break;
         }
