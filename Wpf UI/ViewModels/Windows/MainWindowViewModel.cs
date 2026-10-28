@@ -37,6 +37,12 @@ namespace LLM_Wiki.ViewModels.Windows
                 Content = "目录浏览",
                 Icon = new SymbolIcon { Symbol = SymbolRegular.List24 },
                 TargetPageType = typeof(Views.Pages.TreeBrowserPage)
+            },
+            new NavigationViewItem()
+            {
+                Content = "工作流",
+                Icon = new SymbolIcon { Symbol = SymbolRegular.Flow24 },
+                TargetPageType = typeof(Views.Pages.WorkflowPage)
             }
         };
 

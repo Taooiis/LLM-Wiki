@@ -60,6 +60,8 @@ namespace LLM_Wiki
                 services.AddSingleton<ConfigViewModel>();
                 services.AddSingleton<TreeBrowserPage>();
                 services.AddSingleton<TreeBrowserViewModel>();
+                services.AddSingleton<WorkflowPage>();
+                services.AddSingleton<WorkflowViewModel>();
 
                 // 功能迁移：本地服务（无 WebView2，Wpf UI 项目独立）
                 services.AddSingleton<ConfigService>();
