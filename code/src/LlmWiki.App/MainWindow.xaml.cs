@@ -487,6 +487,51 @@ public partial class MainWindow : Window
     {
         base.OnContentRendered(e);
         _ = loadKbList();
+        _ = Updates();
+    }
+
+    // ---------- 状态栏更新 ----------
+    private async Task Updates()
+    {
+        while (true)
+        {
+            try
+            {
+                // 更新知识库
+                if (BridgeWebView?.CoreWebView2 != null)
+                {
+                    var kb = await ReadActiveKbAsync();
+                    StatusKb?.Text = kb.Split(Path.DirectorySeparatorChar).LastOrDefault() ?? kb;
+                    
+                    // 更新文件数
+                    var r = await _dispatcher.HandleAsync("tree", new JsonObject { ["kb"] = kb }.ToJsonString());
+                    var data = JsonSerializer.Deserialize<JsonObject>(r);
+                    var nodes = data?["tree"] as JsonArray;
+                    var count = CountFiles(nodes);
+                    StatusFileCount?.Text = count.ToString();
+                }
+
+                // 更新分享状态
+                StatusShare?.Visibility = _dispatcher?.Sharing == true ? Visibility.Visible : Visibility.Collapsed;
+
+                await Task.Delay(1000);
+            }
+            catch { await Task.Delay(500); }
+        }
+    }
+
+    private static int CountFiles(JsonNode? node)
+    {
+        if (node is JsonObject obj)
+        {
+            var type = obj["type"]?.ToString() ?? "";
+            if (type == "file") return 1;
+            var count = 0;
+            if (obj["children"] is JsonArray arr)
+                foreach (var child in arr) count += CountFiles(child);
+            return count;
+        }
+        return 0;
     }
 
     private async Task loadKbList()

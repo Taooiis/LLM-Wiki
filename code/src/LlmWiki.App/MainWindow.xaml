@@ -59,13 +59,13 @@
         </ToolBar>
 
         <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="260"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
             <!-- 左侧导航栏 -->
-            <Border Grid.Column="0" Background="#FBFCFE" BorderThickness="0,0,1,0" BorderBrush="#E1E4E8">
+            <Border Grid.Row="0" Grid.Column="0" Background="#FBFCFE" BorderThickness="0,0,1,0" BorderBrush="#E1E4E8">
                 <StackPanel>
                     <!-- 知识库选择 -->
                     <TextBlock Text="知识库" FontWeight="SemiBold" Foreground="#575C65" Margin="12,8,12,4" FontSize="12"/>
@@ -102,7 +102,38 @@
             </Border>
 
             <!-- 右侧 WebView2 内容区 -->
-            <Wpf:WebView2 x:Name="BridgeWebView" Grid.Column="1"/>
+            <Grid Grid.Row="0" Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Wpf:WebView2 x:Name="BridgeWebView" Grid.Row="0"/>
+
+                <!-- 状态栏 -->
+                <StatusBar Grid.Row="1" Background="#F5F7FA" BorderBrush="#D1D5DB" BorderThickness="0,1,0,0">
+                    <StatusBarItem>
+                        <TextBlock Text="知识库: " Foreground="#575C65" FontWeight="SemiBold" Margin="0,0,4,0"/>
+                    </StatusBarItem>
+                    <StatusBarItem>
+                        <TextBlock x:Name="StatusKb" Foreground="#2F343B"/>
+                    </StatusBarItem>
+                    <Separator/>
+                    <StatusBarItem>
+                        <TextBlock Text="文件数: " Foreground="#575C65" FontWeight="SemiBold" Margin="0,0,4,0"/>
+                    </StatusBarItem>
+                    <StatusBarItem>
+                        <TextBlock x:Name="StatusFileCount" Foreground="#2F343B"/>
+                    </StatusBarItem>
+                    <StatusBarItem>
+                        <TextBlock x:Name="StatusShare" Foreground="#575C65" Visibility="Collapsed">📡 已分享</TextBlock>
+                    </StatusBarItem>
+                    <Separator/>
+                    <StatusBarItem HorizontalAlignment="Right">
+                        <TextBlock Text=" v1.0" Foreground="#8A95A8"/>
+                    </StatusBarItem>
+                </StatusBar>
+            </Grid>
         </Grid>
 
         <Border x:Name="DropOverlay" Visibility="Collapsed" IsHitTestVisible="False"
