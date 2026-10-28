@@ -1,4 +1,5 @@
 ﻿using System.Collections.ObjectModel;
+using System.Windows;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -31,7 +32,13 @@ namespace LLM_Wiki.ViewModels.Pages
         private string _selectedKb = "";
 
         [ObservableProperty]
+        private string _selectedFile = "";
+
+        [ObservableProperty]
         private string _markdownText = "";
+
+        [ObservableProperty]
+        private string _searchText = "";
 
         public void LoadKbs()
         {
@@ -66,7 +73,77 @@ namespace LLM_Wiki.ViewModels.Pages
 
             var error = "";
             var content = _fileBridge.ReadText(kb, file, out error);
-            MarkdownText = Markdown.ToPlainText(content ?? string.Empty);
+            MarkdownText = content ?? string.Empty;
+            SelectedFile = file;
+        }
+
+        public void SearchFiles(string kb, string keyword)
+        {
+            Files.Clear();
+            if (string.IsNullOrWhiteSpace(kb) || string.IsNullOrWhiteSpace(keyword))
+            {
+                return;
+            }
+
+            foreach (var name in FlattenFiles(_fileBridge.Tree(kb), keyword))
+            {
+                Files.Add(name);
+            }
+        }
+
+        private static IEnumerable<string> FlattenFiles(TreeItem[] nodes, string keyword)
+        {
+            foreach (var node in nodes)
+            {
+                if (node.Type == "file" && node.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                {
+                    yield return node.Name;
+                }
+                if (node.Children != null)
+                {
+                    foreach (var f in FlattenFiles(node.Children, keyword))
+                    {
+                        yield return f;
+                    }
+                }
+            }
+        }
+
+        // WPF 文件选择器简化：用 OpenFileDialog
+        // 这里返回的文件路径通过 ViewModel 保存到 KB
+        [RelayCommand]
+        private void UploadFile(string kb)
+        {
+            // 占位：实际上传需在 View 中调 MsDialog/OpenFolderDialog
+            MessageBox.Show("上传功能：请选文件 → 调用 FileBridge.WriteText", "上传", MessageBoxButton.OK);
+        }
+
+        [RelayCommand]
+        private void SearchKb(string kbName)
+        {
+            if (string.IsNullOrWhiteSpace(kbName))
+            {
+                return;
+            }
+
+            LoadFiles(kbName);
+            // 触发搜索
+            var found = FlattenFiles(_fileBridge.Tree(kbName), SearchText);
+            Files.Clear();
+            foreach (var f in found) Files.Add(f);
+        }
+
+        [RelayCommand]
+        private void SaveFile(string content)
+        {
+            if (string.IsNullOrWhiteSpace(SelectedKb) || string.IsNullOrWhiteSpace(SelectedFile))
+            {
+                MessageBox.Show("请选择文件后再保存", "保存", MessageBoxButton.OK);
+                return;
+            }
+
+            _fileBridge.WriteText(SelectedKb, SelectedFile, content, out _);
+            MessageBox.Show("已保存", "保存", MessageBoxButton.OK);
         }
 
         [RelayCommand]

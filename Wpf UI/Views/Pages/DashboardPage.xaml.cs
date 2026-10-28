@@ -24,9 +24,13 @@ namespace LLM_Wiki.Views.Pages
 
         private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(DashboardViewModel.MarkdownText))
+            // 同步 SelectedKb 模糊搜索
+            if (e.PropertyName == nameof(DashboardViewModel.SelectedKb))
             {
-                PreviewBox.Text = ViewModel.MarkdownText;
+                if (!string.IsNullOrWhiteSpace(ViewModel.SelectedKb))
+                {
+                    ViewModel.LoadFiles(ViewModel.SelectedKb);
+                }
             }
         }
 
@@ -38,7 +42,6 @@ namespace LLM_Wiki.Views.Pages
             }
 
             ViewModel.SelectedKb = kb;
-            ViewModel.LoadFiles(kb);
         }
 
         private void FileList_SelectionChanged(object sender, SelectionChangedEventArgs e)

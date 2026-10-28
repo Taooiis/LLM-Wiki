@@ -23,59 +23,79 @@
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
 
+    <!-- 标题 -->
     <TextBlock Grid.Row="0" Grid.ColumnSpan="2" FontSize="28" FontWeight="Medium" Text="知识库" />
+
+    <!-- 工具栏：左侧功能，右侧 KB 操作 -->
     <Grid Grid.Row="1" Grid.ColumnSpan="2">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="Auto" />
         <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
-      <TextBlock
+      <!-- 左侧：搜索框 -->
+      <ui:TextBox
         Grid.Column="0"
-        Margin="0,4,12,0"
-        VerticalAlignment="Center"
-        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-        Text="管理你的知识库" />
+        Margin="0,4,8,0"
+        Width="240"
+        PlaceholderText="搜索文件..."
+        Text="{Binding ViewModel.SearchText, Mode=TwoWay}"
+        Background="{DynamicResource ApplicationBackgroundBrush}"
+        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+        BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
       <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+        <!-- KB 操作 -->
         <TextBox
           x:Name="KbNameInput"
-          Width="240"
+          Width="120"
           Margin="0,0,8,0"
-          Padding="6,2"
+          Padding="4,2"
           Background="{DynamicResource ApplicationBackgroundBrush}"
           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
           BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
         <ui:Button
-          Content="新建知识库"
+          Content="新建"
           Command="{Binding ViewModel.CreateKbCommand}"
           CommandParameter="{Binding ElementName=KbNameInput, Path=Text}"
+          Margin="4,0,12,0"
           Icon="Fluent24" />
         <ui:Button
-          Content="删除知识库"
+          Content="删除"
           Command="{Binding ViewModel.DeleteKbCommand}"
           CommandParameter="{Binding SelectedItem, RelativeSource={RelativeSource AncestorType=ListBox}}"
-          Margin="8,0,0,0"
+          Margin="4,0,0,0"
+          Icon="Fluent24" />
+        <!-- 快速搜索 -->
+        <ui:Button
+          Content="搜索"
+          Command="{Binding ViewModel.SearchKbCommand}"
+          CommandParameter="{Binding ElementName=KbList, Path=SelectedItem}"
+          Margin="12,0,8,0"
           Icon="Fluent24" />
       </StackPanel>
     </Grid>
 
+    <!-- 内容区：左 KB 列表 + 右 文件列表/预览 -->
     <Grid Grid.Row="2">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="280" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
+
+      <!-- 左侧：知识库列表 -->
       <ui:ListView
         Grid.Column="0"
         x:Name="KbList"
         ItemsSource="{Binding ViewModel.Kbs, Mode=OneWay}"
         Background="Transparent"
-        BorderThickness="0"
-        SelectionChanged="KbList_SelectionChanged">
+        BorderThickness="0">
         <ui:ListView.ItemTemplate>
           <DataTemplate>
             <TextBlock Padding="8,6" Text="{Binding}" />
           </DataTemplate>
         </ui:ListView.ItemTemplate>
       </ui:ListView>
+
+      <!-- 右侧：文件列表 + 预览 -->
       <StackPanel Grid.Column="1">
         <ui:ListView
           x:Name="FileList"
@@ -89,12 +109,30 @@
             </DataTemplate>
           </ui:ListView.ItemTemplate>
         </ui:ListView>
+
+        <!-- 操作栏 -->
+        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+          <ui:Button
+            Content="上传"
+            Command="{Binding ViewModel.UploadFileCommand}"
+            CommandParameter="{Binding ElementName=KbList, Path=SelectedItem}"
+            Margin="0,0,8,0"
+            Icon="Fluent24" />
+          <ui:Button
+            Content="保存"
+            Command="{Binding ViewModel.SaveFileCommand}"
+            CommandParameter="{Binding ElementName=PreviewBox, Path=Text}"
+            Margin="8,0,0,0"
+            Icon="Fluent24" />
+        </StackPanel>
+
+        <!-- 预览/编辑区 -->
         <ui:TextBox
           x:Name="PreviewBox"
-          Grid.Row="2"
           Margin="0,8,0,0"
           MinHeight="200"
-          Text="{Binding ViewModel.MarkdownText, Mode=OneWay}"
+          Height="200"
+          Text="{Binding ViewModel.MarkdownText, Mode=TwoWay}"
           AcceptsReturn="True"
           TextWrapping="Wrap"
           VerticalScrollBarVisibility="Auto"
