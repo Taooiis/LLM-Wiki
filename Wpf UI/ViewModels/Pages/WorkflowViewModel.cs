@@ -8,16 +8,19 @@ using CommunityToolkit.Mvvm.Input;
 
 using LLM_Wiki.Services;
 using LLM_Wiki.ViewModels.Windows;
+using Wpf.Ui.Abstractions;
 
 namespace LLM_Wiki.ViewModels.Pages
 {
     public partial class WorkflowViewModel : ObservableObject
     {
         private readonly MainWindowViewModel _mainViewModel;
+        private readonly FileBridge _fileBridge;
 
-        public WorkflowViewModel(MainWindowViewModel mainViewModel)
+        public WorkflowViewModel(MainWindowViewModel mainViewModel, FileBridge fileBridge)
         {
             _mainViewModel = mainViewModel;
+            _fileBridge = fileBridge;
             _mainViewModel.PropertyChanged += MainViewModel_PropertyChanged;
         }
 
@@ -83,7 +86,7 @@ namespace LLM_Wiki.ViewModels.Pages
             PromptCards.Add(new PromptCard(
                 "边界说明",
                 "定义 Agent 对本知识库的读写边界与行为规范。",
-                BuildBoundaryPrompt(kbPath)));
+                BuildBoundaryPrompt(kbPath, SelectedKb)));
 
             PromptCards.Add(new PromptCard(
                 "Ingest（批量）",
@@ -114,27 +117,78 @@ namespace LLM_Wiki.ViewModels.Pages
                 BuildCleanPrompt(kbPath)));
         }
 
-        private static string BuildBoundaryPrompt(string kbPath)
+        private string BuildBoundaryPrompt(string kbPath, string kb)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("# 边界说明（" + kbPath + "）");
+            sb.AppendLine("# 知识库接入说明（粘贴进 Agent 配置后可直接读取本库）");
             sb.AppendLine();
-            sb.AppendLine("你是一个知识库维护 Agent，操作目标：" + kbPath);
+            sb.AppendLine("知识库：" + kb);
+            sb.AppendLine("本地绝对路径：" + kbPath);
             sb.AppendLine();
-            sb.AppendLine("## 可执行操作");
-            sb.AppendLine("- 读取 raw/sources/ 下的 .md/.txt 入库副本");
-            sb.AppendLine("- 读取 wiki/ 下的 index.md、log.md、overview.md");
-            sb.AppendLine("- 读取 raw/original/ 下的 docx/xlsx 原件（仅作参考）");
+            sb.AppendLine("## 先读这三个文件");
+
+            // 读取 purpose.md
+            var purposeError = "";
+            var purposeContent = _fileBridge.ReadText(kb, "purpose.md", out purposeError) ?? "";
+            sb.AppendLine("1. purpose.md（目标/范围）：");
+            sb.AppendLine(Cut(purposeContent, 800));
             sb.AppendLine();
-            sb.AppendLine("## 禁止操作");
-            sb.AppendLine("- 不得修改 raw/original/ 下的 Office 原件");
-            sb.AppendLine("- 不得直接修改 wiki/ 产物（除 Ingest 指令明确要求）");
-            sb.AppendLine("- 不得创建超出知识库目录结构的文件");
+
+            // 读取 schema.md
+            var schemaError = "";
+            var schemaContent = _fileBridge.ReadText(kb, "schema.md", out schemaError) ?? "";
+            sb.AppendLine("2. schema.md（结构规则）：");
+            sb.AppendLine(Cut(schemaContent, 800));
             sb.AppendLine();
-            sb.AppendLine("## 执行约定");
-            sb.AppendLine("- 每次执行后，如修改了源文档，需更新 wiki/log.md");
-            sb.AppendLine("- 所有文件路径必须基于本知识库绝对路径：" + kbPath);
+
+            // 读取 wiki/index.md
+            var indexError = "";
+            var indexContent = _fileBridge.ReadText(kb, "wiki/index.md", out indexError) ?? "";
+            sb.AppendLine("3. wiki/index.md（内容目录，先读它找页面）：");
+            sb.AppendLine(Cut(indexContent, 1200));
+            sb.AppendLine();
+
+            sb.AppendLine("## 目录约定");
+            sb.AppendLine("- raw/sources/：源文档（.md/.txt，只读）");
+            sb.AppendLine("- wiki/entities/、concepts/、sources/、queries/、synthesis/、comparisons/：知识页");
+            sb.AppendLine("- wiki/log.md：变更历史；源文档被改后必须重新 Ingest 对应文档");
+            sb.AppendLine("- 页内用 [[页面名]] 互链；断言格式 [来源: 文件名]");
+            sb.AppendLine();
+
+            // 读取目录树（前 120 项）
+            var treeError = "";
+            var treeItems = _fileBridge.Tree(kb);
+            var files = new List<string>();
+            FlattenTree(treeItems, "", files, 120);
+            sb.AppendLine("## 文件清单（" + files.Count + " 项，最多列 120，大改后请重新生成覆盖）");
+            sb.AppendLine(string.Join("\n", files));
+            sb.AppendLine();
+            sb.AppendLine("## 回答要求");
+            sb.AppendLine("引用具体的 wiki 页面；重要结论写回 synthesis/comparison 新页并更新 index.md 和 log.md。");
             return sb.ToString();
+        }
+
+        private static string Cut(string s, int n)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            return s.Length > n ? s.Substring(0, n) + "\n…（已截断）" : s;
+        }
+
+        private static void FlattenTree(TreeItem[] nodes, string pre, List<string> outList, int cap)
+        {
+            foreach (var node in nodes)
+            {
+                if (outList.Count >= cap) return;
+                if (node.Type == "dir")
+                {
+                    outList.Add(pre + node.Name + "/");
+                    FlattenTree(node.Children ?? Array.Empty<TreeItem>(), pre + node.Name + "/", outList, cap);
+                }
+                else
+                {
+                    outList.Add(pre + node.Name);
+                }
+            }
         }
 
         private static string BuildIngestPrompt(string kbPath, bool incremental, List<string>? files = null)
