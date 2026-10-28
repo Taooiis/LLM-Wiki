@@ -22,11 +22,6 @@
     <PackageReference Include="Markdig" Version="1.5.0" />
   </ItemGroup>
 
-  <!-- 功能迁移：复用 LlmWiki.App 逻辑层服务（KbService 等），宿主 UI 由 WPF UI 控件实现 -->
-  <ItemGroup>
-    <ProjectReference Include="..\code\src\LlmWiki.App\LlmWiki.App.csproj" />
-  </ItemGroup>
-
   <ItemGroup>
     <None Remove="Assets\wpfui-icon-256.png" />
     <None Remove="Assets\wpfui-icon-1024.png" />

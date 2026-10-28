@@ -1,5 +1,4 @@
 ﻿using System.IO;
-using System.Reflection;
 using System.Windows.Threading;
 
 using LLM_Wiki.Services;
@@ -7,7 +6,6 @@ using LLM_Wiki.ViewModels.Pages;
 using LLM_Wiki.ViewModels.Windows;
 using LLM_Wiki.Views.Pages;
 using LLM_Wiki.Views.Windows;
-using LlmWiki.App.Services;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -52,14 +50,14 @@ namespace LLM_Wiki
 
                 services.AddSingleton<DashboardPage>();
                 services.AddSingleton<DashboardViewModel>();
-
-                // 功能迁移：知识库服务（逻辑层复用，宿主 UI 由 WPF UI 控件实现）
-                services.AddSingleton<KbService>(sp => new KbService(Path.Combine(AppContext.BaseDirectory, "wikis")));
-                services.AddSingleton<FileBridge>(sp => new FileBridge(Path.Combine(AppContext.BaseDirectory, "wikis")));
                 services.AddSingleton<DataPage>();
                 services.AddSingleton<DataViewModel>();
                 services.AddSingleton<SettingsPage>();
                 services.AddSingleton<SettingsViewModel>();
+
+                // 功能迁移：本地服务（无 WebView2，Wpf UI 项目独立）
+                services.AddSingleton<FileBridge>(sp => new FileBridge(Path.Combine(AppContext.BaseDirectory, "wikis")));
+                services.AddSingleton<KbService>(sp => new KbService(Path.Combine(AppContext.BaseDirectory, "wikis")));
             }).Build();
 
         /// <summary>

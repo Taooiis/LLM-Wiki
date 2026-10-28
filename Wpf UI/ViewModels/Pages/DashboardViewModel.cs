@@ -4,7 +4,7 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
-using LlmWiki.App.Services;
+using LLM_Wiki.Services;
 
 using Markdig;
 
