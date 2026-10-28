@@ -109,7 +109,7 @@ namespace LLM_Wiki.ViewModels.Pages
         }
 
         [RelayCommand]
-        private void ValidateWikisDir()
+        public void ValidateWikisDir()
         {
             if (string.IsNullOrWhiteSpace(WikisDirInput))
             {
