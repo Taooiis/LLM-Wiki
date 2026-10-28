@@ -149,10 +149,16 @@
               <TextBlock Text="{Binding Action}" Width="80" />
               <TextBlock Text="{Binding File}" />
               <ui:Button
+                Content="Ingest"
+                Command="{Binding DataContext.ViewModel.GenerateIngestForChangeCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                CommandParameter="{Binding File}"
+                Margin="4,0,4,0"
+                Icon="Fluent24" />
+              <ui:Button
                 Content="清除"
                 Command="{Binding DataContext.ViewModel.ClearChangeCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                 CommandParameter="{Binding File}"
-                Margin="8,0,0,0"
+                Margin="4,0,0,0"
                 Icon="Fluent24" />
             </StackPanel>
           </DataTemplate>

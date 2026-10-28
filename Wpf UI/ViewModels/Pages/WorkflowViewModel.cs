@@ -27,6 +27,10 @@ namespace LLM_Wiki.ViewModels.Pages
             {
                 OnKbChanged(_mainViewModel.CurrentKb);
             }
+            if (e.PropertyName == nameof(MainWindowViewModel.PendingIngestFiles))
+            {
+                ProcessPendingIngest();
+            }
         }
 
         [ObservableProperty]
@@ -36,7 +40,22 @@ namespace LLM_Wiki.ViewModels.Pages
         private string _kbPath = "";
 
         [ObservableProperty]
+        private string _ingestFiles = "";
+
+        [ObservableProperty]
         private ObservableCollection<PromptCard> _promptCards = new();
+
+        private void ProcessPendingIngest()
+        {
+            if (_mainViewModel.PendingIngestFiles == null || _mainViewModel.PendingIngestFiles.Count == 0)
+            {
+                return;
+            }
+
+            IngestFiles = string.Join(",", _mainViewModel.PendingIngestFiles);
+            _mainViewModel.PendingIngestFiles.Clear();
+            GenerateIngestCommand.Execute(null);
+        }
 
         private void OnKbChanged(string kb)
         {
@@ -69,14 +88,12 @@ namespace LLM_Wiki.ViewModels.Pages
             PromptCards.Add(new PromptCard(
                 "Ingest（批量）",
                 "将知识库内所有源文档纳入索引，生成全量 Ingest 提示词。",
-                BuildIngestPrompt(kbPath, false)));
+                BuildIngestPrompt(kbPath, false, null)));
 
             PromptCards.Add(new PromptCard(
                 "Ingest（增量）",
                 "仅处理 .changes.json 中标记的待处理变更文件。",
-                BuildIngestPrompt(kbPath, true)));
-
-            PromptCards.Add(new PromptCard(
+                BuildIngestPrompt(kbPath, true, null)));            PromptCards.Add(new PromptCard(
                 "Query",
                 "基于知识库内容回答问题，要求带来源引用。",
                 BuildQueryPrompt(kbPath)));
@@ -120,7 +137,7 @@ namespace LLM_Wiki.ViewModels.Pages
             return sb.ToString();
         }
 
-        private static string BuildIngestPrompt(string kbPath, bool incremental)
+        private static string BuildIngestPrompt(string kbPath, bool incremental, List<string>? files = null)
         {
             var suffix = incremental ? "（增量）" : "（批量）";
             var sb = new StringBuilder();
@@ -129,7 +146,15 @@ namespace LLM_Wiki.ViewModels.Pages
             sb.AppendLine("你是一个知识库 Ingest Agent，目标路径：" + kbPath);
             sb.AppendLine();
             sb.AppendLine("## 任务");
-            if (incremental)
+            if (files != null && files.Count > 0)
+            {
+                sb.AppendLine("- 仅处理以下指定文件：");
+                foreach (var f in files)
+                {
+                    sb.AppendLine("  - raw/sources/" + f);
+                }
+            }
+            else if (incremental)
             {
                 sb.AppendLine("- 仅处理 .changes.json 中记录的待处理变更文件（文件/动作/哈希）");
             }
@@ -242,12 +267,37 @@ namespace LLM_Wiki.ViewModels.Pages
             try
             {
                 System.Windows.Clipboard.SetText(card.PromptContent);
-                MessageBox.Show("已复制：“" + card.Title + "”，请粘贴给外部 Agent 执行。", "复制提示词", MessageBoxButton.OK);
+                System.Windows.MessageBox.Show("已复制：“" + card.Title + "”，请粘贴给外部 Agent 执行。", "复制提示词", System.Windows.MessageBoxButton.OK);
             }
             catch
             {
-                MessageBox.Show("复制剪贴板失败", "复制提示词", MessageBoxButton.OK);
+                System.Windows.MessageBox.Show("复制剪贴板失败", "复制提示词", System.Windows.MessageBoxButton.OK);
             }
+        }
+
+        [RelayCommand]
+        private void GenerateIngest()
+        {
+            List<string>? files = null;
+            if (!string.IsNullOrWhiteSpace(IngestFiles))
+            {
+                files = IngestFiles
+                    .Split(new[] { ',', '，', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(f => f.Trim())
+                    .Where(f => f.Length > 0)
+                    .ToList();
+            }
+
+            // 判断是增量还是批量：如果有指定文件，按批量处理指定文件；否则按批量全部
+            var card = PromptCards.FirstOrDefault(c => c.Title == "Ingest（批量）");
+            if (card == null)
+            {
+                return;
+            }
+
+            var prompt = BuildIngestPrompt(KbPath, false, files);
+            var idx = PromptCards.IndexOf(card);
+            PromptCards[idx] = new PromptCard(card.Title, card.Description, prompt);
         }
     }
 

@@ -9,6 +9,9 @@ using Microsoft.Win32;
 
 using LLM_Wiki.Services;
 using LLM_Wiki.ViewModels.Windows;
+using Wpf.Ui;
+using Wpf.Ui.Abstractions;
+using Wpf.Ui.Abstractions.Controls;
 
 namespace LLM_Wiki.ViewModels.Pages
 {
@@ -17,12 +20,14 @@ namespace LLM_Wiki.ViewModels.Pages
         private readonly KbService _kbService;
         private readonly FileBridge _fileBridge;
         private readonly MainWindowViewModel _mainViewModel;
+        private readonly INavigationService _navigationService;
 
-        public SourceViewModel(KbService kbService, FileBridge fileBridge, MainWindowViewModel mainViewModel)
+        public SourceViewModel(KbService kbService, FileBridge fileBridge, MainWindowViewModel mainViewModel, INavigationService navigationService)
         {
             _kbService = kbService;
             _fileBridge = fileBridge;
             _mainViewModel = mainViewModel;
+            _navigationService = navigationService;
 
             _mainViewModel.PropertyChanged += MainViewModel_PropertyChanged;
         }
@@ -170,6 +175,21 @@ namespace LLM_Wiki.ViewModels.Pages
         {
             LoadFiles(SelectedKb);
             LoadChanges(SelectedKb);
+        }
+
+        [RelayCommand]
+        private void GenerateIngestForChange(string file)
+        {
+            if (string.IsNullOrWhiteSpace(SelectedKb) || string.IsNullOrWhiteSpace(file))
+            {
+                return;
+            }
+
+            _mainViewModel.PendingIngestFiles.Clear();
+            _mainViewModel.PendingIngestFiles.Add(file);
+            _mainViewModel.PendingIngestKb = SelectedKb;
+
+            _navigationService.Navigate(typeof(Views.Pages.WorkflowPage));
         }
 
         [RelayCommand]

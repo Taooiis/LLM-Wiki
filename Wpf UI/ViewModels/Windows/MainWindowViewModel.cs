@@ -78,5 +78,13 @@ namespace LLM_Wiki.ViewModels.Windows
         /// <summary>当前选中的知识库名（供源文档页等页面读取）。</summary>
         [ObservableProperty]
         private string _currentKb = "";
+
+        /// <summary>从源文档页“待处理变更”点击“生成 Ingest”后，传递给工作流页的文件列表。</summary>
+        [ObservableProperty]
+        private ObservableCollection<string> _pendingIngestFiles = new();
+
+        /// <summary>对应的知识库名。</summary>
+        [ObservableProperty]
+        private string _pendingIngestKb = "";
     }
 }
