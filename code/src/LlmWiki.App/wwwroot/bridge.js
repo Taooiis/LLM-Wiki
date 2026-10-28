@@ -6,6 +6,20 @@
  *   请求：{ cmd, args, requestId }
  *   响应：{ requestId, result }  —— result 直接是结果对象，不是字符串
  */
+
+// 超时策略：默认 20s；0 表示不超时（等用户操作）
+// 交互类命令要等人点对话框/选文件，不能超时；上传和大目录扫描给足时间。
+const DEFAULT_TIMEOUT = 20000;
+const TIMEOUTS = {
+  'file-pick': 0,
+  'folder-pick': 0,
+  'dialog-confirm': 0,
+  'dialog-input': 0,
+  'upload': 300000,      // 5 分钟：office 转换可能较慢
+  'prompt': 60000,       // 大库扫描
+  'net-pc': 60000,       // SMB 枚举在断网共享上会慢
+  'net-shares': 60000,
+};
 window.api = (async (path, options = {}) => {
   // 1. 将 /api/path 转换为命令名
   const routeMap = {
@@ -62,21 +76,39 @@ window.api = (async (path, options = {}) => {
 
   // 3. 发请求并按 requestId 关联响应
   const requestId = Math.random().toString(36).substring(2, 15);
+  const timeoutMs = options.timeout ?? TIMEOUTS[cmd] ?? DEFAULT_TIMEOUT;
   return new Promise((resolve) => {
+    let timer = null;
+    const finish = (payload) => {
+      window.chrome.webview.removeEventListener('message', handler);
+      if (timer) clearTimeout(timer);
+      resolve(payload);
+    };
     const handler = (event) => {
       let wrapper;
       try { wrapper = JSON.parse(event.data); } catch { return; }
       if (wrapper.requestId !== requestId) return;
-      window.chrome.webview.removeEventListener('message', handler);
       const payload = wrapper.result || {};
       // 模拟 fetch 的 .json() 形状
-      resolve({
+      finish({
         ok: !payload.error,
         json: async () => payload
       });
     };
     // 注意：宿主应答只投递到 chrome.webview 的事件上，window 的 message 事件收不到
     window.chrome.webview.addEventListener('message', handler);
+    // 超时兜底：桥断时不能让调用方永远挂着（曾经表现为「点什么都没反应」）
+    if (timeoutMs > 0) {
+      timer = setTimeout(() => {
+        console.warn('[bridge] 请求超时:', cmd, requestId);
+        finish({
+          ok: false,
+          json: async () => ({
+            error: '通讯超时（' + cmd + '）：界面与后台连接异常。请重试；持续失败请重启应用。'
+          })
+        });
+      }, timeoutMs);
+    }
     window.chrome.webview.postMessage({ cmd: cmd, args: JSON.stringify(args), requestId: requestId });
   });
 });
