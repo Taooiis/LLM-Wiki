@@ -222,6 +222,13 @@ public partial class MainWindow : Window
         // 关掉浏览器自带快捷键：否则 Ctrl+S 会弹「保存网页」、Ctrl+N 会开新窗口。
         // 页面自己处理 Ctrl+S/N/E（桌面应用该有自己的键位）。
         BridgeWebView.CoreWebView2.Settings.AreBrowserAcceleratorKeysEnabled = false;
+        // 1.3 杀掉网页痕迹：右键「检查」、F12 开发者工具、默认右键菜单、
+        // Ctrl+滚轮缩放、左下角链接地址栏 —— 这些一露出来就暴露了这是个网页。
+        BridgeWebView.CoreWebView2.Settings.AreDevToolsEnabled = false;
+        BridgeWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+        BridgeWebView.CoreWebView2.Settings.IsZoomControlEnabled = false;
+        BridgeWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+        BridgeWebView.CoreWebView2.Settings.IsBuiltInErrorPageEnabled = false;
 
         // 2. 注册消息接收（协议见 Bridge/BridgeProtocol.cs）
         BridgeWebView.CoreWebView2.WebMessageReceived += async (_, e) =>

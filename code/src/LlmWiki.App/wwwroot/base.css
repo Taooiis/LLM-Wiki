@@ -11,7 +11,18 @@ body {
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   caret-color: var(--accent);
+  /* 1.3 桌面应用默认不选中文字：消除 Web 的「双击选词」蓝块 */
+  user-select: none;
+  /* 1.5 桌面基准：系统字体 14px 与 1.55 行高（Windows 桌面密度） */
 }
+/* 内容区仍允许选中复制（阅读/编辑时需要） */
+.article, .editor, textarea, input, .content, .doc-body, pre, code, .md, .selectable {
+  user-select: text;
+}
+textarea, input { user-select: text; }
+/* 1.3 禁止链接/图片被拖出（否则能拖到桌面变成快捷方式） */
+a, img { -webkit-user-drag: none; user-drag: none; }
+a { -webkit-user-drag: none; }
 ::selection { background: color-mix(in srgb, var(--accent) 20%, transparent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 h1, h2, h3, h4 { margin: 0; font-weight: 650; letter-spacing: -0.01em; overflow-wrap: break-word; }

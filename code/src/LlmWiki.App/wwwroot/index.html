@@ -1206,6 +1206,8 @@ document.getElementById('pickList').addEventListener('keydown', (e) => {
 document.addEventListener('keydown', (e) => {
   if (!(e.ctrlKey || e.metaKey)) return;
   const k = e.key.toLowerCase();
+  // 1.3 杀掉网页痕迹：Ctrl+F 是浏览器查找，桌面应用不该弹 WebView 的查找条
+  if (k === 'f') { e.preventDefault(); return; }
   // Ctrl+N：新建文档（弹窗开着时不抢）
   if (k === 'n' && !modalCtx) { e.preventDefault(); openNewDoc(); return; }
   // Ctrl+E：在资源管理器中打开当前库
@@ -1213,6 +1215,13 @@ document.addEventListener('keydown', (e) => {
   // Ctrl+S：保存（弹窗开着才生效；没开时是浏览器行为，忽略）
   if (k === 's' && modalCtx) { e.preventDefault(); saveModal(); return; }
 });
+
+// 1.3 杀掉网页痕迹：禁止把链接/选中内容拖出窗口（真桌面应用不会这样）
+document.addEventListener('dragstart', (e) => {
+  if (e.target instanceof HTMLAnchorElement || e.target instanceof HTMLImageElement) {
+    e.preventDefault();
+  }
+}, true);
 
 // 宿主桥（bridge.js 由 WebView2 注入）不在时（如静态预览）跳过启动请求
 if (typeof api !== 'undefined') {
