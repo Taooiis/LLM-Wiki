@@ -76,12 +76,31 @@
           </DataTemplate>
         </ui:ListView.ItemTemplate>
       </ui:ListView>
-      <ui:ListView
-        Grid.Column="1"
-        x:Name="FileList"
-        ItemsSource="{Binding ViewModel.Files, Mode=OneWay}"
-        Background="Transparent"
-        BorderThickness="0" />
+      <StackPanel Grid.Column="1">
+        <ui:ListView
+          x:Name="FileList"
+          ItemsSource="{Binding ViewModel.Files, Mode=OneWay}"
+          Background="Transparent"
+          BorderThickness="0"
+          SelectionChanged="FileList_SelectionChanged">
+          <ui:ListView.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Padding="8,6" Text="{Binding}" />
+            </DataTemplate>
+          </ui:ListView.ItemTemplate>
+        </ui:ListView>
+        <ui:TextBox
+          x:Name="PreviewBox"
+          Grid.Row="2"
+          Margin="0,8,0,0"
+          MinHeight="200"
+          Text="{Binding ViewModel.MarkdownText, Mode=OneWay}"
+          AcceptsReturn="True"
+          TextWrapping="Wrap"
+          VerticalScrollBarVisibility="Auto"
+          Background="{DynamicResource ApplicationBackgroundBrush}"
+          Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+      </StackPanel>
     </Grid>
   </Grid>
 </Page>

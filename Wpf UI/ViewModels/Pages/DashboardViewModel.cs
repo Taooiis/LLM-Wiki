@@ -5,6 +5,8 @@ using CommunityToolkit.Mvvm.Input;
 
 using LlmWiki.App.Services;
 
+using Markdig;
+
 namespace LLM_Wiki.ViewModels.Pages
 {
     public partial class DashboardViewModel : ObservableObject
@@ -28,6 +30,9 @@ namespace LLM_Wiki.ViewModels.Pages
         [ObservableProperty]
         private string _selectedKb = "";
 
+        [ObservableProperty]
+        private string _markdownText = "";
+
         public void LoadKbs()
         {
             Kbs.Clear();
@@ -49,6 +54,19 @@ namespace LLM_Wiki.ViewModels.Pages
             {
                 Files.Add(item.Name);
             }
+        }
+
+        public void LoadFileContent(string kb, string file)
+        {
+            if (string.IsNullOrWhiteSpace(kb) || string.IsNullOrWhiteSpace(file))
+            {
+                MarkdownText = string.Empty;
+                return;
+            }
+
+            var error = "";
+            var content = _fileBridge.ReadText(kb, file, out error);
+            MarkdownText = Markdown.ToPlainText(content ?? string.Empty);
         }
 
         [RelayCommand]

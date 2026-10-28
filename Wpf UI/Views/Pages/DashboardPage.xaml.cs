@@ -1,4 +1,6 @@
-﻿using System.Windows.Controls;
+﻿using System.ComponentModel;
+
+using System.Windows.Controls;
 
 using LLM_Wiki.ViewModels.Pages;
 
@@ -15,7 +17,17 @@ namespace LLM_Wiki.Views.Pages
             ViewModel = viewModel;
             DataContext = this;
 
+            ViewModel.PropertyChanged += ViewModel_PropertyChanged;
+
             InitializeComponent();
+        }
+
+        private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(DashboardViewModel.MarkdownText))
+            {
+                PreviewBox.Text = ViewModel.MarkdownText;
+            }
         }
 
         private void KbList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -25,7 +37,18 @@ namespace LLM_Wiki.Views.Pages
                 return;
             }
 
+            ViewModel.SelectedKb = kb;
             ViewModel.LoadFiles(kb);
+        }
+
+        private void FileList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is not ListBox list || list.SelectedItem is not string file)
+            {
+                return;
+            }
+
+            ViewModel.LoadFileContent(ViewModel.SelectedKb, file);
         }
     }
 }
