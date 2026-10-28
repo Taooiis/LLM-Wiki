@@ -100,6 +100,22 @@
 - [x] 实测：组播查询 → 收到 `flags=0x8400, QD=1, AN=1` 应答，A 记录 = 本机局域网 IP
 - [ ] 手动验证：分享页出现 `http://llmwiki.local:8765/?pin=XXXX`；手机同网段输该地址能打开
 
+## 2026-10-28 桥消息监听修复（阻塞性 bug）
+
+**现象**：开启分享无反应、页面列表/状态不刷新（所有面板交互失效）
+
+**根因**：`wwwroot/bridge.js` 把宿主应答监听注册在 `window` 上（`window.addEventListener('message')`），
+而 WebView2 的 `PostWebMessageAsString` 应答只投递到 `chrome.webview` 的事件对象上（运行时升级后行为变化）。
+请求发得出去、C# 也正常处理并回包，但 JS 永远收不到 → `api()` 的 Promise 永不 resolve → 全部静默挂起。
+
+**修复**：改为 `window.chrome.webview.addEventListener('message', handler)`（移除时用同一 target），
+与已有的 `fs-change` 推送通道写法保持一致。
+
+**验证**（CDP 远程调试实测）：
+- 修复前：`api('/api/settings')` 8 秒超时；C# 侧日志显示 `recv → handled → posted response` 全部正常
+- 修复后：`api('/api/settings')` 正常返回；`startShare()` 后状态变「运行中 · 端口 8765」，
+  地址列表出现 `http://llmwiki.local:8765/?pin=XXXX`
+
 ## 下一步
-- 手动验证批次：mDNS 友好地址 + 文件关联双击/右键导入
-- 后续候选：托盘提示优化 / 分享页样式深化 / 多 wiki 切换
+- 手动验证批次：手机端打开 mDNS 友好地址 + 文件关联双击/右键导入
+- 后续候选：API 超时兜底 / 数据目录迁 %APPDATA% / 安装包 + 自动更新 / 系统通知

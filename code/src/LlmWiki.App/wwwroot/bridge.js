@@ -67,7 +67,7 @@ window.api = (async (path, options = {}) => {
       let wrapper;
       try { wrapper = JSON.parse(event.data); } catch { return; }
       if (wrapper.requestId !== requestId) return;
-      window.removeEventListener('message', handler);
+      window.chrome.webview.removeEventListener('message', handler);
       const payload = wrapper.result || {};
       // 模拟 fetch 的 .json() 形状
       resolve({
@@ -75,7 +75,8 @@ window.api = (async (path, options = {}) => {
         json: async () => payload
       });
     };
-    window.addEventListener('message', handler);
+    // 注意：宿主应答只投递到 chrome.webview 的事件上，window 的 message 事件收不到
+    window.chrome.webview.addEventListener('message', handler);
     window.chrome.webview.postMessage({ cmd: cmd, args: JSON.stringify(args), requestId: requestId });
   });
 });
