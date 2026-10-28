@@ -195,23 +195,36 @@ namespace LLM_Wiki.ViewModels.Pages
 
             var sourcePath = dialog.FileName;
             var fileName = Path.GetFileName(sourcePath);
-            var rel = "raw/sources/" + fileName;
+            var ext = Path.GetExtension(fileName).ToLowerInvariant();
 
             // 读取文件内容
+            byte[] rawBytes;
             string content;
+            string? error;
             try
             {
-                var ext = Path.GetExtension(fileName).ToLowerInvariant();
+                rawBytes = File.ReadAllBytes(sourcePath);
                 if (ext == ".docx" || ext == ".xlsx")
                 {
-                    // Office 文件：先保存原件到 raw/original/，Markdown 转换留待后续实现
+                    // Office 文件：先保存原件到 raw/original/，Markdown 副本写 raw/sources/
                     var originalRel = "raw/original/" + fileName;
                     File.Copy(sourcePath, Path.Combine(GetKbRoot(), originalRel), overwrite: true);
-                    content = $"# {fileName}\n\n> Office 文件已上传到 raw/original/，Markdown 转换功能待实现。\n";
+
+                    var (md, convErr) = ext == ".docx"
+                        ? OfficeConverter.ConvertDocx(fileName, rawBytes)
+                        : OfficeConverter.ConvertXlsx(fileName, rawBytes);
+                    if (md == null)
+                    {
+                        MessageBox.Show(convErr, "Office 转换失败", MessageBoxButton.OK, MessageBoxImage.Error);
+                        return;
+                    }
+                    content = md;
+                    error = "";
                 }
                 else
                 {
-                    content = File.ReadAllText(sourcePath, Encoding.UTF8);
+                    content = Encoding.UTF8.GetString(rawBytes);
+                    error = "";
                 }
             }
             catch (Exception ex)
@@ -220,7 +233,11 @@ namespace LLM_Wiki.ViewModels.Pages
                 return;
             }
 
-            var error = "";
+            // Markdown 副本写入 raw/sources/（文件名 + .md 后缀，避免与已有 md 重名）
+            var rel = "raw/sources/" + fileName;
+            if (ext == ".docx" || ext == ".xlsx")
+                rel = "raw/sources/" + Path.GetFileNameWithoutExtension(fileName) + ".md";
+
             var ok = _fileBridge.WriteText(SelectedKb, rel, content, out error);
             if (!ok)
             {
