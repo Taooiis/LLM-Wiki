@@ -2,6 +2,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shell;
@@ -471,9 +473,13 @@ public partial class MainWindow : Window
 
     private void OnSearch(object sender, RoutedEventArgs e)
     {
-        // 搜索功能：暂时跳到前端搜索
         BridgeWebView?.CoreWebView2?.ExecuteScriptAsync(
-            $"document.querySelector('input[role=\"search\"]')?.focus();");
+            "document.querySelector('input[role=\"search\"]')?.focus();");
+    }
+
+    private void OnThemeToggle(object sender, RoutedEventArgs e)
+    {
+        BridgeWebView?.CoreWebView2?.ExecuteScriptAsync("toggleTheme();");
     }
 
     // ---------- 项目加载 ----------
@@ -493,5 +499,127 @@ public partial class MainWindow : Window
         var kbJson = kbs?.Select(k => (JsonNode?)k).ToArray() ?? [];
         await BridgeWebView.ExecuteScriptAsync(
             $"populateKbList({JsonSerializer.Serialize(kbJson)})");
+
+        // 加载第一个知识库的目录树到 WPF TreeView
+        if (kbJson?.Length > 0 && BridgeWebView?.CoreWebView2 != null)
+        {
+            var kbName = kbJson[0].AsObject()?["name"]?.ToString() ?? "";
+            if (!string.IsNullOrEmpty(kbName))
+                await LoadTreeAsync(kbName);
+        }
     }
+
+    // ---------- 目录树 ----------
+    private async Task LoadTreeAsync(string kb)
+    {
+        var args = new JsonObject { ["kb"] = kb };
+        var raw = await _dispatcher.HandleAsync("tree", args.ToJsonString());
+        var data = JsonSerializer.Deserialize<JsonObject>(raw);
+        var nodes = data?["tree"] as JsonArray;
+
+        DirTree.Items.Clear();
+        if (nodes != null)
+        {
+            foreach (var node in nodes)
+            {
+                if (node is JsonObject n)
+                {
+                    var item = CreateTreeItem(n, kb);
+                    DirTree.Items.Add(item);
+                }
+            }
+        }
+    }
+
+    private TreeViewItem CreateTreeItem(JsonObject node, string kb)
+    {
+        var name = node["name"]?.ToString() ?? "";
+        var type = node["type"]?.ToString() ?? "file";
+
+        var item = new TreeViewItem
+        {
+            Header = name,
+            Tag = new KbTreeNode(kb, name, type)
+        };
+
+        if (type == "dir")
+        {
+            var children = node["children"] as JsonArray;
+            if (children != null)
+            {
+                foreach (var child in children)
+                {
+                    if (child is JsonObject c)
+                    {
+                        item.Items.Add(CreateTreeItem(c, kb));
+                    }
+                }
+            }
+        }
+
+        item.MouseLeftButtonDown += TreeItem_MouseLeftDown;
+        item.MouseRightButtonUp += TreeItem_MouseRightUp;
+        return item;
+    }
+
+    private async void TreeItem_MouseLeftDown(object sender, MouseButtonEventArgs e)
+    {
+        var item = sender as TreeViewItem;
+        var tag = item?.Tag as KbTreeNode;
+        if (tag?.Type == "dir") return;
+
+        if (BridgeWebView?.CoreWebView2 == null) return;
+
+        // 导航到选中项
+        var args = new JsonObject { ["kb"] = tag.Kb, ["path"] = tag.Path };
+        var raw = await _dispatcher.HandleAsync("file-read", args.ToJsonString());
+        var data = JsonSerializer.Deserialize<JsonObject>(raw);
+
+        if (data?["error"] == null)
+        {
+            await BridgeWebView.ExecuteScriptAsync(
+                $"showContent({data?.ToJsonString() ?? "{}"})");
+        }
+    }
+
+    private void TreeItem_MouseRightUp(object sender, MouseButtonEventArgs e)
+    {
+        var item = sender as TreeViewItem;
+        var tag = item?.Tag as KbTreeNode;
+        if (tag == null) return;
+
+        var menu = new ContextMenu();
+        var pos = e.GetPosition(null);
+
+        var revealItem = new MenuItem { Header = "定位到资源管理器" };
+        revealItem.Click += async (_, _) =>
+        {
+            await _dispatcher.HandleAsync("file-reveal",
+                new JsonObject { ["kb"] = tag.Kb, ["path"] = tag.Path }.ToJsonString());
+        };
+
+        var openItem = new MenuItem { Header = "用默认程序打开" };
+        openItem.Click += async (_, _) =>
+        {
+            await _dispatcher.HandleAsync("file-open",
+                new JsonObject { ["kb"] = tag.Kb, ["path"] = tag.Path }.ToJsonString());
+        };
+
+        var copyItem = new MenuItem { Header = "复制完整路径" };
+        copyItem.Click += async (_, _) =>
+        {
+            await _dispatcher.HandleAsync("file-copy-path",
+                new JsonObject { ["kb"] = tag.Kb, ["path"] = tag.Path }.ToJsonString());
+        };
+
+        menu.Items.Add(revealItem);
+        menu.Items.Add(openItem);
+        menu.Items.Add(copyItem);
+        menu.IsOpen = true;
+        menu.HorizontalOffset = pos.X;
+        menu.VerticalOffset = pos.Y;
+    }
+
+    // 辅助 record 类型传递数据
+    private record KbTreeNode(string Kb, string Path, string Type);
 }

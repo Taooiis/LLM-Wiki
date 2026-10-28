@@ -3,19 +3,31 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:Wpf="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="LLM Wiki 知识库" Height="800" Width="1200"
-        WindowState="Maximized">
+        WindowState="Maximized"
+        Background="#FBFCFE">
     <Window.TaskbarItemInfo>
         <TaskbarItemInfo>
             <TaskbarItemInfo.ThumbButtonInfos>
-                <ThumbButtonInfo x:Name="ThumbRefresh"
-                    Description="刷新"
-                    Click="OnThumbRefresh"/>
-                <ThumbButtonInfo x:Name="ThumbShareToggle"
-                    Description="切换分享"
-                    Click="OnThumbShareToggle"/>
+                <ThumbButtonInfo x:Name="ThumbRefresh" Description="刷新" Click="OnThumbRefresh"/>
+                <ThumbButtonInfo x:Name="ThumbShareToggle" Description="切换分享" Click="OnThumbShareToggle"/>
             </TaskbarItemInfo.ThumbButtonInfos>
         </TaskbarItemInfo>
     </Window.TaskbarItemInfo>
+
+    <Window.Resources>
+        <Style x:Key="NavButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#2F343B"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#F6F8FB"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
 
     <DockPanel>
         <Menu DockPanel.Dock="Top">
@@ -46,8 +58,52 @@
             <Button Content="🔍 搜索" Click="OnSearch" ToolTip="搜索"/>
         </ToolBar>
 
-        <!-- WebView2 内容区 -->
-        <Wpf:WebView2 x:Name="BridgeWebView"/>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="260"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 左侧导航栏 -->
+            <Border Grid.Column="0" Background="#FBFCFE" BorderThickness="0,0,1,0" BorderBrush="#E1E4E8">
+                <StackPanel>
+                    <!-- 知识库选择 -->
+                    <TextBlock Text="知识库" FontWeight="SemiBold" Foreground="#575C65" Margin="12,8,12,4" FontSize="12"/>
+                    <ComboBox x:Name="KbSelector" Height="28" Margin="12,0,12,12" BorderBrush="#D1D5DB"/>
+
+                    <!-- 目录树 -->
+                    <ScrollViewer>
+                        <StackPanel>
+                            <TextBlock Text="目录树" FontWeight="SemiBold" Foreground="#575C65" Margin="12,12,12,4" FontSize="12"/>
+                            <TreeView x:Name="DirTree" Height="400" Margin="0,0,12,12">
+                                <TreeView.ItemContainerStyle>
+                                    <Style TargetType="TreeViewItem">
+                                        <Setter Property="Foreground" Value="#2F343B"/>
+                                        <Setter Property="FontSize" Value="13"/>
+                                        <Setter Property="IsExpanded" Value="True"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#E8EDF2"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TreeView.ItemContainerStyle>
+                            </TreeView>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- 快速操作 -->
+                    <TextBlock Text="快速操作" FontWeight="SemiBold" Foreground="#575C65" Margin="12,4,12,4" FontSize="12"/>
+                    <StackPanel Orientation="Horizontal" Margin="12,0,12,12">
+                        <Button Click="OnThemeToggle" Width="40" Height="28" Content="☀️"/>
+                        <Button Click="OnRefresh" Width="40" Height="28" Margin="4,0,0,0" Content="🔄"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- 右侧 WebView2 内容区 -->
+            <Wpf:WebView2 x:Name="BridgeWebView" Grid.Column="1"/>
+        </Grid>
 
         <Border x:Name="DropOverlay" Visibility="Collapsed" IsHitTestVisible="False"
                 Background="#B31E293B" Margin="16" CornerRadius="12">
