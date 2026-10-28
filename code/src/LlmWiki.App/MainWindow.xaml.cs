@@ -20,6 +20,7 @@ namespace LlmWiki.App;
 public partial class MainWindow : Window
 {
     private BridgeDispatcher _dispatcher = null!;
+    private readonly ConfigService _config = new(AppContext.BaseDirectory);
     private readonly UiStateStore _ui = new(AppContext.BaseDirectory);
     private bool _reallyExit;
     private System.Windows.Threading.DispatcherTimer? _tbTimer;
@@ -678,9 +679,30 @@ public partial class MainWindow : Window
                 new JsonObject { ["kb"] = tag.Kb, ["path"] = tag.Path }.ToJsonString());
         };
 
+        // 复制到桌面
+        var copyDesktopItem = new MenuItem { Header = "复制到桌面" };
+        copyDesktopItem.Click += (_, _) =>
+        {
+            var fileName = tag.Path.Split(Path.DirectorySeparatorChar).Last();
+            var desktopPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), fileName);
+            var source = Path.Combine(_config.WikisDir, tag.Kb, tag.Path);
+            if (!File.Exists(source)) return;
+            try
+            {
+                File.Copy(source, desktopPath, true);
+                ToastService.Show("复制到桌面成功", desktopPath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"复制失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        };
+
         menu.Items.Add(revealItem);
         menu.Items.Add(openItem);
         menu.Items.Add(copyItem);
+        menu.Items.Add(new Separator());
+        menu.Items.Add(copyDesktopItem);
         menu.IsOpen = true;
         menu.HorizontalOffset = pos.X;
         menu.VerticalOffset = pos.Y;
