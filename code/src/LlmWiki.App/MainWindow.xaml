@@ -4,6 +4,22 @@
         xmlns:Wpf="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="LLM Wiki 知识库" Height="800" Width="1200"
         WindowState="Maximized">
+    <Window.TaskbarItemInfo>
+        <TaskbarItemInfo>
+            <TaskbarItemInfo.ThumbButtonInfos>
+                <!-- 刷新目录树 -->
+                <ThumbButtonInfo x:Name="ThumbRefresh"
+                    Description="刷新"
+                    Click="OnThumbRefresh"
+                    IsEnabled="True"/>
+                <!-- 切换分享 -->
+                <ThumbButtonInfo x:Name="ThumbShareToggle"
+                    Description="切换分享"
+                    Click="OnThumbShareToggle"
+                    IsEnabled="True"/>
+            </TaskbarItemInfo.ThumbButtonInfos>
+        </TaskbarItemInfo>
+    </Window.TaskbarItemInfo>
     <DockPanel>
         <!-- 顶部菜单栏 -->
         <Menu DockPanel.Dock="Top">

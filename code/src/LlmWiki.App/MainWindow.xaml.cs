@@ -2,6 +2,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Shell;
 using Microsoft.Web.WebView2.Core;
 using LlmWiki.App.Bridge;
@@ -30,12 +32,16 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         RestoreGeometry();
-        
+
         // 2.1 任务栏集成：监听分享状态更新进度条
-        _tbTimer = new System.Windows.Threading.DispatcherTimer 
+        _tbTimer = new System.Windows.Threading.DispatcherTimer
         { Interval = TimeSpan.FromSeconds(1) };
         _tbTimer.Tick += (_, _) => UpdateTaskbarProgress();
         _tbTimer.Start();
+
+        // 2.3 缩略图按钮图标
+        ThumbRefresh.ImageSource = CreateIcon("refresh");
+        ThumbShareToggle.ImageSource = CreateIcon("share");
 
         Loaded += async (_, _) => await InitWebViewAsync();
         Closing += OnClosing;
@@ -127,12 +133,59 @@ public partial class MainWindow : Window
         {
             tb.ProgressState = TaskbarItemProgressState.Indeterminate;
             tb.Description = "LLM Wiki - 分享服务已启用";
+            ThumbShareToggle.Description = "关闭分享";
+            ThumbShareToggle.IsEnabled = true;
         }
         else
         {
             tb.ProgressState = TaskbarItemProgressState.None;
             tb.Description = null;
+            ThumbShareToggle.Description = "开启分享";
+            ThumbShareToggle.IsEnabled = true;
         }
+    }
+
+    /// <summary>2.3 缩略图按钮图标：简单矢量图标。</summary>
+    private static ImageSource CreateIcon(string type)
+    {
+        var geo = new PathGeometry();
+        // use GeometryDrawing which is a Drawing, works with DrawingImage
+        var drawing = new GeometryDrawing
+        {
+            Brush = Brushes.White,
+            Pen = new Pen(Brushes.White, 1.5),
+            Geometry = new RectangleGeometry(new Rect(0, 0, 16, 16)) // placeholder rect
+        };
+
+        switch (type)
+        {
+            case "refresh":
+                drawing.Geometry = Geometry.Parse(
+                    "M13.5 12.5L11 15L13.5 17.5L12 19L7 14L12 9L13.5 10.5L11 13H15V15H11");
+                break;
+            case "share":
+                drawing.Geometry = Geometry.Parse("M8 5A3 3 0 1 8 11A3 3 0 0 0 8 5M4.5 14A2.5 2.5 0 1 1 4.5 19A2.5 2.5 0 0 1 4.5 14M11.5 14A2.5 2.5 0 1 1 11.5 19A2.5 2.5 0 0 1 11.5 14");
+                drawing.Brush = Brushes.Transparent;
+                break;
+        }
+        return new DrawingImage(drawing);
+    }
+
+    /// <summary>2.3 缩略图按钮：刷新</summary>
+    private void OnThumbRefresh(object sender, EventArgs e)
+    {
+        _ = BridgeWebView.CoreWebView2?.ExecuteScriptAsync(
+            "if (typeof loadTree === 'function') loadTree();");
+    }
+
+    /// <summary>2.3 缩略图按钮：切换分享</summary>
+    private void OnThumbShareToggle(object sender, EventArgs e)
+    {
+        if (_dispatcher?.Sharing == true)
+            _ = _dispatcher.HandleAsync("share-stop", "{}");
+        else
+            _ = _dispatcher.HandleAsync("share-start",
+                new System.Text.Json.Nodes.JsonObject { ["port"] = 0 }.ToJsonString());
     }
 
     private async Task InitWebViewAsync()
