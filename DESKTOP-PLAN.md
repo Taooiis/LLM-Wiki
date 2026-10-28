@@ -35,7 +35,7 @@
 |---|---|---|---|
 | 2.1 | 任务栏集成（跳转列表 / 缩略图按钮 / 进度条） | ✅ | ProgressState 同步分享状态；Thumbnail 按钮（刷新/切换分享）；Jump List 留待 |
 | 2.2 | Toast 通知（导入完成 / 分享开启 / Agent 改文件） | ✅ | NotifyIcon.BalloonTip 实现原生通知 |
-| 2.3 | 全局快捷键（如 Ctrl+Shift+L 唤出） | ⬜ | `RegisterHotKey` |
+| 2.3 | 全局快捷键（如 Ctrl+Shift+L 唤出） | ✅ | HotKeyService：RegisterHotKey 注册 Ctrl+Shift+L，toggle 显示/隐藏 |
 | 2.4 | 拖出（文件列表 → 资源管理器复制/移动） | ⬜ | WPF `DoDragDrop` |
 | 2.5 | 原生状态栏（库路径 / 文件数 / 监听状态） | ✅ | WPF StatusBar 显示知识库名、文件数、分享状态（📡） |
 

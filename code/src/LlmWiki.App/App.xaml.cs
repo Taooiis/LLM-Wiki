@@ -21,6 +21,7 @@ public partial class App : Application
     private MainWindow? _window;
     private TrayIcon? _tray;
     private CancellationTokenSource? _pipeCts;
+    private HotKeyService? _hotKey;
 
     private string[]? _pendingFiles;
 
@@ -56,6 +57,11 @@ public partial class App : Application
         _window.Closed += (_, _) => Shutdown();
         _window.Show();
 
+        // 2.3 全局快捷键：Ctrl+Shift+L 唤出/隐藏
+        _hotKey = new HotKeyService();
+        _hotKey.Attach(_window);
+        _hotKey.HotKeyPressed += ToggleWindow;
+
         // 保存待导入的文件路径（App.xaml.cs 传进来）
         _pendingFiles = e.Args.Where(File.Exists).ToArray();
         if (_pendingFiles.Length > 0) _window.PendingFiles = _pendingFiles;
@@ -75,6 +81,18 @@ public partial class App : Application
         // 从别的程序切回来时，Windows 不一定给焦点：Topmost 抖一下强制到最前
         _window.Topmost = true;
         _window.Topmost = false;
+    }
+
+    /// <summary>全局快捷键：已在前台则隐藏，否则唤出（toggle）。</summary>
+    private void ToggleWindow()
+    {
+        if (_window is null) return;
+        if (_window.IsVisible && _window.IsActive)
+        {
+            _window.Hide();
+            return;
+        }
+        ActivateWindow();
     }
 
     /// <summary>托盘“退出”：先置退出标记，让关窗拦截放行。</summary>
@@ -167,6 +185,7 @@ public partial class App : Application
     {
         _pipeCts?.Cancel();
         _pipeCts?.Dispose();
+        _hotKey?.Dispose();
         _tray?.Dispose();
         if (_ownsMutex)
         {
