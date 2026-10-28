@@ -688,6 +688,17 @@ async function loadKbs() {
   document.getElementById('kbPath').textContent = '本地根目录：' + (data.root || '') + '  → 当前：' + (sel.value ? data.root + '\\' + sel.value : '');
   if (sel.value) { saveUiState({ lastKb: sel.value }); loadSources(); watchKb(); updateTitle(); }
 }
+
+// 3.4 多窗口：由 WPF 端调用，设置当前选中的知识库
+async function setActiveKb(kbName) {
+  if (!kbName) return;
+  const sel = document.getElementById('kbSel');
+  const opts = Array.from(sel.options).map(o => o.value);
+  if (!opts.includes(kbName)) return;
+  sel.value = kbName;
+  onKbChange();
+}
+
 async function createKb() {
   const name = document.getElementById('newKb').value.trim();
   const scene = document.getElementById('newKbScene').value;

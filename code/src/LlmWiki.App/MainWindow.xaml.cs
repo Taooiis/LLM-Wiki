@@ -31,6 +31,9 @@ public partial class MainWindow : Window
     /// <summary>启动时命令行传入的文件路径（双击文件 / 发送到），WebView2 就绪后导入。</summary>
     public string[]? PendingFiles { get; set; }
 
+    /// <summary>启动时预加载的知识库名（多窗口时使用）。</summary>
+    public string? PendingKbName { get; set; }
+
     public MainWindow()
     {
         InitializeComponent();
@@ -567,8 +570,28 @@ public partial class MainWindow : Window
         await BridgeWebView.ExecuteScriptAsync(
             $"populateKbList({JsonSerializer.Serialize(kbJson)})");
 
-        // 加载第一个知识库的目录树到 WPF TreeView
-        if (kbJson?.Length > 0 && BridgeWebView?.CoreWebView2 != null)
+        // 3.4 多窗口：如果传入了预设的知识库名，选中它并加载
+        var targetKb = PendingKbName ?? (kbJson?.Length > 0 
+            ? kbJson[0].AsObject()?["name"]?.ToString() ?? "" 
+            : "");
+        if (!string.IsNullOrEmpty(targetKb) && BridgeWebView?.CoreWebView2 != null)
+        {
+            var idx = 0;
+            for (var i = 0; i < kbJson?.Length; i++)
+            {
+                var name = kbJson[i].AsObject()?["name"]?.ToString() ?? "";
+                if (name.Equals(targetKb, StringComparison.OrdinalIgnoreCase))
+                {
+                    idx = i;
+                    break;
+                }
+            }
+            // 触发前端选中知识库下拉框（假设页面有相应 API）
+            await BridgeWebView.ExecuteScriptAsync(
+                $"setActiveKb({JsonSerializer.Serialize(targetKb)})");
+            await LoadTreeAsync(targetKb);
+        }
+        else if (kbJson?.Length > 0 && BridgeWebView?.CoreWebView2 != null)
         {
             var kbName = kbJson[0].AsObject()?["name"]?.ToString() ?? "";
             if (!string.IsNullOrEmpty(kbName))
@@ -639,7 +662,7 @@ public partial class MainWindow : Window
         // 在新窗口中打开选中知识库
         var newWindow = new MainWindow();
         newWindow.Show();
-        _ = LoadKbToWindow(newWindow, tag.Kb);
+        newWindow.PendingKbName = tag.Kb;
     }
 
     private async void TreeItem_MouseLeftDown(object sender, MouseButtonEventArgs e)
