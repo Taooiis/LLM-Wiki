@@ -70,7 +70,7 @@ namespace LLM_Wiki
                 services.AddSingleton<GuideViewModel>();
 
                 // 功能迁移：本地服务（无 WebView2，Wpf UI 项目独立）
-                services.AddSingleton<ConfigService>();
+                services.AddSingleton<ConfigService>(sp => new ConfigService(AppContext.BaseDirectory));
                 services.AddSingleton<FileBridge>(sp => new FileBridge(Path.Combine(AppContext.BaseDirectory, "wikis")));
                 services.AddSingleton<KbService>(sp => new KbService(Path.Combine(AppContext.BaseDirectory, "wikis")));
             }).Build();
