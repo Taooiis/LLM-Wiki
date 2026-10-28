@@ -626,7 +626,20 @@ public partial class MainWindow : Window
 
         item.MouseLeftButtonDown += TreeItem_MouseLeftDown;
         item.MouseRightButtonUp += TreeItem_MouseRightUp;
+        item.MouseDoubleClick += TreeItem_MouseDoubleClick;
         return item;
+    }
+
+    private void TreeItem_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        var item = sender as TreeViewItem;
+        var tag = item?.Tag as KbTreeNode;
+        if (tag?.Type != "dir") return;
+
+        // 在新窗口中打开选中知识库
+        var newWindow = new MainWindow();
+        newWindow.Show();
+        _ = LoadKbToWindow(newWindow, tag.Kb);
     }
 
     private async void TreeItem_MouseLeftDown(object sender, MouseButtonEventArgs e)

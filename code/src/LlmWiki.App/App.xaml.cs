@@ -19,6 +19,7 @@ public partial class App : Application
     private Mutex? _mutex;
     private bool _ownsMutex;
     private MainWindow? _window;
+    private readonly List<MainWindow> _childWindows = new();
     private TrayIcon? _tray;
     private CancellationTokenSource? _pipeCts;
     private HotKeyService? _hotKey;
