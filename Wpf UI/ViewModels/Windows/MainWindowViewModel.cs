@@ -1,5 +1,7 @@
 ﻿using System.Collections.ObjectModel;
 
+using CommunityToolkit.Mvvm.ComponentModel;
+
 using Wpf.Ui.Controls;
 
 namespace LLM_Wiki.ViewModels.Windows
@@ -23,6 +25,12 @@ namespace LLM_Wiki.ViewModels.Windows
                 Content = "Data",
                 Icon = new SymbolIcon { Symbol = SymbolRegular.DataHistogram24 },
                 TargetPageType = typeof(Views.Pages.DataPage)
+            },
+            new NavigationViewItem()
+            {
+                Content = "源文档",
+                Icon = new SymbolIcon { Symbol = SymbolRegular.Document24 },
+                TargetPageType = typeof(Views.Pages.SourcePage)
             }
         };
 
@@ -42,5 +50,9 @@ namespace LLM_Wiki.ViewModels.Windows
         {
             new MenuItem { Header = "Home", Tag = "tray_home" }
         };
+
+        /// <summary>当前选中的知识库名（供源文档页等页面读取）。</summary>
+        [ObservableProperty]
+        private string _currentKb = "";
     }
 }

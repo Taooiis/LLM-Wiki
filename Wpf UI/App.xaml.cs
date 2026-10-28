@@ -54,6 +54,8 @@ namespace LLM_Wiki
                 services.AddSingleton<DataViewModel>();
                 services.AddSingleton<SettingsPage>();
                 services.AddSingleton<SettingsViewModel>();
+                services.AddSingleton<SourcePage>();
+                services.AddSingleton<SourceViewModel>();
 
                 // 功能迁移：本地服务（无 WebView2，Wpf UI 项目独立）
                 services.AddSingleton<FileBridge>(sp => new FileBridge(Path.Combine(AppContext.BaseDirectory, "wikis")));
