@@ -35,6 +35,10 @@ public partial class MainWindow : Window
         InitializeComponent();
         RestoreGeometry();
 
+        // 显示启动闪屏
+        var splash = new BootSplash();
+        splash.Show();
+
         // 2.1 任务栏集成：监听分享状态更新进度条
         _tbTimer = new System.Windows.Threading.DispatcherTimer
         { Interval = TimeSpan.FromSeconds(1) };
@@ -45,7 +49,11 @@ public partial class MainWindow : Window
         ThumbRefresh.ImageSource = CreateIcon("refresh");
         ThumbShareToggle.ImageSource = CreateIcon("share");
 
-        Loaded += async (_, _) => await InitWebViewAsync();
+        Loaded += async (_, _) =>
+        {
+            await InitWebViewAsync(splash);
+            splash.Close();
+        };
         Closing += OnClosing;
     }
 
@@ -190,7 +198,7 @@ public partial class MainWindow : Window
                 new System.Text.Json.Nodes.JsonObject { ["port"] = 0 }.ToJsonString());
     }
 
-    private async Task InitWebViewAsync()
+    private async Task InitWebViewAsync(BootSplash? splash = null)
     {
         string? available = CoreWebView2Environment.GetAvailableBrowserVersionString();
         if (string.IsNullOrEmpty(available))
