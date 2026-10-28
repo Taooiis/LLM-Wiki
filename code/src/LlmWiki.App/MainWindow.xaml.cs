@@ -459,4 +459,39 @@ public partial class MainWindow : Window
         MessageBox.Show(this, "LLM Wiki 知识库管理\n版本：开发中\n\n© 2026 作者：LLM Wiki 项目",
             "关于 LLM Wiki", MessageBoxButton.OK, MessageBoxImage.Information);
     }
+
+    // ---------- 工具栏按钮 ----------
+    private void OnShareToggle(object sender, RoutedEventArgs e)
+    {
+        if (_dispatcher?.Sharing == true)
+            _ = _dispatcher.HandleAsync("share-stop", "{}");
+        else
+            _ = _dispatcher.HandleAsync("share-start", new JsonObject { ["port"] = 0 }.ToJsonString());
+    }
+
+    private void OnSearch(object sender, RoutedEventArgs e)
+    {
+        // 搜索功能：暂时跳到前端搜索
+        BridgeWebView?.CoreWebView2?.ExecuteScriptAsync(
+            $"document.querySelector('input[role=\"search\"]')?.focus();");
+    }
+
+    // ---------- 项目加载 ----------
+    protected override void OnContentRendered(EventArgs e)
+    {
+        base.OnContentRendered(e);
+        _ = loadKbList();
+    }
+
+    private async Task loadKbList()
+    {
+        if (BridgeWebView?.CoreWebView2 == null) return;
+        var r = await _dispatcher.HandleAsync("kbs-list", "{}");
+        var data = JsonSerializer.Deserialize<JsonObject>(r);
+        var kbs = data["kbs"] as JsonArray;
+        // 填充知识库列表到前端
+        var kbJson = kbs?.Select(k => (JsonNode?)k).ToArray() ?? [];
+        await BridgeWebView.ExecuteScriptAsync(
+            $"populateKbList({JsonSerializer.Serialize(kbJson)})");
+    }
 }
