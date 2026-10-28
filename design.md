@@ -4,12 +4,12 @@ The locked system. Every design pass reads this first and pages share it. Change
 
 ## System
 - Genre: 现代工作台（Linear / Notion 一档的 Operate 工具界面）
-- Shape: 左侧边栏（224px 常驻）+ 工作区；管理面板六页由 `tab()` 切换，分享页为横幅 + 树/文并排
-- Theme: 冷灰白系统 + 单一靛蓝强调（用户通过结构化问题钉选；Coral 纸面世界已于 2026-10-27 整体废弃）
+- Shape: 左侧 Pane + 工作区 Frame；管理面板由 WPF `NavigationView` 导航切换（六页按计划 P1-P2 逐步接线；左侧 Pane 默认展开，展开宽度 224px，折叠策略按计划 P1 实现）；分享页为横幅 + 树/文并排。
+- Theme: 冷灰白系统 + 单一靛蓝强调（用户通过结构化问题钉选；Coral 纸面世界已于 2026-10-27 整体废弃）。控件视觉以 **WPF UI Library 官方 Fluent 主题样式** 为准，优先功能完整性，前期不做视觉抄袭；冷灰白 + 靛蓝由 Fluent 主题及设计 token 参考呈现，不做旧 Web 样式迁移。
 - Mode: Operate —— 扫读性、一致性、原生预期优先；签名元素 = 工作流页的深色代码面板提示词输出区
 
 ## Tokens
-`code/src/LlmWiki.App/wwwroot/tokens.css` 是唯一事实源（分享页因 Kestrel 单文件直出而内联同一套值）。要点：
+`Wpf UI/` 主题资源字典（ThemesDictionary / ControlsDictionary）与设计 token 为**参考值集**（计划以控件原生 Fluent 样式呈现为主，不强制把 Web 端 token 全量映射为 WPF 资源；全 WPF 化后 WebView2 tokens.css 随前端移除；分享页仍为独立静态网页，内联同一套值）。前期保留 token 仅供后期视觉对齐参考，不强制落地。
 
 ```css
 :root {
@@ -25,7 +25,7 @@ The locked system. Every design pass reads this first and pages share it. Change
 }
 ```
 
-## Rules
+## Rules（前期视觉以 WPF UI 控件原生 Fluent 样式呈现为主；以下规则为后期视觉优化参考，非 P0-P1 强制）
 - **强调色纪律**：靛蓝只出现在主操作按钮、当前导航项、焦点环与复制成功语义；绝不作大面积底色或标题色。主按钮带纵向渐变与品牌色投影。
 - **层级**：17px/650 页标题 → 14px/600 卡片标题 → 13px 正文 → 12px 辅助 → 11px 弱说明；字重拉层级，不用颜色。
 - **密度**：控件 32px、表格行 40px 档、卡片内边距 16/20、间距走 4px 尺度（--sp-*）。
@@ -34,7 +34,7 @@ The locked system. Every design pass reads this first and pages share it. Change
 - **图标**：手绘 16px / stroke 1.5 / currentColor 内联 SVG，一库里。
 - **深色代码面板**（签名）：`--code-*` 令牌；一键复制后按钮变 `--success` 绿"已复制"2 秒。
 - **动效**：仅 transform/opacity 微动（按压、120ms）；reduced-motion 全瞬时。
-- **新增页面**：复用 tokens.css + base.css；分享页改 token 时两处同步（文件头有注释提示）。
+- **新增页面**：复用 WPF 主题资源 + token；分享页改 token 时两处同步（文件头有注释提示）。
 
 ## Exports
-`code/src/LlmWiki.App/wwwroot/tokens.css` + `base.css`；方向契约存档于 `.impeccable/surfaces/panel.md`。
+`Wpf UI/` 主题资源字典（ThemesDictionary / ControlsDictionary + 设计 token 参考）；方向契约存档于 `.impeccable/surfaces/panel.md`。全 WPF 化后主题资源随 WPF 控件主题迁移，不再强制"唯一事实源"。

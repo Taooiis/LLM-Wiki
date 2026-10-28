@@ -1,2 +1,10 @@
 .superpowers/
 .hallmark/
+
+# .NET / WPF build outputs
+bin/
+obj/
+.vs/
+*.csproj.user
+*.slnx
+*.user

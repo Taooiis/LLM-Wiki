@@ -5,7 +5,7 @@
 ## 一页速览
 
 - **是什么**：Windows 桌面知识库维护工具（取代 LLM Wiki Demo 的 Node 服务 + 浏览器面板方案）。
-- **壳与内核**：C# 宿主（先 .NET 10 LTS，.NET 11 GA 后升级到 11）+ WebView2 渲染前端；文件桥内置在 C# 里，不再依赖 Node。
+- **壳与内核**：C# 宿主（先 .NET 10 LTS，.NET 11 GA 后升级到 11）+ WPF UI Library 原生控件（全 WPF 化、放弃 WebView2，见 `WPF-UI-PLAN.md`）；文件桥内置在 C# 里，不再依赖 Node。
 - **定位**：只做知识库维护（建库 / 传文档 / 预览编辑 / 提示词生成）；不做问答、不内置 AI。
 - **AI 链路**：与 demo 相同——客户端生成提示词 → 人复制到外部 Agent（opencode / codex 等）→ Agent 直接读写知识库文件。
 - **源格式**：txt / md / docx / xlsx 四种；docx 与 xlsx 在上传时转成 Markdown 副本入库，原件保留。
