@@ -334,4 +334,46 @@ public partial class MainWindow : Window
         }
         return false;
     }
+
+    // ---------- 菜单栏事件 ----------
+    private void OnOpenFolder(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "选择文件夹",
+            InitialDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LlmWiki", "wikis")
+        };
+        dlg.ShowDialog(this);
+    }
+
+    private void OnOpenFile(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "打开文件",
+            Filter = "支持的文件|*.md;*.txt;*.docx;*.xlsx|所有文件|*.*"
+        };
+        if (dlg.ShowDialog(this) == true)
+            _ = ImportFilesFromCommandLine([dlg.FileName]);
+    }
+
+    private void OnCut(object sender, RoutedEventArgs e) => Clipboard.SetText(""); // 占位：实际在网页里操作
+    private void OnCopy(object sender, RoutedEventArgs e) => Clipboard.SetText("");
+    private void OnPaste(object sender, RoutedEventArgs e) => Clipboard.SetText("");
+    private void OnRefresh(object sender, RoutedEventArgs e) => BridgeWebView.CoreWebView2?.ExecuteScriptAsync("if (typeof loadTree === 'function') loadTree();");
+    private void OnExit(object sender, RoutedEventArgs e)
+    {
+        if (_dispatcher?.Sharing == true)
+        {
+            if (MessageBox.Show(this, "分享服务正在运行，确定退出吗？", "LLM Wiki",
+                    MessageBoxButton.OKCancel, MessageBoxImage.Warning) == MessageBoxResult.Cancel)
+                return;
+        }
+        ReallyExit();
+    }
+    private void OnAbout(object sender, RoutedEventArgs e)
+    {
+        MessageBox.Show(this, "LLM Wiki 知识库管理\n版本：开发中\n\n© 2026 作者：LLM Wiki 项目",
+            "关于 LLM Wiki", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
 }
