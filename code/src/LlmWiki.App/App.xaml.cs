@@ -26,6 +26,11 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // 0. 全局异常捕获 + 崩溃日志（必须最先装）
+        AppDomain.CurrentDomain.UnhandledException += (_, ex) => LogCrash(ex.ExceptionObject as Exception);
+        // WPF UI 线程异常
+        Dispatcher.UnhandledException += (_, ex) => { LogCrash(ex.Exception); ex.Handled = true; };
+
         // 1. 单实例判定：拿不到 Mutex 说明已有进程在跑，通知它露脸后本进程退出
         _mutex = new Mutex(true, MutexName, out var isFirst);
         if (!isFirst)
@@ -139,6 +144,21 @@ public partial class App : Application
                 Thread.Sleep(100);
             }
         }
+    }
+
+    /// <summary>崩溃异常写日志 + 弹窗。</summary>
+    private static void LogCrash(Exception? ex)
+    {
+        if (ex == null) return;
+        try
+        {
+            var path = Path.GetDirectoryName(Path.GetTempPath()) + "\\LLM Wiki\\crash.log";
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            var info = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}\n{ex.GetType()}: {ex.Message}\n{ex.StackTrace}\n\n";
+            File.AppendAllText(path, info);
+            // 不弹窗，防止二次崩溃卡死
+        }
+        catch { /* 写入失败也别崩 */ }
     }
 
     protected override void OnExit(ExitEventArgs e)
