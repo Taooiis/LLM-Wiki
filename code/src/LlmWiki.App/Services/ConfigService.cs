@@ -36,8 +36,9 @@ public class ConfigService
 
         // 解析后得到实际目录
         string? dir = configured == null ? null : PathGuard.ResolveWikisDir(configured, appRoot);
-        // 若目录在 exe 目录里（旧默认），自动搬走
-        if (dir != null && Path.GetFullPath(dir).StartsWith(appRoot, StringComparison.OrdinalIgnoreCase))
+        // 仅旧默认目录（appRoot\wikis）才搬走到 %APPDATA%；用户自定义的目录留原地
+        string oldDefault = Path.Combine(appRoot, "wikis");
+        if (dir != null && Path.GetFullPath(dir).Equals(oldDefault, StringComparison.OrdinalIgnoreCase))
         {
             dir = MigrateFromBinDir(dir, DefaultWikis);
         }

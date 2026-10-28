@@ -50,6 +50,8 @@ public partial class App : Application
         _window = new MainWindow();
         _tray = new TrayIcon(ActivateWindow, ExitApp);
         _window.HiddenToTray += () => _tray?.NotifyHidden();
+        // 2.2 初始化托停通知服务
+        ToastService.SetNotifyIcon(_tray!.Icon);
         // ShutdownMode 是 OnExplicitShutdown：关掉最后一个窗口不会自动退，需要显式结束
         _window.Closed += (_, _) => Shutdown();
         _window.Show();

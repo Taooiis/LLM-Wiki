@@ -340,6 +340,11 @@ public partial class MainWindow : Window
             };
             var raw = await _dispatcher.HandleAsync("upload-path", args.ToJsonString());
             await BridgeWebView.ExecuteScriptAsync($"window.onDropResult && window.onDropResult({raw})");
+
+            // 2.2 Toast 通知：导入完成
+            var resp = JsonSerializer.Deserialize<JsonObject>(raw);
+            if (resp["ok"]?.GetValue<bool>() == true)
+                ToastService.ShowImportComplete(kb, paths.Length);
         }
         catch (Exception ex)
         {

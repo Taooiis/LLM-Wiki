@@ -77,6 +77,7 @@ public class ShareService(ConfigService config)
                 ?? [$"http://localhost:{_port}/"];
             ParseFirstAddress(_addresses.FirstOrDefault());
             error = "";
+            ToastService.ShowShareStarted(_port);
             return true;
         }
         catch (Exception e)
@@ -97,6 +98,7 @@ public class ShareService(ConfigService config)
             _host.Dispose();
             _host = null;
             Pin = "";
+            ToastService.ShowShareStopped();
         }
         // mDNS 应答器一起收掉：不在分享就不该应答域名查询
         _mdns?.Dispose();

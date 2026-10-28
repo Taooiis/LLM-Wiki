@@ -13,10 +13,14 @@ public class ConfigServiceTests : IDisposable
     public void Dispose() { try { Directory.Delete(_root, true); } catch { } }
 
     [Fact]
-    public void NoConfigFile_DefaultsToAppRootWikis()
+    public void NoConfigFile_DefaultsToAppDataLlmWikiWikis()
     {
         var cfg = new ConfigService(_root);
-        Assert.Equal(Path.Combine(_root, "wikis"), cfg.WikisDir);
+        // 4.3 迁移：无 config.json 时默认使用 %APPDATA%\LlmWiki\wikis（免丢）
+        var expected = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "LlmWiki", "wikis");
+        Assert.Equal(expected, cfg.WikisDir);
     }
 
     [Fact]
@@ -34,12 +38,13 @@ public class ConfigServiceTests : IDisposable
     public void SetWikisDir_ValidPath_SavesAndReloads()
     {
         var cfg = new ConfigService(_root);
-        var target = Path.Combine(_root, "new-place");
+        // 使用独立目录（不在 appRoot 下），避免触发迁移逻辑
+        var target = Path.Combine(Path.GetTempPath(), "llmwiki-cfg-test-" + Guid.NewGuid().ToString("N"));
         var ok = cfg.SetWikisDir(target, out var error);
         Assert.True(ok, error);
         Assert.Equal(target, cfg.WikisDir);
-        Assert.True(Directory.Exists(target)); // 设置成功即建目录（Demo server.js:337 同）
-        // 新实例从 config.json 读回（重启保持）
+        Assert.True(Directory.Exists(target));
+        // 新实例从 config.json 读回
         Assert.Equal(target, new ConfigService(_root).WikisDir);
     }
 

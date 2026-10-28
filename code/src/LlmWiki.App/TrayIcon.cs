@@ -31,6 +31,9 @@ public sealed class TrayIcon : IDisposable
         _icon.DoubleClick += (_, _) => show();
     }
 
+    /// <summary>Expose underlying NotifyIcon for toast notifications.</summary>
+    public NotifyIcon Icon => _icon;
+
     /// <summary>第一次缩到托盘时提示一次，避免用户以为程序被关掉了。</summary>
     public void NotifyHidden()
     {
