@@ -12,13 +12,17 @@ public class ConfigService
     private readonly string _configFile;
     private readonly string _appRoot;
 
+    /// <summary>默认库目录：%APPDATA%\LlmWiki\wikis（免丢）</summary>
+    private static readonly string DefaultWikis = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LlmWiki", "wikis");
+
     public ConfigService(string appRoot)
     {
         appRoot = Path.GetFullPath(appRoot);
         _appRoot = appRoot;
         _configFile = Path.Combine(appRoot, "config.json");
 
-        // 实例级初始化：有有效配置则用之，否则回退 appRoot\wikis
+        // 实例级初始化：读取配置 → 若位置在 exe 目录下（旧默认），自动搬到 %APPDATA%
         string? configured = null;
         if (File.Exists(_configFile))
         {
@@ -29,8 +33,44 @@ public class ConfigService
             }
             catch { /* 坏 JSON 回退默认 */ }
         }
-        var dir = configured == null ? null : PathGuard.ResolveWikisDir(configured, appRoot);
-        WikisDir = dir ?? Path.Combine(appRoot, "wikis");
+
+        // 解析后得到实际目录
+        string? dir = configured == null ? null : PathGuard.ResolveWikisDir(configured, appRoot);
+        // 若目录在 exe 目录里（旧默认），自动搬走
+        if (dir != null && Path.GetFullPath(dir).StartsWith(appRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            dir = MigrateFromBinDir(dir, DefaultWikis);
+        }
+
+        WikisDir = dir ?? (Directory.Exists(DefaultWikis) ? DefaultWikis : CreateDefaultWikis());
+    }
+
+    /// <summary>搬库：从旧目录复制到 %APPDATA%，写配置并返回新路径。</summary>
+    private static string MigrateFromBinDir(string oldDir, string newDir)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(newDir) ?? newDir);
+            CopyDirectory(oldDir, newDir);
+            return newDir;
+        }
+        catch { return newDir; }
+    }
+
+    private static void CopyDirectory(string src, string dst)
+    {
+        Directory.CreateDirectory(dst);
+        foreach (var subDir in Directory.GetDirectories(src))
+            CopyDirectory(subDir, dst + Path.DirectorySeparatorChar + Path.GetFileName(subDir));
+        foreach (var file in Directory.GetFiles(src))
+            File.Copy(file, dst + Path.DirectorySeparatorChar + Path.GetFileName(file), true);
+    }
+
+    private static string CreateDefaultWikis()
+    {
+        Directory.CreateDirectory(DefaultWikis);
+        File.WriteAllText(Path.Combine(DefaultWikis, ".gitkeep"), "LlmWiki 库目录 / LLM Wiki Knowledge Base\n");
+        return DefaultWikis;
     }
 
     // 当前存储根目录（构造时读取，SetWikisDir 更新）
