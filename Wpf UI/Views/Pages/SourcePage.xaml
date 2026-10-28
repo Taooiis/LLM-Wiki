@@ -6,15 +6,20 @@
   xmlns:local="clr-namespace:LLM_Wiki.Views.Pages"
   xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
   xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  xmlns:dialogs="clr-namespace:LLM_Wiki.Views.Dialogs"
   Title="SourcePage"
   d:DataContext="{d:DesignInstance local:SourcePage, IsDesignTimeCreatable=False}"
-  d:DesignHeight="450"
-  d:DesignWidth="800"
+  d:DesignHeight="600"
+  d:DesignWidth="900"
   ui:Design.Background="{DynamicResource ApplicationBackgroundBrush}"
   ui:Design.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
   mc:Ignorable="d"
 >
+  <Page.Resources>
+    <dialogs:EditorDialog x:Key="EditorDlg" />
+  </Page.Resources>
+
   <Grid>
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
@@ -51,10 +56,15 @@
           CommandParameter="{Binding ElementName=KbList, Path=SelectedItem}"
           Margin="4,0,0,0"
           Icon="Fluent24" />
+        <ui:Button
+          Content="刷新"
+          Command="{Binding ViewModel.RefreshCommand}"
+          Margin="8,0,0,0"
+          Icon="Fluent24" />
       </StackPanel>
     </Grid>
 
-    <!-- 内容区：左文件列表 + 右编辑器 -->
+    <!-- 内容区：左文件列表 + 右预览/编辑 -->
     <Grid Grid.Row="1">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="260" />
@@ -78,38 +88,45 @@
         </ui:ListView>
       </StackPanel>
 
-      <!-- 右侧：编辑器 + 操作栏 -->
+      <!-- 右侧：预览 + 编辑按钮 -->
       <Grid Grid.Column="1">
         <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
           <RowDefinition Height="*" />
           <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <Grid Grid.Row="0" Margin="0,8,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock
+            Grid.Column="0"
+            VerticalAlignment="Center"
+            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+            Text="{Binding ViewModel.SelectedFile, TargetNullValue='请选择文件', FallbackValue='请选择文件'}" />
+          <ui:Button
+            Grid.Column="1"
+            x:Name="EditButton"
+            Content="编辑"
+            Click="OnEditClick"
+            Margin="8,0,0,0"
+            Icon="Fluent24"
+            IsEnabled="False" />
+        </Grid>
+
         <ui:TextBox
-          x:Name="EditorBox"
-          Grid.Row="0"
+          x:Name="PreviewText"
+          Grid.Row="1"
           Margin="0,8,0,0"
-          Text="{Binding ViewModel.DocumentContent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-          AcceptsReturn="True"
           TextWrapping="Wrap"
           VerticalScrollBarVisibility="Auto"
+          IsReadOnly="True"
           Background="{DynamicResource ApplicationBackgroundBrush}"
-          Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,8,0,0">
-          <ui:Button
-            Content="保存"
-            Command="{Binding ViewModel.SaveDocumentCommand}"
-            CommandParameter="{Binding ElementName=EditorBox, Path=Text}"
-            Margin="0,0,8,0"
-            Icon="Fluent24" />
-          <ui:Button
-            Content="删除"
-            Command="{Binding ViewModel.DeleteFileCommand}"
-            CommandParameter="{Binding ElementName=FileList, Path=SelectedItem}"
-            Margin="8,0,0,0"
-            Icon="Fluent24" />
-        </StackPanel>
+          Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+          BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
+          Padding="8" />
       </Grid>
     </Grid>
 

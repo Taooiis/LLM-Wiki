@@ -1,8 +1,11 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
+using System.Text;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Win32;
 
 using LLM_Wiki.Services;
 using LLM_Wiki.ViewModels.Windows;
@@ -155,6 +158,84 @@ namespace LLM_Wiki.ViewModels.Pages
 
             _fileBridge.ClearChanges(SelectedKb, new[] { fileName });
             LoadChanges(SelectedKb);
+        }
+
+        public bool SaveFile(string kb, string rel, string content, out string error)
+        {
+            return _fileBridge.WriteText(kb, rel, content, out error);
+        }
+
+        [RelayCommand]
+        private void Refresh()
+        {
+            LoadFiles(SelectedKb);
+            LoadChanges(SelectedKb);
+        }
+
+        [RelayCommand]
+        private async Task UploadFile()
+        {
+            if (string.IsNullOrWhiteSpace(SelectedKb))
+            {
+                MessageBox.Show("请先选择一个知识库", "上传", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var dialog = new OpenFileDialog
+            {
+                Title = "选择要上传的文件",
+                Filter = "所有支持的文件 (*.md;*.txt;*.docx;*.xlsx)|*.md;*.txt;*.docx;*.xlsx|文本文件 (*.md;*.txt)|*.md;*.txt|Office 文件 (*.docx;*.xlsx)|*.docx;*.xlsx",
+                Multiselect = false
+            };
+
+            if (dialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            var sourcePath = dialog.FileName;
+            var fileName = Path.GetFileName(sourcePath);
+            var rel = "raw/sources/" + fileName;
+
+            // 读取文件内容
+            string content;
+            try
+            {
+                var ext = Path.GetExtension(fileName).ToLowerInvariant();
+                if (ext == ".docx" || ext == ".xlsx")
+                {
+                    // Office 文件：先保存原件到 raw/original/，Markdown 转换留待后续实现
+                    var originalRel = "raw/original/" + fileName;
+                    File.Copy(sourcePath, Path.Combine(GetKbRoot(), originalRel), overwrite: true);
+                    content = $"# {fileName}\n\n> Office 文件已上传到 raw/original/，Markdown 转换功能待实现。\n";
+                }
+                else
+                {
+                    content = File.ReadAllText(sourcePath, Encoding.UTF8);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("读取文件失败：" + ex.Message, "上传", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            var error = "";
+            var ok = _fileBridge.WriteText(SelectedKb, rel, content, out error);
+            if (!ok)
+            {
+                MessageBox.Show("上传失败：" + error, "上传", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            LoadFiles(SelectedKb);
+            LoadChanges(SelectedKb);
+            MessageBox.Show($"已上传：{fileName}", "上传", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private string GetKbRoot()
+        {
+            return Path.Combine(AppContext.BaseDirectory, "wikis", SelectedKb);
         }
     }
 

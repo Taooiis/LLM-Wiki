@@ -1,0 +1,84 @@
+<ui:ContentDialog
+  x:Class="LLM_Wiki.Views.Dialogs.EditorDialog"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  mc:Ignorable="d"
+  d:DesignHeight="500"
+  d:DesignWidth="800"
+  Title="编辑"
+  PrimaryButtonText="保存"
+  SecondaryButtonText="关闭"
+  IsPrimaryButtonEnabled="True"
+  KeyDown="OnKeyDown"
+  >
+  <Grid Margin="12">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <!-- 标题栏：文件名 + dirty 标记 + 消息 -->
+    <Grid Grid.Row="0" Margin="0,0,0,8">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <TextBox
+        x:Name="FileNameInput"
+        Grid.Column="0"
+        Margin="0,0,8,0"
+        Padding="6,2"
+        Background="{DynamicResource ApplicationBackgroundBrush}"
+        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+        BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
+        Visibility="Collapsed" />
+      <TextBlock
+        x:Name="FilePathText"
+        Grid.Column="0"
+        VerticalAlignment="Center"
+        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+        FontSize="12" />
+      <TextBlock
+        x:Name="DirtyText"
+        Grid.Column="1"
+        Text="● 未保存"
+        Foreground="{DynamicResource TextFillColorDangerBrush}"
+        FontWeight="SemiBold"
+        Visibility="Collapsed"
+        Margin="8,0,0,0" />
+    </Grid>
+
+    <TextBlock
+      x:Name="MsgText"
+      Grid.Row="1"
+      Margin="0,0,0,8"
+      Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+      FontSize="12"
+      TextWrapping="Wrap" />
+
+    <!-- 正文编辑器 -->
+    <ui:TextBox
+      x:Name="EditorBox"
+      Grid.Row="2"
+      Margin="0,0,0,8"
+      AcceptsReturn="True"
+      TextWrapping="Wrap"
+      VerticalScrollBarVisibility="Auto"
+      Background="{DynamicResource ApplicationBackgroundBrush}"
+      Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+      BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
+      TextChanged="OnEditorTextChanged" />
+
+    <TextBlock
+      Grid.Row="3"
+      HorizontalAlignment="Right"
+      Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+      FontSize="12"
+      Text="Ctrl+S 保存 · Esc 关闭 · 未保存会提醒" />
+  </Grid>
+</ui:ContentDialog>
