@@ -64,3 +64,27 @@
   --color-accent-2: var(--accent-text);
   --color-success: var(--success);
 }
+
+/* 5.2 深色模式：跟随系统 prefers-color-scheme */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0F172A;            /* 更深的 slate 蓝 */
+    --surface: #1E293B;
+    --surface-2: #334155;
+    --surface-3: #475569;
+    --border: #475569;
+    --border-strong: #64748B;
+    --border-hover: #94A3B8;
+
+    --text-1: #F1F5F9;
+    --text-2: #E2E8F0;
+    --text-3: #CBD5E1;
+    --text-faint: #94A3B8;
+
+    --code-bg: #0F172A;
+
+    --danger-subtle: #3F192A;
+    --success: #22C55E;
+    --warn-bg: #713F12;
+  }
+}
