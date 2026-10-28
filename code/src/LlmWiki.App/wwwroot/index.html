@@ -124,6 +124,11 @@ ul.tree li.dir { color: var(--text-2); font-weight: 600; }
 ul.tree a { color: var(--text-1); cursor: pointer; border-radius: 4px; }
 ul.tree a:hover { color: var(--accent-text); }
 
+/* 右键菜单：目录树、文件列表 */
+.filemenu { position: fixed; z-index: 1000; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.15); padding: 4px 0; }
+.filemenu button { min-width: 140px; padding: 6px 12px; font-size: var(--fs-2); border: 0; background: none; color: var(--text-1); cursor: pointer; border-radius: 4px; }
+.filemenu button:hover { background: var(--surface-2); }
+
 /* ---- 路径浏览分栏 ---- */
 .split { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
 .split .card { margin-top: 0; }
@@ -1056,8 +1061,8 @@ async function loadTree() {
 function renderTree(nodes, base) {
   let h = '<ul class="tree">';
   for (const n of nodes) {
-    if (n.type === 'dir') h += `<li class="dir">${esc(n.name)}` + renderTree(n.children || [], base + n.name + '/') + '</li>';
-    else h += `<li><a tabindex="0" onclick="viewAnyDecode('${encodeURIComponent(base + n.name)}')">${esc(n.name)}</a></li>`;
+    if (n.type === 'dir') h += `<li class="dir" data-path="${esc(base + n.name)}" oncontextmenu="showFileMenu(event, '${esc(base + n.name)}', 'dir')">${esc(n.name)}` + renderTree(n.children || [], base + n.name + '/') + '</li>';
+    else h += `<li data-path="${esc(base + n.name)}" oncontextmenu="showFileMenu(event, '${esc(base + n.name)}', 'file')"><a tabindex="0" onclick="viewAnyDecode('${encodeURIComponent(base + n.name)}')">${esc(n.name)}</a></li>`;
   }
   return h + '</ul>';
 }
@@ -1070,6 +1075,38 @@ async function viewAny(rel) {
   document.getElementById('viewName').textContent = rel;
   openModal({ mode: 'exist', path: rel, filename: rel.split('/').pop(), content: data.content || '' });
 }
+
+// ---- 右键菜单：文件/目录右键显示操作 ----
+let fileMenuEl = null;
+function showFileMenu(e, relPath, itemType) {
+  e.preventDefault();
+  // 清除旧菜单
+  if (fileMenuEl) { fileMenuEl.remove(); fileMenuEl = null; }
+  fileMenuEl = document.createElement('div');
+  fileMenuEl.className = 'filemenu';
+  fileMenuEl.style.left = e.pageX + 'px';
+  fileMenuEl.style.top = e.pageY + 'px';
+  document.body.appendChild(fileMenuEl);
+
+  const kb = kb();
+  const actions = [
+    { label: '定位到资源管理器', icon: '📂', fn: () => api('/api/file-reveal', { method: 'POST', body: JSON.stringify({ kb, path: relPath }) }) },
+    { label: '用默认程序打开', icon: '📄', fn: () => api('/api/file-open', { method: 'POST', body: JSON.stringify({ kb, path: relPath }) }) },
+    { label: '复制完整路径', icon: '📋', fn: () => api('/api/file-copy-path', { method: 'POST', body: JSON.stringify({ kb, path: relPath }) }).then(() => { navigator.clipboard.writeText(relPath); toast('已复制路径：' + relPath); }) },
+  ];
+  for (const a of actions) {
+    const btn = document.createElement('button');
+    btn.innerHTML = `${a.icon} ${a.label}`;
+    btn.onclick = async () => {
+      const r = await a.fn();
+      const d = await r.json();
+      if (d.error) toast(d.error, 'err');
+      fileMenuEl.remove(); fileMenuEl = null;
+    };
+    fileMenuEl.appendChild(btn);
+  }
+}
+document.addEventListener('click', (e) => { if (fileMenuEl && !fileMenuEl.contains(e.target)) { fileMenuEl.remove(); fileMenuEl = null; } });
 
 // ---- 工作流：提示词由 C# PromptEngine 生成（绝对路径/哈希/清单都是后端权威数据） ----
 async function askPrompt(kind, extra) {

@@ -320,6 +320,25 @@ public class BridgeDispatcher(ConfigService config)
                     Share.Stop();
                     return Ok(new JsonObject { ["ok"] = true, ["running"] = false });
 
+                // ---------- 文件操作：打开/定位/复制路径 ----------
+                case "file-reveal" when S("kb") is { } kb && S("path") is { } rel:
+                {
+                    var safe = PathGuard.SafeJoin(config.WikisDir, kb, rel);
+                    return ShellOps.Reveal(safe ?? "") ? Ok(new JsonObject { ["ok"] = true }) : Error("无法定位文件");
+                }
+                case "file-open" when S("kb") is { } kb && S("path") is { } rel:
+                {
+                    var safe = PathGuard.SafeJoin(config.WikisDir, kb, rel);
+                    return ShellOps.Open(safe ?? "") ? Ok(new JsonObject { ["ok"] = true }) : Error("无法打开文件");
+                }
+                case "file-copy-path" when S("kb") is { } kb && S("path") is { } rel:
+                {
+                    var safe = PathGuard.SafeJoin(config.WikisDir, kb, rel);
+                    if (safe == null) return Error("路径非法");
+                    System.Windows.Forms.Clipboard.SetText(safe);
+                    return Ok(new JsonObject { ["ok"] = true });
+                }
+
                 default: return Error("未知命令：" + name);
             }
         }

@@ -53,6 +53,9 @@ window.api = (async (path, options = {}) => {
     '/api/clipboard': 'clipboard-set',
     '/api/file-assoc': options.method === 'POST' ? 'file-assoc-register' : 'file-assoc-get',
     '/api/file-assoc/unregister': 'file-assoc-unregister',
+    '/api/file-reveal': 'file-reveal',
+    '/api/file-open': 'file-open',
+    '/api/file-copy-path': 'file-copy-path',
   };
 
   // 处理带 Query 的路径 (e.g., /api/sources?kb=...)

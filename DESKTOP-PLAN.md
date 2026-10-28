@@ -56,7 +56,7 @@
 | 4.1 | 桥消息监听修复（`chrome.webview` 事件） | ✅ | commit `6aca372`，阻塞性 bug |
 | 4.2 | `api()` 超时兜底 + 错误 toast | ✅ | `bridge.js` 分级超时（默认 20s，交互类不超时，上传 5 分钟）；超时返回 error 并由现有 toast 展示 |
 | 4.3 | 数据目录迁 `%APPDATA%\LlmWiki\wikis` | ✅ | 启动时自动搬旧库；默认仓库在 `%APPDATA%`，升级/清理不丢库 |
-| 4.4 | 全局异常捕获 + 崩溃日志 | ⬜ | 异常目前静默 |
+| 4.4 | 全局异常捕获 + 崩溃日志 | ✅ | 记录 `%APPDATA%\LlmWiki\logs.txt`；UI 报错弹窗；崩溃写 Temp，供收集诊断 |
 | 4.5 | 安装包 + 自动更新（Inno Setup / MSIX） | ⬜ | 现在只能手动跑 `bin\Debug` |
 
 ## 5. 功能差距
