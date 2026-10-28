@@ -66,6 +66,12 @@ namespace LLM_Wiki.ViewModels.Windows
                 Content = "配置",
                 Icon = new SymbolIcon { Symbol = SymbolRegular.Settings24 },
                 TargetPageType = typeof(Views.Pages.ConfigPage)
+            },
+            new NavigationViewItem()
+            {
+                Content = "小白指南",
+                Icon = new SymbolIcon { Symbol = SymbolRegular.Info24 },
+                TargetPageType = typeof(Views.Pages.GuidePage)
             }
         };
 

@@ -66,6 +66,8 @@ namespace LLM_Wiki
                 services.AddSingleton<SharePage>();
                 services.AddSingleton<ShareViewModel>();
                 services.AddSingleton<ShareService>();
+                services.AddSingleton<GuidePage>();
+                services.AddSingleton<GuideViewModel>();
 
                 // 功能迁移：本地服务（无 WebView2，Wpf UI 项目独立）
                 services.AddSingleton<ConfigService>();
