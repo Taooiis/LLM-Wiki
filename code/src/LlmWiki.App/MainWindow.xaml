@@ -48,6 +48,9 @@
             <MenuItem Header="_帮助(_H)">
                 <MenuItem Header="关于(_A)" Click="OnAbout"/>
             </MenuItem>
+            <MenuItem Header="_设置(_S)">
+                <MenuItem Header="设置(_T)" Click="OnSettings"/>
+            </MenuItem>
         </Menu>
 
         <ToolBar DockPanel.Dock="Top" Margin="4,2,0,2">

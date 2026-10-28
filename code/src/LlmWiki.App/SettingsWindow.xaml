@@ -1,0 +1,86 @@
+<Window x:Class="LlmWiki.App.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="设置" Height="480" Width="560"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#FBFCFE">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 标题 -->
+        <TextBlock Text="LLM Wiki 设置" FontSize="18" FontWeight="SemiBold" 
+                   Foreground="#2F343B" Margin="0,0,0,24" Grid.Row="0"/>
+
+        <!-- 设置内容 -->
+        <TabControl Grid.Row="1" x:Name="SettingsTab">
+            <!-- 知识库设置 -->
+            <TabItem Header="知识库">
+                <StackPanel Margin="16">
+                    <TextBlock Text="已注册知识库" Foreground="#575C65" Margin="0,0,0,12"/>
+                    <ListBox x:Name="KbList" BorderBrush="#D1D5DB" Background="White"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <Button Content="编辑路径" Width="100" Height="28" Margin="0,0,8,0"/>
+                        <Button Content="删除" Width="100" Height="28" Margin="0,0,8,0"/>
+                        <Button Content="添加..." Width="100" Height="28"/>
+                    </StackPanel>
+                </StackPanel>
+            </TabItem>
+
+            <!-- 文件夹设置 -->
+            <TabItem Header="文件夹">
+                <StackPanel Margin="16">
+                    <TextBlock Text="工作目录" Foreground="#575C65" Margin="0,0,0,8"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                        <TextBox x:Name="FolderBox" Width="320" IsReadOnly="True"/>
+                        <Button Content="浏览..." Width="80" Height="28" Margin="8,0,0,0"
+                                Click="OnBrowseFolder"/>
+                    </StackPanel>
+                    <Button Content="更改默认文件夹" Width="140" Height="28"/>
+                </StackPanel>
+            </TabItem>
+
+            <!-- 分享设置 -->
+            <TabItem Header="分享">
+                <StackPanel Margin="16">
+                    <CheckBox x:Name="AutoShare" Content="自动分享当前知识库" Margin="0,0,0,16"/>
+                    <TextBlock Text="分享端口" Foreground="#575C65" Margin="0,0,0,8"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                        <TextBox x:Name="PortBox" Width="60" Text="8080" MinWidth="60"/>
+                        <TextBlock Text="端口 (0=随机)" Foreground="#8A95A8" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    </StackPanel>
+                    <Button x:Name="StartShareBtn" Content="启动分享" Width="120" Height="28"/>
+                </StackPanel>
+            </TabItem>
+
+            <!-- 外观设置 -->
+            <TabItem Header="外观">
+                <StackPanel Margin="16">
+                    <TextBlock Text="主题" Foreground="#575C65" Margin="0,0,0,12"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                        <RadioButton x:Name="ThemeLight" Content="浅色" GroupName="Theme" IsChecked="True" Margin="0,0,16,0"/>
+                        <RadioButton x:Name="ThemeDark" Content="深色" GroupName="Theme" Margin="0,0,16,0"/>
+                        <RadioButton x:Name="ThemeSystem" Content="跟随系统" GroupName="Theme" Margin="0,0,0,0"/>
+                    </StackPanel>
+                    <TextBlock Text="界面语言" Foreground="#575C65" Margin="0,0,0,12"/>
+                    <ComboBox x:Name="LangCombo" Width="160" Margin="0,0,0,16">
+                        <ComboBoxItem Content="简体中文" IsSelected="True"/>
+                        <ComboBoxItem Content="English"/>
+                    </ComboBox>
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+
+        <!-- 按钮区域 -->
+        <StatusBar Grid.Row="2" Background="#FBFCFE" BorderBrush="#D1D5DB" BorderThickness="0,1,0,0" Height="48">
+            <Separator/>
+            <Button Content="保存" Width="90" Height="28" Margin="0,0,0,0" Click="OnSave"/>
+            <Separator/>
+            <Button Content="取消" Width="90" Height="28" Click="OnCancel"/>
+        </StatusBar>
+    </Grid>
+</Window>

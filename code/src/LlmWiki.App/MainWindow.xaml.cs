@@ -462,6 +462,12 @@ public partial class MainWindow : Window
             "关于 LLM Wiki", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
+    private void OnSettings(object sender, RoutedEventArgs e)
+    {
+        var dlg = new SettingsWindow { Owner = this };
+        dlg.ShowDialog();
+    }
+
     // ---------- 工具栏按钮 ----------
     private void OnShareToggle(object sender, RoutedEventArgs e)
     {
