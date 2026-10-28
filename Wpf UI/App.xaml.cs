@@ -55,6 +55,7 @@ namespace LLM_Wiki
 
                 // 功能迁移：知识库服务（逻辑层复用，宿主 UI 由 WPF UI 控件实现）
                 services.AddSingleton<KbService>(sp => new KbService(Path.Combine(AppContext.BaseDirectory, "wikis")));
+                services.AddSingleton<FileBridge>(sp => new FileBridge(Path.Combine(AppContext.BaseDirectory, "wikis")));
                 services.AddSingleton<DataPage>();
                 services.AddSingleton<DataViewModel>();
                 services.AddSingleton<SettingsPage>();

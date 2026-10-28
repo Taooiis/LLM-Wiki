@@ -1,4 +1,6 @@
-﻿using LLM_Wiki.ViewModels.Pages;
+﻿using System.Windows.Controls;
+
+using LLM_Wiki.ViewModels.Pages;
 
 using Wpf.Ui.Abstractions.Controls;
 
@@ -14,6 +16,16 @@ namespace LLM_Wiki.Views.Pages
             DataContext = this;
 
             InitializeComponent();
+        }
+
+        private void KbList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is not ListBox list || list.SelectedItem is not string kb)
+            {
+                return;
+            }
+
+            ViewModel.LoadFiles(kb);
         }
     }
 }

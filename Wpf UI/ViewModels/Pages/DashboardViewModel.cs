@@ -10,15 +10,23 @@ namespace LLM_Wiki.ViewModels.Pages
     public partial class DashboardViewModel : ObservableObject
     {
         private readonly KbService _kbService;
+        private readonly FileBridge _fileBridge;
 
-        public DashboardViewModel(KbService kbService)
+        public DashboardViewModel(KbService kbService, FileBridge fileBridge)
         {
             _kbService = kbService;
+            _fileBridge = fileBridge;
             LoadKbs();
         }
 
         [ObservableProperty]
         private ObservableCollection<string> _kbs = new();
+
+        [ObservableProperty]
+        private ObservableCollection<string> _files = new();
+
+        [ObservableProperty]
+        private string _selectedKb = "";
 
         public void LoadKbs()
         {
@@ -26,6 +34,20 @@ namespace LLM_Wiki.ViewModels.Pages
             foreach (var kb in _kbService.ListKbs())
             {
                 Kbs.Add(kb);
+            }
+        }
+
+        public void LoadFiles(string kb)
+        {
+            Files.Clear();
+            if (string.IsNullOrWhiteSpace(kb))
+            {
+                return;
+            }
+
+            foreach (var item in _fileBridge.Tree(kb))
+            {
+                Files.Add(item.Name);
             }
         }
 

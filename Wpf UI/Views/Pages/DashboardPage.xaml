@@ -23,50 +23,65 @@
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
 
-    <TextBlock Grid.Row="0" FontSize="28" FontWeight="Medium" Text="知识库" />
-    <TextBlock
-      Grid.Row="1"
-      Margin="0,4,0,12"
-      Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-      Text="管理你的知识库" />
+    <TextBlock Grid.Row="0" Grid.ColumnSpan="2" FontSize="28" FontWeight="Medium" Text="知识库" />
+    <Grid Grid.Row="1" Grid.ColumnSpan="2">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <TextBlock
+        Grid.Column="0"
+        Margin="0,4,12,0"
+        VerticalAlignment="Center"
+        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+        Text="管理你的知识库" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+        <TextBox
+          x:Name="KbNameInput"
+          Width="240"
+          Margin="0,0,8,0"
+          Padding="6,2"
+          Background="{DynamicResource ApplicationBackgroundBrush}"
+          Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+          BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
+        <ui:Button
+          Content="新建知识库"
+          Command="{Binding ViewModel.CreateKbCommand}"
+          CommandParameter="{Binding ElementName=KbNameInput, Path=Text}"
+          Icon="Fluent24" />
+        <ui:Button
+          Content="删除知识库"
+          Command="{Binding ViewModel.DeleteKbCommand}"
+          CommandParameter="{Binding SelectedItem, RelativeSource={RelativeSource AncestorType=ListBox}}"
+          Margin="8,0,0,0"
+          Icon="Fluent24" />
+      </StackPanel>
+    </Grid>
 
-    <ui:ListView
-      Grid.Row="2"
-      x:Name="KbList"
-      ItemsSource="{Binding ViewModel.Kbs, Mode=OneWay}"
-      Background="Transparent"
-      BorderThickness="0">
-      <ui:ListView.ItemTemplate>
-        <DataTemplate>
-          <TextBlock Padding="8,6" Text="{Binding}" />
-        </DataTemplate>
-      </ui:ListView.ItemTemplate>
-    </ui:ListView>
-
-    <StackPanel
-      Grid.Row="2"
-      Orientation="Horizontal"
-      HorizontalAlignment="Right"
-      Margin="0,8,0,0">
-      <TextBox
-        x:Name="KbNameInput"
-        Width="240"
-        Margin="0,0,8,0"
-        Padding="6,2"
-        Background="{DynamicResource ApplicationBackgroundBrush}"
-        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-        BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
-      <ui:Button
-        Content="新建知识库"
-        Command="{Binding ViewModel.CreateKbCommand}"
-        CommandParameter="{Binding ElementName=KbNameInput, Path=Text}"
-        Icon="Fluent24" />
-      <ui:Button
-        Content="删除知识库"
-        Command="{Binding ViewModel.DeleteKbCommand}"
-        CommandParameter="{Binding SelectedItem, RelativeSource={RelativeSource AncestorType=ListBox}}"
-        Margin="8,0,0,0"
-        Icon="Fluent24" />
-    </StackPanel>
+    <Grid Grid.Row="2">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <ui:ListView
+        Grid.Column="0"
+        x:Name="KbList"
+        ItemsSource="{Binding ViewModel.Kbs, Mode=OneWay}"
+        Background="Transparent"
+        BorderThickness="0"
+        SelectionChanged="KbList_SelectionChanged">
+        <ui:ListView.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Padding="8,6" Text="{Binding}" />
+          </DataTemplate>
+        </ui:ListView.ItemTemplate>
+      </ui:ListView>
+      <ui:ListView
+        Grid.Column="1"
+        x:Name="FileList"
+        ItemsSource="{Binding ViewModel.Files, Mode=OneWay}"
+        Background="Transparent"
+        BorderThickness="0" />
+    </Grid>
   </Grid>
 </Page>
