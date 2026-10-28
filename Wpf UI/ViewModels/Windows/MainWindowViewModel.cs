@@ -31,6 +31,12 @@ namespace LLM_Wiki.ViewModels.Windows
                 Content = "源文档",
                 Icon = new SymbolIcon { Symbol = SymbolRegular.Document24 },
                 TargetPageType = typeof(Views.Pages.SourcePage)
+            },
+            new NavigationViewItem()
+            {
+                Content = "目录浏览",
+                Icon = new SymbolIcon { Symbol = SymbolRegular.List24 },
+                TargetPageType = typeof(Views.Pages.TreeBrowserPage)
             }
         };
 
