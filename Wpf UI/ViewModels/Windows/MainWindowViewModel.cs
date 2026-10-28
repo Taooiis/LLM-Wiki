@@ -43,6 +43,12 @@ namespace LLM_Wiki.ViewModels.Windows
                 Content = "工作流",
                 Icon = new SymbolIcon { Symbol = SymbolRegular.Flow24 },
                 TargetPageType = typeof(Views.Pages.WorkflowPage)
+            },
+            new NavigationViewItem()
+            {
+                Content = "分享",
+                Icon = new SymbolIcon { Symbol = SymbolRegular.Share24 },
+                TargetPageType = typeof(Views.Pages.SharePage)
             }
         };
 

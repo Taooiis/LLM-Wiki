@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="局域网只读查看 LLM Wiki 知识库：浏览目录树、预览与下载文档。" />
+<title>LLM Wiki 只读视图</title>
+<style>
+:root {
+  color-scheme: light;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px;
+  --fs-xs: 11px; --fs-sm: 12px; --fs-2: 13px; --fs-md: 14px; --fs-lg: 15px; --fs-xl: 17px; --fs-2xl: 20px;
+  --bg: #F6F8FB; --surface: #FFFFFF; --surface-2: #F1F4F9; --surface-3: #E9EDF4;
+  --border: #E3E8EF; --border-strong: #CBD5E4; --border-hover: #AEBDD2;
+  --text-1: #16233A; --text-2: #3E4C63; --text-3: #64748B; --text-faint: #94A3B8;
+  --accent: #2E6BE6; --accent-hover: #245BD0; --accent-subtle: #EAF0FE; --accent-text: #2455C4;
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", -apple-system, "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "Consolas", ui-monospace, "SFMono-Regular", monospace;
+  --r-sm: 7px; --r-md: 9px; --r-lg: 14px;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.05);
+  --dur-1: 140ms; --ease-out: cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body { overflow-x: clip; }
+html { scrollbar-color: var(--border-strong) var(--bg); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #C7D2E0; border-radius: 8px; border: 3px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background-color: #A9B9CE; }
+body { margin: 0; min-height: 100dvh; display: flex; flex-direction: column; background: var(--bg); color: var(--text-1); font-family: var(--font-ui); font-size: var(--fs-md); line-height: 1.6; -webkit-font-smoothing: antialiased; caret-color: var(--accent); }
+::selection { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+h1, h2 { margin: 0; font-weight: 650; letter-spacing: -0.01em; overflow-wrap: break-word; text-wrap: balance; }
+img, video { max-width: 100%; height: auto; display: block; }
+button, input, select, textarea { font: inherit; color: inherit; }
+* { scrollbar-width: thin; }
+
+.banner { background: #17171C; color: #F4F4F6; padding: 9px var(--sp-4); }
+.banner h1 { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; font-size: var(--fs-md); font-weight: 600; letter-spacing: 0; }
+.banner-sep { width: 1px; height: 1em; background: rgba(244, 244, 246, 0.4); }
+
+.bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: var(--sp-2) var(--sp-4); display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; }
+.bar label { font-size: var(--fs-2); color: var(--text-3); font-weight: 500; }
+.bar select { min-height: 32px; padding: 0 10px; min-width: 200px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--text-1); font-size: var(--fs-2); transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out); }
+.bar select:hover { border-color: var(--border-hover); }
+.bar select:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+.bar select:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.pane { flex: 1; display: flex; align-items: stretch; height: calc(100dvh - 96px); }
+.tree { flex: 0 0 280px; overflow-y: auto; border-right: 1px solid var(--border); padding: var(--sp-4); background: var(--surface); }
+.tree h2 { font-size: var(--fs-xs); font-weight: 600; color: var(--text-3); margin: 0 0 var(--sp-2); }
+.tree ul { list-style: none; padding-left: 14px; margin: var(--sp-1) 0; border-left: 1px solid var(--border); }
+.tree > ul { padding-left: 0; border-left: 0; }
+.tree li { margin: 2px 0; font-size: var(--fs-2); padding: 1px 4px; border-radius: 4px; }
+.tree li:has(ul) { color: var(--text-2); font-weight: 600; }
+.tree a { color: var(--text-1); text-decoration: none; cursor: pointer; }
+.tree a:hover { color: var(--accent-text); }
+.tree a:active { color: var(--accent); }
+
+.doc { flex: 1; overflow-y: auto; padding: var(--sp-8); }
+.doc-inner { max-width: 760px; margin-inline: auto; line-height: 1.75; }
+.doc h1 { font-size: var(--fs-2xl); margin: var(--sp-2) 0 var(--sp-3); }
+.doc h2 { font-size: var(--fs-xl); margin: var(--sp-5) 0 var(--sp-2); }
+.doc h3 { font-size: var(--fs-lg); font-weight: 650; margin: var(--sp-4) 0 var(--sp-2); }
+.doc h4, .doc h5, .doc h6 { font-size: var(--fs-md); font-weight: 600; margin: var(--sp-3) 0 var(--sp-2); }
+.doc a { color: var(--accent-text); }
+.doc li { margin: var(--sp-1) 0; }
+.empty { color: var(--text-3); text-align: center; padding: var(--sp-6) var(--sp-4); font-size: var(--fs-2); }
+
+@media (max-width: 48rem) {
+  .pane { flex-direction: column; height: auto; }
+  .tree { flex: none; max-height: 40dvh; border-right: 0; border-bottom: 1px solid var(--border); }
+  .doc { padding: var(--sp-4); }
+}
+</style>
+</head>
+<body>
+<header class="banner"><h1><span>只读视图</span><span class="banner-sep" aria-hidden="true"></span><span>编辑请到主机</span></h1></header>
+<div class="bar">
+  <label for="kbSelect">知识库</label>
+  <select id="kbSelect" onchange="onKb()">
+    <option value="">（选择知识库）</option>
+  </select>
+</div>
+<div class="pane">
+  <nav class="tree" aria-label="目录">
+    <h2>目录</h2>
+    <div id="tree" class="empty">先选择知识库</div>
+  </nav>
+  <article class="doc" id="doc"><div class="doc-inner"><p class="empty">选择知识库浏览内容</p></div></article>
+</div>
+
+<script>
+let treeData = [];
+
+function gate(r) {
+  if (r.status === 401) { location.href = '/'; throw new Error('need-pin'); }
+  return r;
+}
+
+fetch('/api/kbs')
+  .then(gate)
+  .then(r => r.json())
+  .then(d => {
+    d.kbs.forEach(k => {
+      const o = document.createElement('option');
+      o.value = k; o.textContent = k;
+      document.getElementById('kbSelect').appendChild(o);
+    });
+  })
+  .catch(() => { document.getElementById('tree').innerHTML = '<div class="empty">知识库列表加载失败，请刷新重试</div>'; });
+
+function onKb() {
+  const k = document.getElementById('kbSelect').value;
+  document.getElementById('doc').innerHTML = '<div class="doc-inner"><div class="empty">加载中…</div></div>';
+  if (!k) return;
+  fetch('/api/tree?kb=' + encodeURIComponent(k))
+    .then(gate)
+    .then(r => r.json())
+    .then(d => { treeData = d.tree || []; renderTree(treeData); });
+}
+
+document.getElementById('tree').addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('a')) { e.preventDefault(); e.target.click(); }
+});
+
+function renderTree(nodes) {
+  const el = document.getElementById('tree');
+  if (!treeData.length) return el.innerHTML = '<div class="empty">本库目录为空</div>';
+  const k = document.getElementById('kbSelect').value;
+  el.innerHTML = '<ul>' + renderItems(nodes, k, '') + '</ul>';
+}
+
+function renderItems(nodes, k, base) {
+  return (nodes || []).map(n =>
+    n.type === 'dir'
+      ? '<li>' + n.name + (n.children && n.children.length ? renderChildren(n.children, k, base + n.name + '/') : '') + '</li>'
+      : '<li><a tabindex="0" onclick="openFile(\'' + (base + n.name) + '\')">' + n.name + '</a></li>'
+  ).join('');
+}
+
+function renderChildren(nodes, k, base) {
+  return '<ul>' + renderItems(nodes, k, base) + '</ul>';
+}
+
+function openFile(name) {
+  const k = document.getElementById('kbSelect').value;
+  fetch('/api/file?kb=' + encodeURIComponent(k) + '&path=raw/sources/' + encodeURIComponent(name))
+    .then(gate)
+    .then(r => r.text())
+    .then(md => {
+      document.getElementById('doc').innerHTML = '<div class="doc-inner">' + md
+        .replace(/^###### (.+)/gm, '<h6>$1</h6>')
+        .replace(/^##### (.+)/gm, '<h5>$1</h5>')
+        .replace(/^#### (.+)/gm, '<h4>$1</h4>')
+        .replace(/^### (.+)/gm, '<h3>$1</h3>')
+        .replace(/^## (.+)/gm, '<h2>$1</h2>')
+        .replace(/^# (.+)/gm, '<h1>$1</h1>')
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/^\- (.+)/gm, '<li>$1</li>')
+        .replace(/\n/g, '<br/>') + '</div>';
+    });
+}
+</script>
+</body>
+</html>

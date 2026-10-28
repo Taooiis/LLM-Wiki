@@ -2,6 +2,7 @@
 using System.Windows.Threading;
 
 using LLM_Wiki.Services;
+using LLM_Wiki.Share;
 using LLM_Wiki.ViewModels.Pages;
 using LLM_Wiki.ViewModels.Windows;
 using LLM_Wiki.Views.Pages;
@@ -62,6 +63,9 @@ namespace LLM_Wiki
                 services.AddSingleton<TreeBrowserViewModel>();
                 services.AddSingleton<WorkflowPage>();
                 services.AddSingleton<WorkflowViewModel>();
+                services.AddSingleton<SharePage>();
+                services.AddSingleton<ShareViewModel>();
+                services.AddSingleton<ShareService>();
 
                 // 功能迁移：本地服务（无 WebView2，Wpf UI 项目独立）
                 services.AddSingleton<ConfigService>();

@@ -22,6 +22,12 @@
     <PackageReference Include="Markdig" Version="1.5.0" />
   </ItemGroup>
 
+  <!-- Kestrel 只读分享服务（spec 03 §3） -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <Content Include="wwwroot-share\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <None Remove="Assets\wpfui-icon-256.png" />
     <None Remove="Assets\wpfui-icon-1024.png" />
