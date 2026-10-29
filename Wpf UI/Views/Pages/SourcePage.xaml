@@ -20,178 +20,188 @@
     <dialogs:EditorDialog x:Key="EditorDlg" />
   </Page.Resources>
 
-  <ScrollViewer VerticalScrollBarVisibility="Auto">
-    <Grid Margin="0,8" Width="1000">
-      <Grid.RowDefinitions>
-        <RowDefinition Height="Auto" />
-        <RowDefinition Height="*" />
-        <RowDefinition Height="Auto" />
-      </Grid.RowDefinitions>
+  <!-- 根布局：各区自带滚动（去外层 ScrollViewer，让 * 行真正撑满视口高度） -->
+  <Grid Margin="{StaticResource PageContentMargin}" MaxWidth="1100">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
 
-      <!-- 标题 + 工具栏 -->
-      <Grid Grid.Row="0" Margin="0,0,0,16">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="*" />
-          <ColumnDefinition Width="Auto" />
-        </Grid.ColumnDefinitions>
+    <!-- 标题 + 工具栏 -->
+    <Grid Grid.Row="0" Margin="0,0,0,16">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
 
-        <TextBlock Grid.Column="0"
-                   FontSize="20" FontWeight="Medium"
-                   Text="源文档" />
+      <TextBlock Grid.Column="0"
+                 Style="{StaticResource PageTitleText}"
+                 Margin="0"
+                 Text="源文档" />
 
-        <TextBlock Grid.Column="1"
-                   Margin="8,0,0,0"
-                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                   Text="支持: .md/.txt 编辑，.docx/.xlsx 上传自动转 MD"
-                   TextWrapping="Wrap"
-                   VerticalAlignment="Center" />
+      <TextBlock Grid.Column="1"
+                 Margin="16,0,0,0"
+                 Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                 Text="支持: .md/.txt 编辑，.docx/.xlsx 上传自动转 MD"
+                 TextWrapping="Wrap"
+                 VerticalAlignment="Center" />
 
-        <StackPanel Grid.Column="1"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Right">
-          <ui:TextBox
-            x:Name="NewFileNameInput"
-            Width="140"
-            Margin="0,0,8,0"
-            Padding="6,2"
-            PlaceholderText="文件名（.md/.txt）"
-            Background="{DynamicResource ApplicationBackgroundBrush}"
-            Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-            BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
-          <ui:Button
-            Content="新建"
-            Command="{Binding ViewModel.CreateFileCommand}"
-            CommandParameter="{Binding ElementName=NewFileNameInput, Path=Text}"
-            Margin="4,0,8,0"
-            Icon="Add24" />
-          <ui:Button
-            x:Name="UploadBtn"
-            Content="上传"
-            Click="OnUploadClick"
-            Margin="4,0,0,0"
-            Icon="Upload24" />
-        </StackPanel>
-      </Grid>
+      <StackPanel Grid.Column="2"
+                  Orientation="Horizontal"
+                  HorizontalAlignment="Right">
+        <ui:TextBox
+          x:Name="NewFileNameInput"
+          Width="140"
+          Margin="0,0,8,0"
+          PlaceholderText="文件名（.md/.txt）"
+          Background="{DynamicResource ApplicationBackgroundBrush}"
+          Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+          BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
+        <ui:Button
+          Content="新建"
+          Command="{Binding ViewModel.CreateFileCommand}"
+          CommandParameter="{Binding ElementName=NewFileNameInput, Path=Text}"
+          Margin="0,0,8,0"
+          Icon="Add24" />
+        <ui:Button
+          x:Name="UploadBtn"
+          Content="上传"
+          Click="OnUploadClick"
+          Icon="Upload24" />
+      </StackPanel>
+    </Grid>
 
-      <!-- 内容区 -->
-      <Grid Grid.Row="1">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="260" />
-          <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
+    <!-- 内容区 -->
+    <Grid Grid.Row="1">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="260" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
 
-        <!-- 左侧：文件列表 -->
-        <StackPanel Grid.Column="0">
-          <TextBlock FontSize="14" FontWeight="SemiBold" Margin="8,8,8,4" Text="文件列表" />
-          <ui:ListView
-            x:Name="FileList"
-            ItemsSource="{Binding ViewModel.Files, Mode=OneWay}"
-            Background="{DynamicResource ApplicationBackgroundBrush}"
-            BorderThickness="0"
-            SelectionChanged="FileList_SelectionChanged">
-            <ui:ListView.ItemTemplate>
-              <DataTemplate>
-                <Border Padding="8,4" Margin="2" CornerRadius="4"
-                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-                  <TextBlock Text="{Binding}"
-                             Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                </Border>
-              </DataTemplate>
-            </ui:ListView.ItemTemplate>
-          </ui:ListView>
-        </StackPanel>
-
-        <!-- 右侧：预览/编辑 -->
-        <Grid Grid.Column="1">
-          <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-          </Grid.RowDefinitions>
-
-          <Grid Grid.Row="0" Margin="0,8,0,0">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <TextBlock
-              Grid.Column="0"
-              VerticalAlignment="Center"
-              Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-              Text="{Binding ViewModel.SelectedFile, TargetNullValue='请选择文件', FallbackValue='请选择文件'}" />
-            <ui:Button
-              Grid.Column="1"
-              x:Name="EditButton"
-              Content="编辑"
-              Click="OnEditClick"
-              Margin="8,0,0,0"
-              Icon="Edit24"
-              IsEnabled="False" />
-          </Grid>
-
-          <ui:TextBox
-            x:Name="PreviewText"
-            Grid.Row="1"
-            Margin="0,8,0,0"
-            TextWrapping="Wrap"
-            VerticalScrollBarVisibility="Auto"
-            Background="{DynamicResource ApplicationBackgroundBrush}"
-            Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-            BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
-            Padding="8" />
-        </Grid>
-      </Grid>
-
-      <!-- 待处理变更区 -->
-      <Grid Grid.Row="2" Margin="0,8,0,0">
+      <!-- 左侧：文件列表 -->
+      <Grid Grid.Column="0">
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />
           <RowDefinition Height="*" />
-          <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-
         <TextBlock Grid.Row="0"
-                   FontSize="14" FontWeight="SemiBold"
-                   Text="待处理变更"
-                   Margin="0,0,0,4" />
-
+                   FontSize="{StaticResource FontSizeBody}"
+                   FontWeight="SemiBold"
+                   Margin="8,0,8,4"
+                   Text="文件列表" />
         <ui:ListView
+          x:Name="FileList"
           Grid.Row="1"
-          ItemsSource="{Binding ViewModel.Changes, Mode=OneWay}"
-          SelectionMode="Multiple">
+          ItemsSource="{Binding ViewModel.Files, Mode=OneWay}"
+          Background="{DynamicResource ApplicationBackgroundBrush}"
+          BorderThickness="0"
+          ScrollViewer.VerticalScrollBarVisibility="Auto"
+          SelectionChanged="FileList_SelectionChanged">
           <ui:ListView.ItemTemplate>
             <DataTemplate>
-              <CheckBox
-                IsChecked="{Binding IsSelected}"
-                Margin="8,4"
-                VerticalAlignment="Center">
-                <TextBlock>
-                  <Run Text="{Binding Time}" />
-                  <Run Text=" | "/>
-                  <Bold><Run Text="{Binding Action}" /></Bold>
-                  <Run Text=" | "/>
-                  <Run Text="{Binding File}" />
-                </TextBlock>
-              </CheckBox>
+              <Border Padding="8,4" Margin="2" CornerRadius="4"
+                      Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                <TextBlock Text="{Binding}"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+              </Border>
             </DataTemplate>
           </ui:ListView.ItemTemplate>
         </ui:ListView>
+      </Grid>
 
-        <StackPanel Grid.Row="2"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Right"
-                    Margin="0,4,0,0">
+      <!-- 右侧：预览/编辑 -->
+      <Grid Grid.Column="1" Margin="8,0,0,0">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0,0,0,8">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock
+            Grid.Column="0"
+            VerticalAlignment="Center"
+            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+            Text="{Binding ViewModel.SelectedFile, TargetNullValue='请选择文件', FallbackValue='请选择文件'}" />
           <ui:Button
-            Content="标记已处理"
-            Command="{Binding ViewModel.ClearSelectedChangesCommand}"
-            Margin="4,0"
-            Icon="Checkmark24" />
-          <ui:Button
-            Content="生成选中 Ingest"
-            Command="{Binding ViewModel.GenerateIngestForSelectedCommand}"
-            Margin="4,0,0,0"
-            Icon="Sync24" />
-        </StackPanel>
+            Grid.Column="1"
+            x:Name="EditButton"
+            Content="编辑"
+            Click="OnEditClick"
+            Margin="8,0,0,0"
+            Icon="Edit24"
+            IsEnabled="False" />
+        </Grid>
+
+        <ui:TextBox
+          x:Name="PreviewText"
+          Grid.Row="1"
+          TextWrapping="Wrap"
+          VerticalScrollBarVisibility="Auto"
+          VerticalAlignment="Stretch"
+          VerticalContentAlignment="Top"
+          Background="{DynamicResource ApplicationBackgroundBrush}"
+          Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+          BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
+          Padding="8" />
       </Grid>
     </Grid>
-  </ScrollViewer>
+
+    <!-- 待处理变更区：内部滚动，避免撑爆页面 -->
+    <Grid Grid.Row="2" Margin="0,12,0,0">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <TextBlock Grid.Row="0"
+                 Style="{StaticResource SectionTitleText}"
+                 Text="待处理变更" />
+
+      <ui:ListView
+        Grid.Row="1"
+        MaxHeight="160"
+        ItemsSource="{Binding ViewModel.Changes, Mode=OneWay}"
+        SelectionMode="Multiple"
+        ScrollViewer.VerticalScrollBarVisibility="Auto">
+        <ui:ListView.ItemTemplate>
+          <DataTemplate>
+            <CheckBox
+              IsChecked="{Binding IsSelected}"
+              Margin="8,4"
+              VerticalAlignment="Center">
+              <TextBlock>
+                <Run Text="{Binding Time}" />
+                <Run Text=" | "/>
+                <Bold><Run Text="{Binding Action}" /></Bold>
+                <Run Text=" | "/>
+                <Run Text="{Binding File}" />
+              </TextBlock>
+            </CheckBox>
+          </DataTemplate>
+        </ui:ListView.ItemTemplate>
+      </ui:ListView>
+
+      <StackPanel Grid.Row="2"
+                  Orientation="Horizontal"
+                  HorizontalAlignment="Right"
+                  Margin="0,8,0,0">
+        <ui:Button
+          Content="标记已处理"
+          Command="{Binding ViewModel.ClearSelectedChangesCommand}"
+          Margin="0,0,8,0"
+          Icon="Checkmark24" />
+        <ui:Button
+          Content="生成选中 Ingest"
+          Command="{Binding ViewModel.GenerateIngestForSelectedCommand}"
+          Icon="Sync24" />
+      </StackPanel>
+    </Grid>
+  </Grid>
 </Page>

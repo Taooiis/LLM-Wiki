@@ -1,12 +1,10 @@
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 
 using LLM_Wiki.ViewModels.Pages;
 using LLM_Wiki.Views.Dialogs;
 
-using Wpf.Ui;
 using Wpf.Ui.Abstractions.Controls;
 using Wpf.Ui.Controls;
 
@@ -15,7 +13,6 @@ namespace LLM_Wiki.Views.Pages
     public partial class ConfigPage : INavigableView<ConfigViewModel>
     {
         public ConfigViewModel ViewModel { get; }
-        private readonly FolderPickerDialog _folderPicker;
 
         public ConfigPage(ConfigViewModel viewModel)
         {
@@ -23,20 +20,31 @@ namespace LLM_Wiki.Views.Pages
             DataContext = this;
 
             InitializeComponent();
-
-            _folderPicker = (FolderPickerDialog)Resources["FolderPickerDlg"];
         }
 
         private async void OnBrowseClick(object sender, RoutedEventArgs e)
         {
-            _folderPicker.InitialDirectory = string.IsNullOrWhiteSpace(ViewModel.WikisDirInput)
+            // 计算初始目录
+            string initialDir = string.IsNullOrWhiteSpace(ViewModel.WikisDirInput)
                 ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "LLM Wiki", "wikis")
                 : ViewModel.WikisDirInput;
 
-            var result = await _folderPicker.ShowAsync(CancellationToken.None);
+            if (!Directory.Exists(initialDir))
+            {
+                initialDir = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            }
+
+            // 使用 FolderPickerDialog
+            var dialog = new FolderPickerDialog
+            {
+                InitialDirectory = initialDir
+            };
+
+            // 显示对话框
+            var result = await dialog.ShowAsync();
             if (result == ContentDialogResult.Primary)
             {
-                ViewModel.WikisDirInput = _folderPicker.SelectedPath;
+                ViewModel.WikisDirInput = dialog.SelectedPath;
                 ViewModel.ValidateWikisDir();
             }
         }
