@@ -16,11 +16,13 @@ namespace LLM_Wiki.ViewModels.Pages
     {
         private readonly MainWindowViewModel _mainViewModel;
         private readonly FileBridge _fileBridge;
+        private readonly ToastService _toastService;
 
-        public WorkflowViewModel(MainWindowViewModel mainViewModel, FileBridge fileBridge)
+        public WorkflowViewModel(MainWindowViewModel mainViewModel, FileBridge fileBridge, ToastService toastService)
         {
             _mainViewModel = mainViewModel;
             _fileBridge = fileBridge;
+            _toastService = toastService;
             _mainViewModel.PropertyChanged += MainViewModel_PropertyChanged;
         }
 
@@ -321,11 +323,11 @@ namespace LLM_Wiki.ViewModels.Pages
             try
             {
                 System.Windows.Clipboard.SetText(card.PromptContent);
-                System.Windows.MessageBox.Show("已复制：“" + card.Title + "”，请粘贴给外部 Agent 执行。", "复制提示词", System.Windows.MessageBoxButton.OK);
+                _toastService.ShowSuccess($"已复制：{card.Title}");
             }
             catch
             {
-                System.Windows.MessageBox.Show("复制剪贴板失败", "复制提示词", System.Windows.MessageBoxButton.OK);
+                _toastService.ShowError("复制剪贴板失败");
             }
         }
 

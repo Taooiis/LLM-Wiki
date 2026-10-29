@@ -1,5 +1,4 @@
 ﻿using System.Collections.ObjectModel;
-using System.Windows;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -14,11 +13,13 @@ namespace LLM_Wiki.ViewModels.Pages
     {
         private readonly KbService _kbService;
         private readonly FileBridge _fileBridge;
+        private readonly ToastService _toastService;
 
-        public DashboardViewModel(KbService kbService, FileBridge fileBridge)
+        public DashboardViewModel(KbService kbService, FileBridge fileBridge, ToastService toastService)
         {
             _kbService = kbService;
             _fileBridge = fileBridge;
+            _toastService = toastService;
             LoadKbs();
         }
 
@@ -115,7 +116,7 @@ namespace LLM_Wiki.ViewModels.Pages
         private void UploadFile(string kb)
         {
             // 占位：实际上传需在 View 中调 MsDialog/OpenFolderDialog
-            MessageBox.Show("上传功能：请选文件 → 调用 FileBridge.WriteText", "上传", MessageBoxButton.OK);
+            _toastService.ShowWarning("上传功能：请选文件 → 调用 FileBridge.WriteText");
         }
 
         [RelayCommand]
@@ -138,12 +139,12 @@ namespace LLM_Wiki.ViewModels.Pages
         {
             if (string.IsNullOrWhiteSpace(SelectedKb) || string.IsNullOrWhiteSpace(SelectedFile))
             {
-                MessageBox.Show("请选择文件后再保存", "保存", MessageBoxButton.OK);
+                _toastService.ShowWarning("请选择文件后再保存");
                 return;
             }
 
             _fileBridge.WriteText(SelectedKb, SelectedFile, content, out _);
-            MessageBox.Show("已保存", "保存", MessageBoxButton.OK);
+            _toastService.ShowSuccess("已保存");
         }
 
         [RelayCommand]
