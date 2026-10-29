@@ -67,14 +67,14 @@
           Content="删除"
           Click="OnDeleteClick"
           Margin="4,0,0,0"
-          Icon="Fluent24" />
+          Icon="Delete24" />
         <!-- 快速搜索 -->
         <ui:Button
           Content="搜索"
           Command="{Binding ViewModel.SearchKbCommand}"
           CommandParameter="{Binding ElementName=KbList, Path=SelectedItem}"
           Margin="12,0,8,0"
-          Icon="Fluent24" />
+          Icon="Search24" />
       </StackPanel>
     </Grid>
 
@@ -121,13 +121,13 @@
             Command="{Binding ViewModel.UploadFileCommand}"
             CommandParameter="{Binding ElementName=KbList, Path=SelectedItem}"
             Margin="0,0,8,0"
-            Icon="Fluent24" />
+            Icon="Upload24" />
           <ui:Button
             Content="保存"
             Command="{Binding ViewModel.SaveFileCommand}"
             CommandParameter="{Binding ElementName=PreviewBox, Path=Text}"
             Margin="8,0,0,0"
-            Icon="Fluent24" />
+            Icon="Save24" />
         </StackPanel>
 
         <!-- 预览/编辑区 -->
