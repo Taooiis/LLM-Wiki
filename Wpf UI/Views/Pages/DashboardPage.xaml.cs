@@ -1,8 +1,10 @@
 ﻿using System.ComponentModel;
-
+using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Controls;
 
 using LLM_Wiki.ViewModels.Pages;
+using LLM_Wiki.Views.Dialogs;
 
 using Wpf.Ui.Abstractions.Controls;
 
@@ -20,6 +22,31 @@ namespace LLM_Wiki.Views.Pages
             ViewModel.PropertyChanged += ViewModel_PropertyChanged;
 
             InitializeComponent();
+        }
+
+        private async void OnDeleteClick(object sender, RoutedEventArgs e)
+        {
+            var kb = KbList.SelectedItem as string;
+            if (string.IsNullOrWhiteSpace(kb))
+            {
+                await ShowConfirmationAndDelete(null);
+                return;
+            }
+
+            var confirm = (ConfirmationDialog)Resources["ConfirmDlg"];
+            if (await confirm.ShowAsync($"确定要删除知识库 \"{kb}\" 吗？\n\n此操作不可恢复，包括其中的所有文件。", "确认删除"))
+            {
+                ViewModel.DeleteKbCommand.Execute(kb);
+            }
+        }
+
+        private async Task ShowConfirmationAndDelete(string? kb)
+        {
+            var confirm = (ConfirmationDialog)Resources["ConfirmDlg"];
+            if (await confirm.ShowAsync("请先选择要删除的知识库", "提示"))
+            {
+                // 已选择
+            }
         }
 
         private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
