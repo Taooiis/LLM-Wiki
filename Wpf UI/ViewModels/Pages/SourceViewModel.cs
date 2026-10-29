@@ -22,13 +22,15 @@ namespace LLM_Wiki.ViewModels.Pages
         private readonly FileBridge _fileBridge;
         private readonly MainWindowViewModel _mainViewModel;
         private readonly INavigationService _navigationService;
+        private readonly ToastService _toastService;
 
-        public SourceViewModel(KbService kbService, FileBridge fileBridge, MainWindowViewModel mainViewModel, INavigationService navigationService)
+        public SourceViewModel(KbService kbService, FileBridge fileBridge, MainWindowViewModel mainViewModel, INavigationService navigationService, ToastService toastService)
         {
             _kbService = kbService;
             _fileBridge = fileBridge;
             _mainViewModel = mainViewModel;
             _navigationService = navigationService;
+            _toastService = toastService;
 
             _mainViewModel.PropertyChanged += MainViewModel_PropertyChanged;
         }
@@ -234,7 +236,7 @@ namespace LLM_Wiki.ViewModels.Pages
         {
             if (string.IsNullOrWhiteSpace(SelectedKb))
             {
-                MessageBox.Show("请先选择一个知识库", "上传", MessageBoxButton.OK, MessageBoxImage.Warning);
+                _toastService.ShowWarning("请先选择一个知识库");
                 return;
             }
 
@@ -272,7 +274,7 @@ namespace LLM_Wiki.ViewModels.Pages
                         : OfficeConverter.ConvertXlsx(fileName, rawBytes);
                     if (md == null)
                     {
-                        MessageBox.Show(convErr, "Office 转换失败", MessageBoxButton.OK, MessageBoxImage.Error);
+                        _toastService.ShowError("Office 转换失败：" + convErr);
                         return;
                     }
                     content = md;
@@ -286,7 +288,7 @@ namespace LLM_Wiki.ViewModels.Pages
             }
             catch (Exception ex)
             {
-                MessageBox.Show("读取文件失败：" + ex.Message, "上传", MessageBoxButton.OK, MessageBoxImage.Error);
+                _toastService.ShowError("读取文件失败：" + ex.Message);
                 return;
             }
 
@@ -298,13 +300,13 @@ namespace LLM_Wiki.ViewModels.Pages
             var ok = _fileBridge.WriteText(SelectedKb, rel, content, out error);
             if (!ok)
             {
-                MessageBox.Show("上传失败：" + error, "上传", MessageBoxButton.OK, MessageBoxImage.Error);
+                _toastService.ShowError("上传失败：" + error);
                 return;
             }
 
             LoadFiles(SelectedKb);
             LoadChanges(SelectedKb);
-            MessageBox.Show($"已上传：{fileName}", "上传", MessageBoxButton.OK, MessageBoxImage.Information);
+            _toastService.ShowSuccess($"已上传：{fileName}");
         }
 
         private string GetKbRoot()

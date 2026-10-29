@@ -74,6 +74,7 @@ namespace LLM_Wiki
                 services.AddSingleton<FileBridge>(sp => new FileBridge(Path.Combine(AppContext.BaseDirectory, "wikis")));
                 services.AddSingleton<KbService>(sp => new KbService(Path.Combine(AppContext.BaseDirectory, "wikis")));
                 services.AddSingleton<ISnackbarService, SnackbarService>();
+                services.AddSingleton<ToastService>();
             }).Build();
 
         /// <summary>

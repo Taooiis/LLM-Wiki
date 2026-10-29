@@ -18,14 +18,17 @@ namespace LLM_Wiki.Services
             _snackbarService = snackbarService;
         }
 
+        /// <summary>
+        /// 分享开启：显示端口 + 局域网地址。
+        /// </summary>
         public void ShowShareStarted(int port)
         {
-            // 静默：分享状态在 UI 页面显示，不弹窗打扰
+            _snackbarService.Show("分享已开启", $"端口 {port}，局域网访问", ControlAppearance.Success, null, TimeSpan.FromSeconds(5));
         }
 
         public void ShowShareStopped()
         {
-            // 静默
+            _snackbarService.Show("分享已停止", "局域网分享服务已关闭", ControlAppearance.Info, null, TimeSpan.FromSeconds(2.6));
         }
 
         public void ShowImportComplete(string kbName, int fileCount)
@@ -51,6 +54,11 @@ namespace LLM_Wiki.Services
         public void ShowError(string message)
         {
             _snackbarService.Show("错误", message, ControlAppearance.Danger, null, TimeSpan.FromSeconds(2.6));
+        }
+
+        public void ShowWarning(string message)
+        {
+            _snackbarService.Show("警告", message, ControlAppearance.Caution, null, TimeSpan.FromSeconds(3));
         }
     }
 }

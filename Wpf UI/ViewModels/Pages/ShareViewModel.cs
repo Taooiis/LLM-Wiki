@@ -4,6 +4,7 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
+using LLM_Wiki.Services;
 using LLM_Wiki.Share;
 
 namespace LLM_Wiki.ViewModels.Pages
@@ -11,10 +12,12 @@ namespace LLM_Wiki.ViewModels.Pages
     public partial class ShareViewModel : ObservableObject
     {
         private readonly ShareService _shareService;
+        private readonly ToastService _toastService;
 
-        public ShareViewModel(ShareService shareService)
+        public ShareViewModel(ShareService shareService, ToastService toastService)
         {
             _shareService = shareService;
+            _toastService = toastService;
             Refresh();
         }
 
@@ -68,11 +71,12 @@ namespace LLM_Wiki.ViewModels.Pages
             var ok = _shareService.Start(8765, out var error);
             if (!ok)
             {
-                MessageBox.Show("分享启动失败：" + error, "分享", MessageBoxButton.OK, MessageBoxImage.Warning);
+                _toastService.ShowError("分享启动失败：" + error);
                 return;
             }
 
             Refresh();
+            _toastService.ShowShareStarted(_shareService.Port);
         }
 
         [RelayCommand]
@@ -82,6 +86,7 @@ namespace LLM_Wiki.ViewModels.Pages
 
             _shareService.Stop();
             Refresh();
+            _toastService.ShowShareStopped();
         }
 
         [RelayCommand]
@@ -92,11 +97,11 @@ namespace LLM_Wiki.ViewModels.Pages
             try
             {
                 System.Windows.Clipboard.SetText(AccessUrl);
-                MessageBox.Show("已复制访问地址：" + AccessUrl, "复制", MessageBoxButton.OK, MessageBoxImage.Information);
+                _toastService.ShowSuccess("已复制访问地址");
             }
             catch
             {
-                MessageBox.Show("复制剪贴板失败", "复制", MessageBoxButton.OK, MessageBoxImage.Warning);
+                _toastService.ShowError("复制剪贴板失败");
             }
         }
     }
