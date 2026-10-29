@@ -20,129 +20,145 @@
     <dialogs:ConfirmationDialog x:Key="ConfirmDlg" />
   </Page.Resources>
 
-  <Grid>
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto" />
-      <RowDefinition Height="Auto" />
-      <RowDefinition Height="*" />
-    </Grid.RowDefinitions>
+  <!-- 响应式布局容器 -->
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <Grid Margin="0,8" Width="1000">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
 
-    <!-- 标题 -->
-    <TextBlock Grid.Row="0" Grid.ColumnSpan="2" FontSize="28" FontWeight="Medium" Text="知识库" />
+      <!-- 标题 -->
+      <TextBlock Grid.Row="0" Grid.ColumnSpan="2"
+                 FontSize="28" FontWeight="Medium"
+                 Text="知识库"
+                 Margin="0,0,0,16" />
 
-    <!-- 工具栏：左侧功能，右侧 KB 操作 -->
-    <Grid Grid.Row="1" Grid.ColumnSpan="2">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*" />
-        <ColumnDefinition Width="Auto" />
-      </Grid.ColumnDefinitions>
-      <!-- 左侧：搜索框 -->
-      <ui:TextBox
-        Grid.Column="0"
-        Margin="0,4,8,0"
-        Width="240"
-        PlaceholderText="搜索文件..."
-        Text="{Binding ViewModel.SearchText, Mode=TwoWay}"
-        Background="{DynamicResource ApplicationBackgroundBrush}"
-        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-        BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
-      <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
-        <!-- KB 操作 -->
-        <TextBox
-          x:Name="KbNameInput"
-          Width="120"
+      <!-- 工具栏 -->
+      <Grid Grid.Row="1" Grid.ColumnSpan="2">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="250" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <!-- 左侧：KB 搜索 -->
+        <ui:TextBox
+          Grid.Column="0"
           Margin="0,0,8,0"
-          Padding="4,2"
+          Width="200"
+          PlaceholderText="搜索知识库..."
+          Text="{Binding ViewModel.SearchText, Mode=TwoWay}"
           Background="{DynamicResource ApplicationBackgroundBrush}"
           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
           BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
-        <ui:Button
-          Content="新建"
-          Command="{Binding ViewModel.CreateKbCommand}"
-          CommandParameter="{Binding ElementName=KbNameInput, Path=Text}"
-          Margin="4,0,12,0"
-          Icon="Fluent24" />
-        <ui:Button
-          x:Name="DeleteBtn"
-          Content="删除"
-          Click="OnDeleteClick"
-          Margin="4,0,0,0"
-          Icon="Delete24" />
-        <!-- 快速搜索 -->
-        <ui:Button
-          Content="搜索"
-          Command="{Binding ViewModel.SearchKbCommand}"
-          CommandParameter="{Binding ElementName=KbList, Path=SelectedItem}"
-          Margin="12,0,8,0"
-          Icon="Search24" />
-      </StackPanel>
-    </Grid>
 
-    <!-- 内容区：左 KB 列表 + 右 文件列表/预览 -->
-    <Grid Grid.Row="2">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="280" />
-        <ColumnDefinition Width="*" />
-      </Grid.ColumnDefinitions>
-
-      <!-- 左侧：知识库列表 -->
-      <ui:ListView
-        Grid.Column="0"
-        x:Name="KbList"
-        ItemsSource="{Binding ViewModel.Kbs, Mode=OneWay}"
-        Background="Transparent"
-        BorderThickness="0">
-        <ui:ListView.ItemTemplate>
-          <DataTemplate>
-            <TextBlock Padding="8,6" Text="{Binding}" />
-          </DataTemplate>
-        </ui:ListView.ItemTemplate>
-      </ui:ListView>
-
-      <!-- 右侧：文件列表 + 预览 -->
-      <StackPanel Grid.Column="1">
+        <!-- 中间：KB 列表 -->
         <ui:ListView
-          x:Name="FileList"
-          ItemsSource="{Binding ViewModel.Files, Mode=OneWay}"
-          Background="Transparent"
+          x:Name="KbList"
+          Grid.Column="1"
+          ItemsSource="{Binding ViewModel.Kbs, Mode=OneWay}"
+          SelectedItem="{Binding ViewModel.SelectedKb, Mode=TwoWay}"
+          Background="{DynamicResource ApplicationBackgroundBrush}"
           BorderThickness="0"
-          SelectionChanged="FileList_SelectionChanged">
+          ScrollViewer.VerticalScrollBarVisibility="Disabled">
           <ui:ListView.ItemTemplate>
             <DataTemplate>
-              <TextBlock Padding="8,6" Text="{Binding}" />
+              <Border Padding="8,4" Margin="2"
+                      Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Grid.Column="0" Text="{Binding}"
+                             Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                  <ui:Button Grid.Column="1"
+                             Content="编辑"
+                             Margin="8,0,0,0"
+                             Icon="Edit24"
+                             FontSize="12" />
+                </Grid>
+              </Border>
             </DataTemplate>
           </ui:ListView.ItemTemplate>
         </ui:ListView>
 
-        <!-- 操作栏 -->
-        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-          <ui:Button
-            Content="上传"
-            Command="{Binding ViewModel.UploadFileCommand}"
-            CommandParameter="{Binding ElementName=KbList, Path=SelectedItem}"
+        <!-- 右侧：KB 操作 -->
+        <StackPanel Grid.Column="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top">
+          <TextBox
+            x:Name="KbNameInput"
+            Width="120"
             Margin="0,0,8,0"
-            Icon="Upload24" />
+            Padding="4,2"
+            Background="{DynamicResource ApplicationBackgroundBrush}"
+            Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+            BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
           <ui:Button
-            Content="保存"
-            Command="{Binding ViewModel.SaveFileCommand}"
-            CommandParameter="{Binding ElementName=PreviewBox, Path=Text}"
-            Margin="8,0,0,0"
-            Icon="Save24" />
+            Content="新建"
+            Command="{Binding ViewModel.CreateKbCommand}"
+            CommandParameter="{Binding ElementName=KbNameInput, Path=Text}"
+            Margin="0,0,4,0"
+            Icon="Add24" />
+          <ui:Button
+            x:Name="DeleteBtn"
+            Content="删除"
+            Click="OnDeleteClick"
+            Margin="0,0,0,0"
+            Icon="Delete24" />
+        </StackPanel>
+      </Grid>
+
+      <!-- 内容区 -->
+      <Grid Grid.Row="2">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="280" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- 左侧：文件列表 -->
+        <StackPanel Grid.Column="0">
+          <ui:TextBox
+            Margin="8"
+            Width="240"
+            PlaceholderText="搜索文件..."
+            Text="{Binding ViewModel.SearchText, Mode=TwoWay}"
+            Background="{DynamicResource ApplicationBackgroundBrush}"
+            Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+            BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
+          <ui:ListView
+            x:Name="FileList"
+            ItemsSource="{Binding ViewModel.Files, Mode=OneWay}"
+            Background="Transparent"
+            BorderThickness="0"
+            SelectionChanged="FileList_SelectionChanged">
+            <ui:ListView.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Padding="8,6" Text="{Binding}" />
+              </DataTemplate>
+            </ui:ListView.ItemTemplate>
+          </ui:ListView>
         </StackPanel>
 
-        <!-- 预览/编辑区 -->
-        <ui:TextBox
-          x:Name="PreviewBox"
-          Margin="0,8,0,0"
-          MinHeight="200"
-          Height="200"
-          Text="{Binding ViewModel.MarkdownText, Mode=TwoWay}"
-          AcceptsReturn="True"
-          TextWrapping="Wrap"
-          VerticalScrollBarVisibility="Auto"
-          Background="{DynamicResource ApplicationBackgroundBrush}"
-          Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-      </StackPanel>
+        <!-- 右侧：文件预览 -->
+        <StackPanel Grid.Column="1">
+          <ui:TextBox
+            x:Name="PreviewBox"
+            Margin="0,8,0,0"
+            MinHeight="200"
+            Height="200"
+            Text="{Binding ViewModel.MarkdownText, Mode=TwoWay}"
+            AcceptsReturn="True"
+            TextWrapping="Wrap"
+            VerticalScrollBarVisibility="Auto"
+            Background="{DynamicResource ApplicationBackgroundBrush}"
+            Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+        </StackPanel>
+      </Grid>
     </Grid>
-  </Grid>
+  </ScrollViewer>
 </Page>

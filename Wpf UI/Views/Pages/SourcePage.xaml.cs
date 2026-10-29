@@ -1,4 +1,3 @@
-using System;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -56,6 +55,11 @@ namespace LLM_Wiki.Views.Pages
             _editorDlg.ShowAsync(System.Threading.CancellationToken.None);
         }
 
+        private void OnUploadClick(object sender, RoutedEventArgs e)
+        {
+            ViewModel.UploadFileCommand.Execute(null);
+        }
+
         private void OnEditorSaved(string content)
         {
             if (string.IsNullOrWhiteSpace(ViewModel.SelectedKb) || string.IsNullOrWhiteSpace(ViewModel.SelectedFile))
@@ -80,14 +84,11 @@ namespace LLM_Wiki.Views.Pages
             ShowToast("已保存：" + ViewModel.SelectedFile, true);
         }
 
-        private void OnUploadClick(object sender, RoutedEventArgs e)
-        {
-            ViewModel.UploadFileCommand.Execute(null);
-        }
-
         private void ShowToast(string message, bool success)
         {
-            var appearance = success ? Wpf.Ui.Controls.ControlAppearance.Success : Wpf.Ui.Controls.ControlAppearance.Danger;
+            var appearance = success
+                ? Wpf.Ui.Controls.ControlAppearance.Success
+                : Wpf.Ui.Controls.ControlAppearance.Danger;
             _snackbarService.Show(success ? "成功" : "错误", message, appearance, null, TimeSpan.FromSeconds(2.6));
         }
     }

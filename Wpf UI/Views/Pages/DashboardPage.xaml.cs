@@ -1,22 +1,25 @@
 ﻿using System.ComponentModel;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 
 using LLM_Wiki.ViewModels.Pages;
 using LLM_Wiki.Views.Dialogs;
 
+using Wpf.Ui;
 using Wpf.Ui.Abstractions.Controls;
+using Wpf.Ui.Controls;
 
 namespace LLM_Wiki.Views.Pages
 {
     public partial class DashboardPage : INavigableView<DashboardViewModel>
     {
         public DashboardViewModel ViewModel { get; }
+        private readonly ISnackbarService _snackbarService;
 
-        public DashboardPage(DashboardViewModel viewModel)
+        public DashboardPage(DashboardViewModel viewModel, ISnackbarService snackbarService)
         {
             ViewModel = viewModel;
+            _snackbarService = snackbarService;
             DataContext = this;
 
             ViewModel.PropertyChanged += ViewModel_PropertyChanged;
@@ -26,32 +29,21 @@ namespace LLM_Wiki.Views.Pages
 
         private async void OnDeleteClick(object sender, RoutedEventArgs e)
         {
-            var kb = KbList.SelectedItem as string;
-            if (string.IsNullOrWhiteSpace(kb))
+            if (string.IsNullOrWhiteSpace(ViewModel.SelectedKb))
             {
-                await ShowConfirmationAndDelete(null);
+                _snackbarService.Show("提示", "请先选中要删除的知识库", ControlAppearance.Info, null, TimeSpan.FromSeconds(2.6));
                 return;
             }
 
             var confirm = (ConfirmationDialog)Resources["ConfirmDlg"];
-            if (await confirm.ShowAsync($"确定要删除知识库 \"{kb}\" 吗？\n\n此操作不可恢复，包括其中的所有文件。", "确认删除"))
+            if (await confirm.ShowAsync($"确定要删除知识库 \"{ViewModel.SelectedKb}\" 吗？\n此操作不可恢复。", "确认删除"))
             {
-                ViewModel.DeleteKbCommand.Execute(kb);
-            }
-        }
-
-        private async Task ShowConfirmationAndDelete(string? kb)
-        {
-            var confirm = (ConfirmationDialog)Resources["ConfirmDlg"];
-            if (await confirm.ShowAsync("请先选择要删除的知识库", "提示"))
-            {
-                // 已选择
+                ViewModel.DeleteKbCommand.Execute(ViewModel.SelectedKb);
             }
         }
 
         private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-            // 同步 SelectedKb 模糊搜索
             if (e.PropertyName == nameof(DashboardViewModel.SelectedKb))
             {
                 if (!string.IsNullOrWhiteSpace(ViewModel.SelectedKb))
@@ -61,19 +53,9 @@ namespace LLM_Wiki.Views.Pages
             }
         }
 
-        private void KbList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (sender is not ListBox list || list.SelectedItem is not string kb)
-            {
-                return;
-            }
-
-            ViewModel.SelectedKb = kb;
-        }
-
         private void FileList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (sender is not ListBox list || list.SelectedItem is not string file)
+            if (sender is not System.Windows.Controls.ListView list || list.SelectedItem is not string file)
             {
                 return;
             }
