@@ -52,9 +52,10 @@ public class UpdateService
                 ShowUpdateToast(release);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // 网络异常/解析失败：静默不打扰
+            // 网络异常/解析失败：静默不打扰；仅记录供调试
+            System.Diagnostics.Debug.WriteLine($"[UpdateService] 检查更新失败: {ex.Message}");
         }
     }
 

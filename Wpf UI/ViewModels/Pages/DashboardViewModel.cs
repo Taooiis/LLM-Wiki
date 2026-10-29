@@ -162,8 +162,31 @@ namespace LLM_Wiki.ViewModels.Pages
         [RelayCommand]
         private void DeleteKb(string name)
         {
+            // 校验选中项
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                _toastService.ShowWarning("请先选择要删除的知识库");
+                return;
+            }
+
+            // 校验库名合法性
+            if (!PathGuard.ValidKb(name))
+            {
+                _toastService.ShowError("知识库名非法：仅允许中文、英文、数字、下划线、中划线");
+                return;
+            }
+
+            // 校验库是否存在
+            var (ok, error) = _kbService.ValidateDelete(name);
+            if (!ok)
+            {
+                _toastService.ShowError(error);
+                return;
+            }
+
             _kbService.DeleteKb(name);
             LoadKbs();
+            _toastService.ShowSuccess($"已删除知识库：{name}");
         }
     }
 }
