@@ -1,10 +1,11 @@
+using System;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 
 using LLM_Wiki.ViewModels.Pages;
 using LLM_Wiki.Views.Dialogs;
 
+using Wpf.Ui;
 using Wpf.Ui.Abstractions.Controls;
 
 namespace LLM_Wiki.Views.Pages
@@ -14,16 +15,18 @@ namespace LLM_Wiki.Views.Pages
         public SourceViewModel ViewModel { get; }
 
         private readonly EditorDialog _editorDlg;
+        private readonly ISnackbarService _snackbarService;
 
-        public SourcePage(SourceViewModel viewModel)
+        public SourcePage(SourceViewModel viewModel, ISnackbarService snackbarService)
         {
             ViewModel = viewModel;
+            _snackbarService = snackbarService;
             DataContext = this;
+
+            InitializeComponent();
 
             _editorDlg = (EditorDialog)Resources["EditorDlg"];
             _editorDlg.Saved += OnEditorSaved;
-
-            InitializeComponent();
         }
 
         private void FileList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -49,7 +52,7 @@ namespace LLM_Wiki.Views.Pages
             _editorDlg.DialogMode = EditorDialog.Mode.Exist;
             _editorDlg.FileName = ViewModel.SelectedFile;
             _editorDlg.FilePath = "raw/sources/" + ViewModel.SelectedFile;
-            _editorDlg.EditorContent = ViewModel.DocumentContent;
+            _editorDlg.SetLoadedContent(ViewModel.DocumentContent);
             _editorDlg.ShowAsync(System.Threading.CancellationToken.None);
         }
 
@@ -64,19 +67,23 @@ namespace LLM_Wiki.Views.Pages
             var ok = ViewModel.SaveFile(ViewModel.SelectedKb, "raw/sources/" + ViewModel.SelectedFile, content, out error);
             if (!ok)
             {
-                System.Windows.MessageBox.Show("保存失败：" + error, "保存", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                ShowToast("保存失败：" + error, false);
                 return;
             }
 
             ViewModel.DocumentContent = content;
             PreviewText.Text = content;
             ViewModel.LoadChanges(ViewModel.SelectedKb);
+            // E4/E6：清除 dirty 标记
+            _editorDlg.ClearDirty();
+            // E7：toast 提示
             ShowToast("已保存：" + ViewModel.SelectedFile, true);
         }
 
         private void ShowToast(string message, bool success)
         {
-            System.Windows.MessageBox.Show(message, success ? "成功" : "错误", System.Windows.MessageBoxButton.OK, success ? System.Windows.MessageBoxImage.Information : System.Windows.MessageBoxImage.Error);
+            var appearance = success ? Wpf.Ui.Controls.ControlAppearance.Success : Wpf.Ui.Controls.ControlAppearance.Danger;
+            _snackbarService.Show(success ? "成功" : "错误", message, appearance, null, TimeSpan.FromSeconds(2.6));
         }
     }
 }

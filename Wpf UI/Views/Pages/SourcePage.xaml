@@ -141,29 +141,42 @@
         Grid.Row="1"
         ItemsSource="{Binding ViewModel.Changes, Mode=OneWay}"
         Background="Transparent"
-        BorderThickness="0">
+        BorderThickness="0"
+        SelectionMode="Multiple">
         <ui:ListView.ItemTemplate>
           <DataTemplate>
-            <StackPanel Orientation="Horizontal" Margin="4,2">
-              <TextBlock Text="{Binding Time}" Width="120" />
-              <TextBlock Text="{Binding Action}" Width="80" />
-              <TextBlock Text="{Binding File}" />
-              <ui:Button
-                Content="Ingest"
-                Command="{Binding DataContext.ViewModel.GenerateIngestForChangeCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
-                CommandParameter="{Binding File}"
-                Margin="4,0,4,0"
-                Icon="Fluent24" />
-              <ui:Button
-                Content="清除"
-                Command="{Binding DataContext.ViewModel.ClearChangeCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
-                CommandParameter="{Binding File}"
-                Margin="4,0,0,0"
-                Icon="Fluent24" />
-            </StackPanel>
+            <CheckBox
+              IsChecked="{Binding IsSelected}"
+              Margin="4,2"
+              VerticalAlignment="Center">
+              <TextBlock>
+                <Run Text="{Binding Time}" />
+                <Run Text=" | "/>
+                <Bold><Run Text="{Binding Action}" /></Bold>
+                <Run Text=" | "/>
+                <Run Text="{Binding File}" />
+              </TextBlock>
+            </CheckBox>
           </DataTemplate>
         </ui:ListView.ItemTemplate>
       </ui:ListView>
+      <!-- 操作按钮行 -->
+      <StackPanel
+        Grid.Row="2"
+        Orientation="Horizontal"
+        HorizontalAlignment="Right"
+        Margin="0,4,0,0">
+        <ui:Button
+          Content="标记已处理"
+          Command="{Binding ViewModel.ClearSelectedChangesCommand}"
+          Margin="4,0"
+          Icon="Fluent24" />
+        <ui:Button
+          Content="生成选中 Ingest"
+          Command="{Binding ViewModel.GenerateIngestForSelectedCommand}"
+          Margin="4,0,0,0"
+          Icon="Fluent24" />
+      </StackPanel>
     </Grid>
   </Grid>
 </Page>

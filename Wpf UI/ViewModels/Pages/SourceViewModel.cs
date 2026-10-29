@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -193,6 +194,42 @@ namespace LLM_Wiki.ViewModels.Pages
         }
 
         [RelayCommand]
+        private void GenerateIngestForSelected()
+        {
+            var selected = Changes.Where(c => c.IsSelected).Select(c => c.File).ToList();
+            if (selected.Count == 0)
+            {
+                return;
+            }
+
+            _mainViewModel.PendingIngestFiles.Clear();
+            foreach (var f in selected)
+            {
+                _mainViewModel.PendingIngestFiles.Add(f);
+            }
+            _mainViewModel.PendingIngestKb = SelectedKb;
+
+            _navigationService.Navigate(typeof(Views.Pages.WorkflowPage));
+        }
+
+        [RelayCommand]
+        private void ClearSelectedChanges()
+        {
+            var selected = Changes.Where(c => c.IsSelected).Select(c => c.File).ToList();
+            if (selected.Count == 0)
+            {
+                return;
+            }
+
+            _fileBridge.ClearChanges(SelectedKb, selected.ToArray());
+            foreach (var c in Changes.Where(c => c.IsSelected).ToList())
+            {
+                c.IsSelected = false;
+            }
+            LoadChanges(SelectedKb);
+        }
+
+        [RelayCommand]
         private async Task UploadFile()
         {
             if (string.IsNullOrWhiteSpace(SelectedKb))
@@ -276,5 +313,8 @@ namespace LLM_Wiki.ViewModels.Pages
         }
     }
 
-    public record ChangeItem(string File, string Action, string Time, string Hash);
+    public record ChangeItem(string File, string Action, string Time, string Hash)
+    {
+        public bool IsSelected { get; set; }
+    }
 }

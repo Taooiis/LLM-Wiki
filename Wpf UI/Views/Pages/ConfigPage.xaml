@@ -59,7 +59,7 @@
               <ui:Button
                 Grid.Row="0" Grid.Column="1"
                 Content="浏览"
-                Command="{Binding ViewModel.BrowseWikisDirCommand}"
+                Click="OnBrowseClick"
                 Margin="0,0,8,8"
                 Icon="Fluent24" />
 

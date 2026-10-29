@@ -22,7 +22,6 @@
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
 
-    <!-- 标题栏：文件名 + dirty 标记 + 消息 -->
     <Grid Grid.Row="0" Margin="0,0,0,8">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
@@ -61,7 +60,6 @@
       FontSize="12"
       TextWrapping="Wrap" />
 
-    <!-- 正文编辑器 -->
     <ui:TextBox
       x:Name="EditorBox"
       Grid.Row="2"

@@ -1,0 +1,112 @@
+<ui:ContentDialog
+  x:Class="LLM_Wiki.Views.Dialogs.FolderPickerDialog"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  Title="选择文件夹"
+  PrimaryButtonText="确定"
+  SecondaryButtonText="取消"
+  Width="600"
+  Height="500"
+  mc:Ignorable="d">
+  <Grid Margin="12">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+
+    <!-- 常用位置一键直达 -->
+    <WrapPanel Grid.Row="0" Margin="0,0,0,8">
+      <ui:Button
+        x:Name="DesktopBtn"
+        Content="桌面"
+        Click="OnCommonLocationClick"
+        Tag="Desktop"
+        Margin="2,0"
+        Width="80"
+        Icon="Fluent24" />
+      <ui:Button
+        x:Name="DocumentsBtn"
+        Content="我的文档"
+        Click="OnCommonLocationClick"
+        Tag="Documents"
+        Margin="2,0"
+        Width="80"
+        Icon="Fluent24" />
+      <ui:Button
+        x:Name="AppDirBtn"
+        Content="程序目录"
+        Click="OnCommonLocationClick"
+        Tag="AppDir"
+        Margin="2,0"
+        Width="80"
+        Icon="Fluent24" />
+    </WrapPanel>
+
+    <!-- 面包屑导航 -->
+    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+      <TextBlock
+        x:Name="BreadcrumbText"
+        VerticalAlignment="Center"
+        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+        Text="当前路径：" />
+      <TextBlock
+        x:Name="CurrentPathText"
+        Margin="4,0"
+        VerticalAlignment="Center"
+        Text="{Binding CurrentPath, RelativeSource={RelativeSource AncestorType=ContentDialog}}"
+        TextWrapping="NoWrap" />
+      <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Text="|" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+      <ui:TextBox
+        x:Name="AddressInput"
+        Width="300"
+        VerticalAlignment="Center"
+        Text="{Binding Address, RelativeSource={RelativeSource AncestorType=ContentDialog}, UpdateSourceTrigger=PropertyChanged}" />
+      <ui:Button
+        Content="前往"
+        Click="OnNavigateToAddress"
+        Margin="4,0,0,0"
+        Icon="Fluent24" />
+    </StackPanel>
+
+    <!-- 文件夹列表 -->
+    <Grid Grid.Row="2">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="300" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+
+      <!-- 磁盘列表 -->
+      <ui:ListView
+        x:Name="DriveList"
+        Grid.Column="0"
+        Margin="0,0,8,0"
+        Height="100"
+        SelectionChanged="Drive_SelectionChanged">
+        <ui:ListView.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Text="{Binding Name}" />
+          </DataTemplate>
+        </ui:ListView.ItemTemplate>
+      </ui:ListView>
+
+      <!-- 文件夹列表 -->
+      <ui:ListView
+        x:Name="FolderList"
+        Grid.Column="1"
+        SelectionChanged=" Folder_SelectionChanged">
+        <ui:ListView.ItemTemplate>
+          <DataTemplate>
+            <TextBlock>
+              <Run Text="{Binding Name}" />
+              <Run Text=" (目录)" />
+            </TextBlock>
+          </DataTemplate>
+        </ui:ListView.ItemTemplate>
+      </ui:ListView>
+    </Grid>
+  </Grid>
+</ui:ContentDialog>

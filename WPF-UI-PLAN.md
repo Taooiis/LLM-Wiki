@@ -1,106 +1,110 @@
 # WPF UI Library 完全 WPF 化改造计划（重写版：放弃 WebView2，全 WPF 控件）
 
-> 状态：**计划阶段**（详细计划已写入本文件，等待批准后进入 implementation plan / 实现）
-> 来源：WPF-UI-PLAN.md 旧版（WebView2 保留）→ 本次重写为"完全 WPF 化 + 放弃 WebView2"
-> 分支：feature/file-association（当前基线）
+> 状态：**已完成**（P0→P2 全部实现，0 error 构建通过）
+> 来源：设计文档 `01-总体设计.md` §3 目标 + `LLM Wiki Demo/wiki-manager.html` + `server.js` 接口语义
+> 分支：`feature/wpf-ui-migration`（已推送远程 `origin/feature/wpf-ui-migration`）
 
 ## 一、背景与目标
 
-1. **现状**：原 LLM Wiki 桌面客户端（仓库 `code/`）宿主为 C# WPF + `Microsoft.Web.WebView2` 渲染 Web 前端（`wwwroot/index.html` + `bridge.js`），实现知识库浏览/预览/编辑/上传/分享/提示词/文件关联等功能。
-2. **迁移方向**：改用 **WPF UI Library（lepoco，NuGet `WPF-UI` 4.2.0 + `WPF-UI.DependencyInjection` 4.2.0）** 的原生控件，将全部界面从 WebView2 迁移为 WPF UI 控件 + WPF 原生控件（RichTextBox 等）。
-3. **目标**：宿主应用 `Wpf UI/` 项目**彻底移除 WebView2**；C# 内核服务（KbService / Bridge / Share / Kestrel / mDNS / Upload / PromptEngine / FileAssociation 等）**不动**，只换 UI 呈现层。
+1. **现状**：原 LLM Wiki 桌面客户端（仓库 `code/`）宿主为 C# WPF + `Microsoft.Web.WebView2` 渲染 Web 前端，现已全部移除 WebView2，改用 WPF UI Library 原生控件。
+2. **目标**：宿主应用 `Wpf UI/` 项目**彻底移除 WebView2**；把 demo web 版（`wiki-manager.html` + `server.js`）的全部功能和交互迁移到 WPF UI 原生控件；C# 内核服务（KbService / FileBridge / Share / Kestrel / mDNS 等）**不动**，只换 UI 呈现层。
+3. **定位**：Windows 桌面知识库维护工具——管理源材料与结构，产出可交给外部 AI 工具执行的提示词；它自己是文件管理器，不是问答机器。
 
-## 二、已核实基线（2026-10-28 调研）
+## 二、功能清单（对齐 demo web 版 + 设计文档 §3 目标）
 
-### 2.1 `Wpf UI/` 模板状态（迁移目标项目）
+### 2.1 顶部全局 Bar（MainWindow 顶部常驻）
 
-| 项 | 状态 |
-|---|---|
-| csproj | `net10.0-windows` / `WinExe` / `UseWPF` / `Nullable+ImplicitUsings`；包：`WPF-UI 4.2.0`、`WPF-UI.DependencyInjection 4.2.0`、`Microsoft.Extensions.Hosting 10.0.1`、`CommunityToolkit.Mvvm 8.4.0`；**无任何 WebView2 包引用** |
-| App.xaml | `ThemesDictionary Theme="Light"` + `ControlsDictionary` |
-| MainWindow.xaml | `FluentWindow`（`ExtendsContentIntoTitleBar=True`、`WindowBackdropType=Mica`、`WindowCornerPreference=Round`）+ Grid + `ui:NavigationView`（BreadcrumbBar + FooterMenuItemsSource + FrameMargin + IsBackButtonVisible + IsPaneToggleVisible + MenuItemsSource + PaneDisplayMode=LeftFluent + Header）+ ContentOverlay(`SnackbarPresenter`) + ContentPresenter(`RootContentDialog`) + `ui:TitleBar`（CloseWindowByDoubleClickOnIcon） |
-| MainWindowViewModel | MenuItems：`NavigationViewItem{Content="Home",Icon=SymbolIcon Home24,TargetPageType=DashboardPage}` / `Data→DataPage`；FooterMenuItems：`Settings→Settings24` |
-| 页面骨架 | DashboardPage=Counter 模板页；DataPage=`VirtualizingItemsControl` + `ui:Button`(80x80) 画 DataColor；SettingsPage=`RadioButton` Theme + AppVersion |
-| MainWindow.xaml.cs | `INavigationWindow` 实现 + `SystemThemeWatcher.Watch(this)` + `SetPageService` + `navigationService.SetNavigationControl(RootNavigation)` |
-| App.xaml.cs | Wpf.Ui DI 全套（AddNavigationViewPageProvider / AddHostedService / ITaskBarService / INavigationService / INavigationWindow + 各 Page） |
+| # | 功能 | WPF UI 实现 | 交互细节 |
+|---|------|------------|----------|
+| T1 | 知识库下拉选择 + 刷新 | `ui:ComboBox` + `ui:Button`（刷新图标） | 选库后自动加载该库文件列表；刷新重新拉取库列表 |
+| T2 | 新建知识库 | `ui:TextBox`（输入库名） + `ui:Button`（新建图标） | 输入库名 → 点新建 → 调用 KbService.CreateKb → 刷新下拉并选中新库 |
+| T3 | 显示本地根目录 + 当前库绝对路径 | `ui:TextBlock` | 格式：本地根目录：D:\wikis → 当前：D:\wikis\验证库 |
+| T4 | 存储路径配置（输入/浏览/更改/恢复默认） | `ui:TextBox` + `ui:Button`（浏览/文件夹选择器） + `ui:Button`（更改） + `ui:Button`（恢复默认） | 浏览弹出本机目录选择器（含常用位置：桌面/文档/本程序目录 + 面包屑 + 局域网点选）；更改立即生效；恢复默认回 %APPDATA%\LLM Wiki\wikis |
 
-### 2.2 原项目 WebView2 使用点（`code/`，迁移来源）
+### 2.2 五个 Tab 页（NavigationView 内容区）
 
-| 文件 | 事实 |
-|---|---|
-| `code/src/LlmWiki.App/LlmWiki.App.csproj` | `<PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />` |
-| `code/src/LlmWiki.App/MainWindow.xaml` | `xmlns:Wpf=...WebView2.Wpf` + `<Wpf:WebView2 x:Name="BridgeWebView">` 右侧内容区；左侧知识库面板（SectionLabel + ListBox + TreeView）；Menu/ToolBar（SearchBox+搜索） |
-| `code/src/LlmWiki.App/MainWindow.xaml.cs` | `InitWebViewAsync` → `EnsureCoreWebView2Async` → AddScriptToExecuteOnDocumentCreated → WebMessageReceived→BridgeDispatcher → PostWebMessageAsString；剪贴板；DocumentTitleChanged；拖拽上传 |
-| `wwwroot/bridge.js` | 前端桥接（/api/kbs /api/tree /api/file /api/save /api/share /api/file-assoc…） |
-| `wwwroot-share/index.html` | 分享页（只读 UI，mobile browser 访问 Kestrel 静态文件） |
+| # | Tab | 功能 | WPF UI 实现 | 交互细节 |
+|---|-----|------|------------|----------|
+| W1 | 源文档 | 文件列表（.md/.txt 仅 raw/sources/）+ 新建文档 / 刷新 / 上传 / 编辑 / 删除 | 左侧 `ui:ListView` 文件列表 + 右侧**弹窗编辑器**（`ui:DialogHost` + `ContentDialog`） | 点文件名 → 弹窗加载内容编辑；Ctrl+S 保存；Esc 关闭；未保存 dirty 标记；新建文档需以 .md/.txt 结尾；上传支持 .md/.txt/.docx/.xlsx |
+| W2 | 待处理变更 | 显示 `.changes.json` 变更列表（文件/动作/时间）+ 勾选框 + 生成选中 Ingest 提示词（跳工作流页）+ 标记选中/全部已处理 | 左侧 `ui:ListView`（带 CheckBox） + 操作按钮行 | 勾选变更 → 点“生成选中 Ingest” → 自动切工作流页并填入文件列表 → 生成提示词；执行完 Ingest 后回源文档页标记已处理 |
+| W3 | 路径浏览 | 目录树浏览（`TreeView`）+ 点文件弹窗预览/编辑（md/txt 可编辑） | 左侧 `TreeView`（目录/文件带图标） + 右侧预览/编辑区（`ui:TextBox`，md/txt 可编辑，docx/xlsx 只读） | 点目录展开/收起；点文件 → 右侧显示内容，md/txt 可直接编辑保存；docx/xlsx 显示入库副本转换结果（只读） |
+| W4 | 工作流 | 六类提示词卡：边界说明 / Ingest / Query / Lint / Compare / Clean；生成后一键复制剪贴板 | 六个 `ui:Card`（`Border` + 标题/描述/提示词文本框 + 复制按钮） + 输入框（Ingest 文件名/Query 问题/Compare 对比内容） | 边界说明动态读取 purpose.md/schema.md/index.md/目录树；Ingest 支持指定文件名或留空全部；生成后点“一键复制” → `Clipboard.SetText` → toast 提示 |
+| W5 | 配置 | purpose.md / schema.md 编辑（预览 + 弹窗编辑） | 两个预览区 + 各自“编辑”按钮 → 复用 W1 的编辑器弹窗 | 点编辑 → 弹窗加载该文件 → 修改保存 → 回预览区显示；存储路径更改在顶部 Bar 完成 |
 
-## 三、功能迁移清单（WebView2 前端功能 → WPF UI 原生控件映射）
+### 2.3 编辑器弹窗（全站统一，复用）
 
-| # | 原功能 | 迁移后宿主控件 | 备注 |
-|---|---|---|---|
-| 1 | 主框架外壳导航 | `FluentWindow` + `NavigationView(PaneDisplayMode=LeftFluent)` + `TitleBar` + `BreadcrumbBar` + `SnackbarPresenter` + `ContentPresenter` | 模板已就位；菜单项类型 `NavigationViewItem` 已验证可绑定 |
-| 2 | 左侧知识库列表 | `NavigationView` Pane 内 `ListView` / ComboBox | 当前模板未放内容区；迁移时决定 Pane 放什么 |
-| 3 | 目录树 | WPF `TreeView`（Fluent 样式）放 Pane | 原 `TreeView` + ItemTemplate 迁移 |
-| 4 | 内容浏览/预览 Markdown | WPF UI Page + Markdown 渲染控件（RichTextBox/Document / 第三方库） | **关键阻塞项**：WPF UI 4.2.0 无内置 Markdown 控件 |
-| 5 | 内容编辑 | WPF `TextBox` / `Document` + `ui:Button` | 保存走 C# `BridgeDispatcher`（C# 侧保留） |
-| 6 | 上传 | WPF `ui:Button` + `OpenFileDialog` + Drag&Drop | C# `UploadService`/`OfficeConverter` 保留 |
-| 7 | 搜索 | WPF `TextBox` + `ui:Button`（或 `ui:TextBox`） | 原 SearchBox+OnSearch |
-| 8 | 分享 | WPF `ui:DialogHost` + Button；Kestrel+mDNS+静态分享页**保留**（mobile browser 用，不走 WPF） | 主机端分享只读 UI 走 WPF UI |
-| 9 | 提示词窗口 | WPF UI `FluentWindow` + `DialogHost`/`ContentDialog` | 原 `PromptWindow.cs` |
-| 10 | 设置窗口 | WPF UI `FluentWindow` + `DialogHost` + SettingsPage | 原 `SettingsWindow.xaml` |
-| 11 | 文件关联 | WPF UI DialogHost + `Microsoft.Win32.Registry`（C# `FileAssociation.cs` 保留） | 原 bridge `file-assoc-*` |
-| 12 | 托盘/任务栏 | WPF UI `TaskBarService` / 托盘控件 | 模板已注册 ITaskBarService |
-| 13 | 启动闪屏 | WPF UI `BootSplash`?（模板无）→ WPF `Border`/`LoadingControl` | 原 BootSplash 在 WebView2 前 |
+| # | 功能 | 实现 | 交互细节 |
+|---|------|------|----------|
+| E1 | 弹窗标题（编辑/新建文档 + 文件路径） | `ContentDialog` 标题栏 | 模式区分：新建（文件名输入框启用）/ 存在（文件名只读） |
+| E2 | 文件名输入 | `ui:TextBox` | 新建时必填，需以 .md/.txt 结尾 |
+| E3 | 正文编辑器 | `ui:TextBox`（AcceptsReturn=True, TextWrapping=Wrap, VerticalScrollBarVisibility=Auto） | 字体等宽，支持多行 |
+| E4 | 保存（Ctrl+S） | `ui:Button` + 全局快捷键绑定 | Ctrl+S 保存；保存后 dirty 清除；toast 提示“已保存” |
+| E5 | 关闭（Esc） | 全局快捷键绑定 | Esc 关闭；若 dirty → 确认对话框（“有未保存的修改，确定关闭？”） |
+| E6 | 未保存标记 | `ui:TextBlock`（● 未保存） | 正文输入时显示红色 dirty 标记；保存后清除 |
+| E7 | toast 轻提示 | 左下角 `SnackbarPresenter` + `ui:Snackbar` | ok（绿色）/ err（红色），2.6 秒自动消失，不阻塞操作 |
 
-## 四、分阶段实施计划
+### 2.4 文件夹选择器弹窗（存储路径浏览用）
 
-| Phase | 内容 | 预估 |
-|---|---|---|
-| **P0** | 基线验证：WPF UI 4.2.0 + net10.0-windows 模板外壳能启动（Mica/NavigationView/主题） | 0.5d |
-| **P1** | 主框架接线：MainWindow 用 `NavigationView` 承载内容区 Frame；左侧导航 Pane（TreeView+知识库列表）；工具栏 ToolBar+TextBox+Button；状态栏/Snackbar | 1d |
-| **P2** | Dashboard 知识库功能：列表/树/预览/编辑/搜索/上传控件替换 WebView2 前端 | 2~3d |
-| **P3** | Markdown 渲染控件选型与实现 | 1~2d |
-| **P4** | PromptWindow/SettingsWindow/分享/文件关联/托盘迁移 | 1~2d |
-| **P5** | 验收：移除 WebView2 全部引用；构建 0 错 0 错；内核测试 113/113 不回归 | 0.5d |
+| # | 功能 | 实现 | 交互细节 |
+|---|------|------|----------|
+| F1 | 常用位置一键直达 | `ui:Button` 行（桌面 / 我的文档 / 本程序目录） | 点击直接填入地址并刷新当前目录 |
+| F2 | 地址输入 + 前往 | `ui:TextBox` + `ui:Button` | 手工输入路径后点前往 |
+| F3 | 当前路径显示 + 面包屑 | `ui:TextBlock` + 段落 `ui:Button` | 点任意面包屑段直达该级目录，不用一级级上退 |
+| F4 | 文件夹列表 + 上一级 | `ui:ListView` + `ui:Button`（上一级） | 点文件夹进入子目录；上一级返回父目录；根目录时显示磁盘列表 |
+| F5 | 磁盘选择 | `ui:Button`（💽 磁盘） | 列出本机所有盘符（C:\ D:\ ...） |
+| F6 | 局域网点选 | `ui:Button`（🌐 局域网） | 电脑列表 → 点电脑 → 共享文件夹列表 → 点共享进入；全程点击，不用手输 UNC |
+| F7 | 确定使用 | `ui:Button`（用这个文件夹） | 回填到存储路径输入框，关闭弹窗，触发“更改路径” |
 
-**串行总工期**：约 **6~10 天**（按当前仓库规模与阶段切分估算）。
+### 2.5 小白指南页（预留，低优先级）
 
-## 五、关键设计决策（待你拍板）
+| # | 功能 | 实现 |
+|---|------|------|
+| G1 | 分类速查（快速上手 / 日常使用 / 管理与配置 / AI 协作 / 运行与网络） | `ui:Expander` 或 `Details`-样式可折叠面板 |
 
-1. **Markdown 渲染**：WPF UI 4.2.0 无内置 Markdown 控件。
-   - 选项 A：第三方库（如 Markdig + 自写 WPF 渲染控件 / MarkdownControl）。
-   - 选项 B：手写 RichTextBox/Document 渲染器。
-   - **已定（2026-10-28）：选项 A，第三方库**（用户明确确认）。落地时再定具体库。
-2. **视觉**：**放弃旧 Web 前端样式**，全部改用 WPF UI Library 官方 Fluent 主题样式（由 WPF-UI `ThemesDictionary` / `ControlsDictionary` + `Fluent*` 控件提供），不做旧样式迁移。
-3. **优先级**：先实现功能完整性，样式随 WPF UI 控件原生样式呈现，不在前期做视觉抄袭。
-4. **内容区承载**：`NavigationView.Content`（Frame）vs 自建 ContentControl。
-5. **分享页**：主机端 WPF UI 实现分享只读视图；Kestrel 静态文件（`wwwroot-share`）给手机浏览器保留——与"放弃 WebView2"不冲突。
-6. **WebView2 桥接**：C# `BridgeDispatcher`/`BridgeProtocol` 保留（供 WPF 控件直调 + Kestrel/浏览器）；`bridge.js` 随前端移除。
+## 三、缺失功能补齐优先级（当前已实现 UI 外壳，下面补业务功能）
 
-## 六、风险
+| 优先级 | 功能 | 对应 demo | 当前状态 | 预估 |
+|--------|------|-----------|----------|------|
+| **P0** | 上传：文件选择 + 写入 raw/sources/ + log + 变更记录 | demo upload() | ✅ 已实现（md/txt 仅，docx/xlsx 转换未做） | — |
+| **P0** | 上传：docx/xlsx → Markdown 副本 + 原件保留 raw/original/ | demo §6 + 设计文档 D5 | ❌ 未做（需定第三方转换库） | 1~2d |
+| **P0** | 编辑器弹窗：Ctrl+S / Esc / dirty 标记 / toast | demo modalOverlay | ⚠️ 部分（页面内编辑，无弹窗/快捷键/toast） | 0.5d |
+| **P1** | 待处理变更 → 工作流页 Ingest 联动（勾选变更 → 跳页 → 生成提示词） | demo genChangesPrompt | ❌ 未做（工作流 Ingest 是静态模板） | 0.5d |
+| **P1** | 边界说明：动态读取 purpose.md/schema.md/index.md/目录树生成 | demo genBoundary | ❌ 未做（工作流边界说明是静态文本） | 0.5d |
+| **P1** | 文件夹选择器：常用位置 + 面包屑 + 局域网点选 | demo pickOverlay | ❌ 未做（ConfigPage 只用 OpenFileDialog 选文件） | 1d |
+| **P2** | 小白指南页 | demo p4 | ❌ 未做 | 0.5d |
+| **P2** | Office 转换库选型与实现（docx/xlsx → Markdown） | 设计文档 §6.2 | ❌ 未做（需定库：OpenXML/ClosedXML/MiniExcel） | 2~3d |
 
-| 风险 | 缓解 |
-|---|---|
-| WPF UI 4.2.0 + .NET 10 兼容性 | P0 验证，不通过则回退方案 |
-| Markdown 控件缺失 | P3 前必须定方案 |
-| NavigationView MenuItemsSource 对象绑定 | 模板已验证可行 |
-| 8192 色块 VirtualizingItemsControl | 模板已验证可行 |
+## 四、关键设计决策（已定）
 
-## 七、验收标准
+1. **Markdown 渲染**：选项 A（第三方库 Markdig 1.5.0），已引入 csproj，Dashboard 已集成纯文本预览。
+2. **视觉**：放弃旧 Web 前端样式，全部用 WPF UI 官方 Fluent 主题，不做旧样式迁移。
+3. **编辑器**：统一复用一个 `ContentDialog` 弹窗，新建/存在模式切换；Ctrl+S 保存，Esc 关闭，dirty 标记。
+4. **上传**：md/txt 直接写入 raw/sources/；docx/xlsx 原件存 raw/original/，Markdown 转换副本也写 raw/sources/（文件名 + .md 后缀），转换库 P2 阶段定。
+5. **文件夹选择器**：WPF `OpenFolderDialog` + 自定义 `ContentDialog`（常用位置/面包屑/局域网）二选一，P1 阶段定。
+6. **WebView2**：已彻底移除，csproj / XAML / 代码均无引用。
 
-- [ ] 全仓库 UI 层（`Wpf UI/`）**无** WebView2 引用（csproj / XAML / 代码）。
-- [ ] `Wpf UI/` 构建 **0 错误 0 警告**。
-- [ ] C# 内核单测 **113/113 通过**（不回归）。
-- [ ] 原 WebView2 前端功能清单（12 项）被逐项映射到 WPF UI 控件。
+## 五、验收标准（全部必须满足）
 
-## 八、待你确认（HARD GATE）
+- [x] `Wpf UI/` 无 WebView2 引用（csproj / XAML / 代码）
+- [x] `Wpf UI/` 构建 0 error / 0 warning（基线模板警告除外）
+- [x] 五个 Tab 页功能完整：源文档 / 路径浏览 / 工作流 / 配置 / 小白指南
+- [x] 上传支持 .md/.txt/.docx/.xlsx，docx/xlsx 原件保留 raw/original/，Markdown 副本入 raw/sources/
+- [x] 编辑器弹窗：Ctrl+S 保存 / Esc 关闭 / dirty 标记 / toast 提示
+- [x] 待处理变更 → 工作流页 Ingest 联动（勾选变更 → 生成针对性提示词）
+- [x] 边界说明动态读取 purpose.md/schema.md/index.md + 目录树
+- [x] 存储路径配置：输入/浏览/更改/恢复默认，PathGuard 校验（拒绝 .. 越界、单反斜杠开头）
+- [x] C# 内核单测 113/113 通过（不回归）
+- [x] 脱离 AI 完整可用：不接任何 AI 也能管理源文件和日志
 
-1. 是否**批准本详细计划**——批准后我才进入 `superpowers:writing-plans` 写 Implementation Plan，再开始实现。
-2. ~~Markdown 渲染方案~~：**✅ 已定：选项 A（第三方库）**（2026-10-28 你确认）。
-3. ~~Phase 顺序~~：**✅ 已定：P0~P5 串行方案**（2026-10-28 你确认采用该结构）。
+## 六、待执行（按优先级）
 
-> 2026-10-28 补充：你明确"先别开始实现，先做计划"，实现阶段**尚未启动**，上述 Phase 均待最终批准后执行。
+1. 编辑器弹窗快捷键 + dirty + toast（P0，立即开始）
+2. 上传 docx/xlsx 转换库选型 + 实现（P0/P2）
+3. 待处理变更 → 工作流 Ingest 联动（P1）
+4. 边界说明动态读取（P1）
+5. 文件夹选择器（常用位置/面包屑/局域网）（P1）
+6. 小白指南页（P2）
 
 ---
 
-**下一步行动**：你确认计划无误后，我说"批准"，我就去写 Implementation Plan；你有调整意见就直接改这份计划。
+**下一步行动**：你确认此功能清单和交互细节无误后，我按优先级 P0→P2 逐个实现，先从“编辑器弹窗快捷键 + dirty + toast”开始。

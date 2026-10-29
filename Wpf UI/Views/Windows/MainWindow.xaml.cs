@@ -10,14 +10,17 @@ namespace LLM_Wiki.Views.Windows
     public partial class MainWindow : INavigationWindow
     {
         public MainWindowViewModel ViewModel { get; }
+        private readonly ISnackbarService _snackbarService;
 
         public MainWindow(
             MainWindowViewModel viewModel,
             INavigationViewPageProvider navigationViewPageProvider,
-            INavigationService navigationService
+            INavigationService navigationService,
+            ISnackbarService snackbarService
         )
         {
             ViewModel = viewModel;
+            _snackbarService = snackbarService;
             DataContext = this;
 
             SystemThemeWatcher.Watch(this);
@@ -26,6 +29,9 @@ namespace LLM_Wiki.Views.Windows
             SetPageService(navigationViewPageProvider);
 
             navigationService.SetNavigationControl(RootNavigation);
+
+            // 设置 SnackbarPresenter 供全局 toast 使用
+            _snackbarService.SetSnackbarPresenter(SnackbarPresenter);
         }
 
         #region INavigationWindow methods
@@ -40,6 +46,13 @@ namespace LLM_Wiki.Views.Windows
 
         public void CloseWindow() => Close();
 
+        private IServiceProvider? _serviceProvider;
+
+        public void SetServiceProvider(IServiceProvider serviceProvider)
+        {
+            _serviceProvider = serviceProvider;
+        }
+
         #endregion INavigationWindow methods
 
         /// <summary>
@@ -51,16 +64,6 @@ namespace LLM_Wiki.Views.Windows
 
             // Make sure that closing this window will begin the process of closing the application.
             Application.Current.Shutdown();
-        }
-
-        INavigationView INavigationWindow.GetNavigation()
-        {
-            throw new NotImplementedException();
-        }
-
-        public void SetServiceProvider(IServiceProvider serviceProvider)
-        {
-            throw new NotImplementedException();
         }
     }
 }

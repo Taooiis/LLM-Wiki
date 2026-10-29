@@ -1,16 +1,21 @@
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
-using Microsoft.Win32;
 
 using LLM_Wiki.ViewModels.Pages;
+using LLM_Wiki.Views.Dialogs;
 
+using Wpf.Ui;
 using Wpf.Ui.Abstractions.Controls;
+using Wpf.Ui.Controls;
 
 namespace LLM_Wiki.Views.Pages
 {
     public partial class ConfigPage : INavigableView<ConfigViewModel>
     {
         public ConfigViewModel ViewModel { get; }
+        private readonly FolderPickerDialog _folderPicker;
 
         public ConfigPage(ConfigViewModel viewModel)
         {
@@ -18,21 +23,20 @@ namespace LLM_Wiki.Views.Pages
             DataContext = this;
 
             InitializeComponent();
+
+            _folderPicker = new FolderPickerDialog();
         }
 
-        private void OnBrowseClick(object sender, RoutedEventArgs e)
+        private async void OnBrowseClick(object sender, RoutedEventArgs e)
         {
-            var dlg = new OpenFolderDialog
-            {
-                Title = "选择知识库存储目录",
-                InitialDirectory = string.IsNullOrWhiteSpace(ViewModel.WikisDirInput)
-                    ? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
-                    : ViewModel.WikisDirInput
-            };
+            _folderPicker.InitialDirectory = string.IsNullOrWhiteSpace(ViewModel.WikisDirInput)
+                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "LLM Wiki", "wikis")
+                : ViewModel.WikisDirInput;
 
-            if (dlg.ShowDialog() == true)
+            var result = await _folderPicker.ShowAsync(CancellationToken.None);
+            if (result == ContentDialogResult.Primary)
             {
-                ViewModel.WikisDirInput = dlg.FolderName;
+                ViewModel.WikisDirInput = _folderPicker.SelectedPath;
                 ViewModel.ValidateWikisDir();
             }
         }

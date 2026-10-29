@@ -1,35 +1,56 @@
 using System.Windows;
 
-namespace LLM_Wiki.Services;
+using Wpf.Ui;
+using Wpf.Ui.Controls;
 
-/// <summary>
-/// 托停通知（Toast）：分享开启、导入完成。
-/// WPF 版：用 MessageBox 代替 WinForms NotifyIcon。
-/// </summary>
-public static class ToastService
+namespace LLM_Wiki.Services
 {
-    public static void ShowShareStarted(int port)
+    /// <summary>
+    /// 托停通知（Toast）服务：分享开启、导入完成等。
+    /// 使用 Wpf.Ui Snackbar 实现底部轻提示。
+    /// </summary>
+    public class ToastService
     {
-        // 静默：分享状态在 UI 页面显示，不弹窗打扰
-    }
+        private readonly ISnackbarService _snackbarService;
 
-    public static void ShowShareStopped()
-    {
-        // 静默
-    }
+        public ToastService(ISnackbarService snackbarService)
+        {
+            _snackbarService = snackbarService;
+        }
 
-    public static void ShowImportComplete(string kbName, int fileCount)
-    {
-        MessageBox.Show($"知识库：{kbName}\n文件：{fileCount} 个", "导入完成", MessageBoxButton.OK, MessageBoxImage.Information);
-    }
+        public void ShowShareStarted(int port)
+        {
+            // 静默：分享状态在 UI 页面显示，不弹窗打扰
+        }
 
-    public static void ShowAgentChanged(string kbName, string filePath)
-    {
-        MessageBox.Show($"知识库：{kbName}\n文件：{System.IO.Path.GetFileName(filePath)}", "文件已变更", MessageBoxButton.OK, MessageBoxImage.Information);
-    }
+        public void ShowShareStopped()
+        {
+            // 静默
+        }
 
-    public static void Show(string title, string message)
-    {
-        MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
+        public void ShowImportComplete(string kbName, int fileCount)
+        {
+            _snackbarService.Show("导入完成", $"知识库：{kbName}\n文件：{fileCount} 个", ControlAppearance.Success, null, TimeSpan.FromSeconds(2.6));
+        }
+
+        public void ShowAgentChanged(string kbName, string filePath)
+        {
+            _snackbarService.Show("文件已变更", $"知识库：{kbName}\n文件：{System.IO.Path.GetFileName(filePath)}", ControlAppearance.Info, null, TimeSpan.FromSeconds(2.6));
+        }
+
+        public void Show(string title, string message)
+        {
+            _snackbarService.Show(title, message, ControlAppearance.Info, null, TimeSpan.FromSeconds(2.6));
+        }
+
+        public void ShowSuccess(string message)
+        {
+            _snackbarService.Show("成功", message, ControlAppearance.Success, null, TimeSpan.FromSeconds(2.6));
+        }
+
+        public void ShowError(string message)
+        {
+            _snackbarService.Show("错误", message, ControlAppearance.Danger, null, TimeSpan.FromSeconds(2.6));
+        }
     }
 }

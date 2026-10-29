@@ -1,3 +1,4 @@
+using System;
 using System.Windows;
 using System.Windows.Input;
 
@@ -51,10 +52,33 @@ namespace LLM_Wiki.Views.Dialogs
             set => SetValue(FilePathProperty, value);
         }
 
+        // 保存前的文档内容，用于 dirty 状态检查
+        private string _savedContent = "";
+
         public EditorDialog()
         {
             InitializeComponent();
             DataContext = this;
+            _savedContent = EditorContent;
+        }
+
+        /// <summary>
+        /// 清除 dirty 状态，通常在文件写入成功后调用
+        /// </summary>
+        public void ClearDirty()
+        {
+            _savedContent = EditorContent;
+            DirtyText.Visibility = Visibility.Collapsed;
+        }
+
+        /// <summary>
+        /// 设置已加载的内容（用于初始化时同步 dirty 状态）
+        /// </summary>
+        public void SetLoadedContent(string content)
+        {
+            EditorContent = content;
+            _savedContent = content;
+            DirtyText.Visibility = Visibility.Collapsed;
         }
 
         private static void OnModeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -66,7 +90,12 @@ namespace LLM_Wiki.Views.Dialogs
         private static void OnEditorContentChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             if (d is EditorDialog dlg)
-                dlg.EditorBox.Text = dlg.EditorContent;
+            {
+                // 避免 cursor 跳转 - 仅在 Text 不同时更新
+                var newValue = (string)e.NewValue;
+                if (dlg.EditorBox.Text != newValue)
+                    dlg.EditorBox.Text = newValue;
+            }
         }
 
         private void ApplyMode()
@@ -99,6 +128,7 @@ namespace LLM_Wiki.Views.Dialogs
                 }
 
                 Saved?.Invoke(EditorContent);
+                MsgText.Text = "";
                 Hide(ContentDialogResult.Primary);
             }
             else if (button == ContentDialogButton.Secondary || button == ContentDialogButton.Close)
@@ -129,7 +159,8 @@ namespace LLM_Wiki.Views.Dialogs
         private void OnEditorTextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
         {
             EditorContent = EditorBox.Text;
-            DirtyText.Visibility = Visibility.Visible;
+            // E6：dirty 标记 - 当内容与保存的内容不同时显示
+            DirtyText.Visibility = EditorContent != _savedContent ? Visibility.Visible : Visibility.Collapsed;
             MsgText.Text = "";
         }
     }
