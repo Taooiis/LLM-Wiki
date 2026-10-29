@@ -65,14 +65,14 @@
 
 | 优先级 | 功能 | 对应 demo | 当前状态 | 预估 |
 |--------|------|-----------|----------|------|
-| **P0** | 上传：文件选择 + 写入 raw/sources/ + log + 变更记录 | demo upload() | ✅ 已实现（md/txt 仅，docx/xlsx 转换未做） | — |
-| **P0** | 上传：docx/xlsx → Markdown 副本 + 原件保留 raw/original/ | demo §6 + 设计文档 D5 | ❌ 未做（需定第三方转换库） | 1~2d |
-| **P0** | 编辑器弹窗：Ctrl+S / Esc / dirty 标记 / toast | demo modalOverlay | ⚠️ 部分（页面内编辑，无弹窗/快捷键/toast） | 0.5d |
-| **P1** | 待处理变更 → 工作流页 Ingest 联动（勾选变更 → 跳页 → 生成提示词） | demo genChangesPrompt | ❌ 未做（工作流 Ingest 是静态模板） | 0.5d |
-| **P1** | 边界说明：动态读取 purpose.md/schema.md/index.md/目录树生成 | demo genBoundary | ❌ 未做（工作流边界说明是静态文本） | 0.5d |
-| **P1** | 文件夹选择器：常用位置 + 面包屑 + 局域网点选 | demo pickOverlay | ❌ 未做（ConfigPage 只用 OpenFileDialog 选文件） | 1d |
-| **P2** | 小白指南页 | demo p4 | ❌ 未做 | 0.5d |
-| **P2** | Office 转换库选型与实现（docx/xlsx → Markdown） | 设计文档 §6.2 | ❌ 未做（需定库：OpenXML/ClosedXML/MiniExcel） | 2~3d |
+| **P0** | 上传：文件选择 + 写入 raw/sources/ + log + 变更记录 | demo upload() | ✅ 已实现（md/txt/docx/xlsx） | — |
+| **P0** | 上传：docx/xlsx → Markdown 副本 + 原件保留 raw/original/ | demo §6 + 设计文档 D5 | ✅ 已实现（OfficeConverter + OpenXML） | — |
+| **P0** | 编辑器弹窗：Ctrl+S / Esc / dirty 标记 / toast | demo modalOverlay | ✅ 全部实现 | — |
+| **P1** | 待处理变更 → 工作流页 Ingest 联动（勾选变更 → 跳页 → 生成提示词） | demo genChangesPrompt | ✅ 已实现 | — |
+| **P1** | 边界说明：动态读取 purpose.md/schema.md/index.md/目录树生成 | demo genBoundary | ✅ 已实现 | — |
+| **P1** | 文件夹选择器：常用位置 + 面包屑 + 局域网点选 | demo pickOverlay | ✅ 已实现（F1-F6） | 1d |
+| **P2** | 小白指南页 | demo p4 | ✅ 已实现（Expander 折叠面板） | 0.5d |
+| **P2** | Office 转换库选型与实现（docx/xlsx → Markdown） | 设计文档 §6.2 | ✅ 已实现（OpenXML） | 2~3d |
 
 ## 四、关键设计决策（已定）
 

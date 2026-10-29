@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -170,23 +171,60 @@ namespace LLM_Wiki.Views.Dialogs
 
         /// <summary>
         /// 加载当前目录下的所有子文件夹。
+        /// 支持本地路径 + UNC 网络路径。
         /// </summary>
         private void LoadFolders()
         {
             Folders.Clear();
 
-            if (!Directory.Exists(CurrentPath))
-            {
-                return;
-            }
-
             try
             {
-                // 上一级
-                var parent = Directory.GetParent(CurrentPath);
-                if (parent != null)
+                // UNC 路径特殊处理：\\ComputerName 或 \\ComputerName\Share
+                if (CurrentPath.StartsWith(@"\\"))
                 {
-                    Folders.Add(new FolderItem("..", parent.FullName, isParent: true));
+                    var parts = CurrentPath.TrimEnd('\\').Split('\\');
+                    // \\ComputerName —— 显示计算机的共享列表
+                    if (parts.Length == 2)
+                    {
+                        var computer = parts[1];
+                        try
+                        {
+                            foreach (var share in new DirectoryInfo(CurrentPath).GetDirectories())
+                            {
+                                Folders.Add(new FolderItem(share.Name, share.FullName, isParent: false));
+                            }
+                        }
+                        catch
+                        {
+                            // 无权限访问共享列表，显示空
+                        }
+                        return;
+                    }
+                    // \\ComputerName\Share —— 父级是 \\ComputerName
+                    var parent = currentPathParent(CurrentPath);
+                    if (!string.IsNullOrEmpty(parent))
+                    {
+                        Folders.Add(new FolderItem("..", parent, isParent: true));
+                    }
+                    foreach (var dir in Directory.GetDirectories(CurrentPath))
+                    {
+                        var info = new DirectoryInfo(dir);
+                        Folders.Add(new FolderItem(info.Name, info.FullName, isParent: false));
+                    }
+                    return;
+                }
+
+                // 本地路径普通处理
+                if (!Directory.Exists(CurrentPath))
+                {
+                    return;
+                }
+
+                // 上一级
+                var localParent = Directory.GetParent(CurrentPath);
+                if (localParent != null)
+                {
+                    Folders.Add(new FolderItem("..", localParent.FullName, isParent: true));
                 }
 
                 // 子文件夹
@@ -203,7 +241,20 @@ namespace LLM_Wiki.Views.Dialogs
         }
 
         /// <summary>
-        /// 定位到当前路径的父目录。
+        /// UNC 路径的上一级目录。
+        /// \\A\B\C → \\A\B
+        /// \\A\B → \\A
+        /// \\A → 根，无父级
+        /// </summary>
+        private static string? currentPathParent(string uncPath)
+        {
+            var parts = uncPath.TrimEnd('\\').Split('\\');
+            if (parts.Length <= 2) return null; // \\ComputerName 没有上级
+            return string.Join("\\", parts.Take(parts.Length - 1));
+        }
+
+        /// <summary>
+        /// 定位到当前路径的父目录（支持本地 + UNC）。
         /// </summary>
         private void NavigateUp()
         {
@@ -214,10 +265,20 @@ namespace LLM_Wiki.Views.Dialogs
 
             try
             {
-                var parent = Directory.GetParent(CurrentPath);
-                if (parent != null)
+                string? parent;
+                if (CurrentPath.StartsWith(@"\\"))
                 {
-                    NavigateTo(parent.FullName);
+                    // UNC 路径：\\Comp\Share\Sub → \\Comp\Share； \\Comp\Share → \\Comp； \\Comp → 根
+                    parent = currentPathParent(CurrentPath);
+                }
+                else
+                {
+                    parent = Directory.GetParent(CurrentPath)?.FullName;
+                }
+
+                if (!string.IsNullOrEmpty(parent))
+                {
+                    NavigateTo(parent);
                 }
             }
             catch
@@ -267,6 +328,34 @@ namespace LLM_Wiki.Views.Dialogs
             if (!string.IsNullOrWhiteSpace(Address))
             {
                 NavigateTo(Address);
+            }
+        }
+
+        /// <summary>
+        /// 处理网络按钮点击：枚举局域网计算机。
+        /// </summary>
+        private void OnNetworkClick(object sender, RoutedEventArgs e)
+        {
+            // 枚举网络计算机：Directory.GetDirectories("\\") 返回 \\ComputerName 列表
+            Folders.Clear();
+
+            try
+            {
+                var computers = Directory.GetDirectories(@"\\");
+                foreach (var comp in computers)
+                {
+                    // GetDirectories 返回的格式类似 \\ComputerName\
+                    var name = new DirectoryInfo(comp).Name;
+                    if (!string.IsNullOrEmpty(name))
+                    {
+                        Folders.Add(new FolderItem(name, comp.TrimEnd('\\'), isParent: false, isNetwork: true));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // 网络浏览失败（可能未加入工作群域或无权限），显示空列表
+                Folders.Add(new FolderItem($"网络浏览失败：{ex.Message}", "", isParent: false, isNetwork: false));
             }
         }
 
@@ -347,15 +436,19 @@ namespace LLM_Wiki.Views.Dialogs
     /// </summary>
     public class FolderItem
     {
-        public FolderItem(string name, string path, bool isParent = false)
+        public FolderItem(string name, string path, bool isParent = false, bool isNetwork = false)
         {
             Name = name;
             Path = path;
             IsParent = isParent;
+            IsNetwork = isNetwork;
         }
 
         public string Name { get; }
         public string Path { get; }
         public bool IsParent { get; }
+        public bool IsNetwork { get; }
+
+        public override string ToString() => IsParent ? ".." : Name;
     }
 }

@@ -44,6 +44,13 @@
         Margin="2,0"
         Width="80"
         Icon="Fluent24" />
+      <ui:Button
+        x:Name="NetworkBtn"
+        Content="网络"
+        Click="OnNetworkClick"
+        Margin="2,0"
+        Width="80"
+        Icon="NetworkConnected24" />
     </WrapPanel>
 
     <!-- 面包屑导航 -->
