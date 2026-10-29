@@ -158,7 +158,6 @@ namespace LLM_Wiki.ViewModels.Pages
             sb.AppendLine();
 
             // 读取目录树（前 120 项）
-            var treeError = "";
             var treeItems = _fileBridge.Tree(kb);
             var files = new List<string>();
             FlattenTree(treeItems, "", files, 120);
