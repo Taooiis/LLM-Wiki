@@ -3,6 +3,8 @@ using System.Windows;
 using Wpf.Ui;
 using Wpf.Ui.Controls;
 
+
+
 namespace LLM_Wiki.Services
 {
     /// <summary>
@@ -44,6 +46,14 @@ namespace LLM_Wiki.Services
         public void Show(string title, string message)
         {
             _snackbarService.Show(title, message, ControlAppearance.Info, null, TimeSpan.FromSeconds(2.6));
+        }
+
+        /// <summary>
+        /// 显示自定义 toast（用于更新提示等长时间显示场景）。
+        /// </summary>
+        public void Show(string title, string message, ControlAppearance appearance, TimeSpan timeout)
+        {
+            _snackbarService.Show(title, message, appearance, null, timeout);
         }
 
         public void ShowSuccess(string message)

@@ -53,6 +53,13 @@ namespace LLM_Wiki.Services
                 _navigationWindow!.ShowWindow();
 
                 _navigationWindow.Navigate(typeof(Views.Pages.DashboardPage));
+
+                // 启动后异步检查更新（不阻塞）
+                _ = Task.Run(() =>
+                {
+                    var updater = _serviceProvider.GetService<UpdateService>();
+                    updater?.CheckAsync();
+                });
             }
 
             await Task.CompletedTask;

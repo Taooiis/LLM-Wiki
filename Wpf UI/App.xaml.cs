@@ -75,6 +75,7 @@ namespace LLM_Wiki
                 services.AddSingleton<KbService>(sp => new KbService(Path.Combine(AppContext.BaseDirectory, "wikis")));
                 services.AddSingleton<ISnackbarService, SnackbarService>();
                 services.AddSingleton<ToastService>();
+                services.AddSingleton<UpdateService>();
             }).Build();
 
         /// <summary>
