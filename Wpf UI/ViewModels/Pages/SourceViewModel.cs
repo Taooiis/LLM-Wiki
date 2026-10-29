@@ -156,7 +156,6 @@ namespace LLM_Wiki.ViewModels.Pages
             LoadChanges(SelectedKb);
         }
 
-        [RelayCommand]
         private void ClearChange(string fileName)
         {
             if (string.IsNullOrWhiteSpace(SelectedKb) || string.IsNullOrWhiteSpace(fileName))
@@ -178,21 +177,6 @@ namespace LLM_Wiki.ViewModels.Pages
         {
             LoadFiles(SelectedKb);
             LoadChanges(SelectedKb);
-        }
-
-        [RelayCommand]
-        private void GenerateIngestForChange(string file)
-        {
-            if (string.IsNullOrWhiteSpace(SelectedKb) || string.IsNullOrWhiteSpace(file))
-            {
-                return;
-            }
-
-            _mainViewModel.PendingIngestFiles.Clear();
-            _mainViewModel.PendingIngestFiles.Add(file);
-            _mainViewModel.PendingIngestKb = SelectedKb;
-
-            _navigationService.Navigate(typeof(Views.Pages.WorkflowPage));
         }
 
         [RelayCommand]
