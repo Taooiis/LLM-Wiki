@@ -53,7 +53,6 @@
         <ui:Button
           Content="上传"
           Command="{Binding ViewModel.UploadFileCommand}"
-          CommandParameter="{Binding ElementName=KbList, Path=SelectedItem}"
           Margin="4,0,0,0"
           Icon="Fluent24" />
         <ui:Button
