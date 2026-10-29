@@ -156,17 +156,6 @@ namespace LLM_Wiki.ViewModels.Pages
             LoadChanges(SelectedKb);
         }
 
-        private void ClearChange(string fileName)
-        {
-            if (string.IsNullOrWhiteSpace(SelectedKb) || string.IsNullOrWhiteSpace(fileName))
-            {
-                return;
-            }
-
-            _fileBridge.ClearChanges(SelectedKb, new[] { fileName });
-            LoadChanges(SelectedKb);
-        }
-
         public bool SaveFile(string kb, string rel, string content, out string error)
         {
             return _fileBridge.WriteText(kb, rel, content, out error);
