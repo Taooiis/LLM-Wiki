@@ -24,7 +24,7 @@ namespace LLM_Wiki.Views.Pages
 
             InitializeComponent();
 
-            _folderPicker = new FolderPickerDialog();
+            _folderPicker = (FolderPickerDialog)Resources["FolderPickerDlg"];
         }
 
         private async void OnBrowseClick(object sender, RoutedEventArgs e)

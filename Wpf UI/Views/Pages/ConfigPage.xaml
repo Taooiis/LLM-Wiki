@@ -6,6 +6,7 @@
   xmlns:local="clr-namespace:LLM_Wiki.Views.Pages"
   xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
   xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  xmlns:dialogs="clr-namespace:LLM_Wiki.Views.Dialogs"
   Title="ConfigPage"
   d:DataContext="{d:DesignInstance local:ConfigPage, IsDesignTimeCreatable=False}"
   d:DesignHeight="600"
@@ -15,6 +16,10 @@
   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
   mc:Ignorable="d"
 >
+  <Page.Resources>
+    <dialogs:FolderPickerDialog x:Key="FolderPickerDlg" />
+  </Page.Resources>
+
   <Grid>
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />

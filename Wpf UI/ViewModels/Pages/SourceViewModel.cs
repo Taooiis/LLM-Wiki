@@ -220,7 +220,7 @@ namespace LLM_Wiki.ViewModels.Pages
                 Multiselect = false
             };
 
-            if (dialog.ShowDialog() != true)
+            if (dialog.ShowDialog(Application.Current.MainWindow) != true)
             {
                 return;
             }
