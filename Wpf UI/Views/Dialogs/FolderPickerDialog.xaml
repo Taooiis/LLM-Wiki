@@ -64,14 +64,14 @@
         x:Name="CurrentPathText"
         Margin="4,0"
         VerticalAlignment="Center"
-        Text="{Binding CurrentPath, RelativeSource={RelativeSource AncestorType=ContentDialog}}"
+        Text="{Binding CurrentPath, RelativeSource={RelativeSource AncestorType=ui:ContentDialog}}"
         TextWrapping="NoWrap" />
       <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Text="|" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
       <ui:TextBox
         x:Name="AddressInput"
         Width="300"
         VerticalAlignment="Center"
-        Text="{Binding Address, RelativeSource={RelativeSource AncestorType=ContentDialog}, UpdateSourceTrigger=PropertyChanged}" />
+        Text="{Binding Address, RelativeSource={RelativeSource AncestorType=ui:ContentDialog}, UpdateSourceTrigger=PropertyChanged}" />
       <ui:Button
         Content="前往"
         Click="OnNavigateToAddress"
