@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
-using System.Windows;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -16,12 +15,14 @@ namespace LLM_Wiki.ViewModels.Pages
         private readonly ConfigService _configService;
         private readonly FileBridge _fileBridge;
         private readonly MainWindowViewModel _mainViewModel;
+        private readonly ToastService _toastService;
 
-        public ConfigViewModel(ConfigService configService, FileBridge fileBridge, MainWindowViewModel mainViewModel)
+        public ConfigViewModel(ConfigService configService, FileBridge fileBridge, MainWindowViewModel mainViewModel, ToastService toastService)
         {
             _configService = configService;
             _fileBridge = fileBridge;
             _mainViewModel = mainViewModel;
+            _toastService = toastService;
 
             _mainViewModel.PropertyChanged += MainViewModel_PropertyChanged;
 
@@ -87,12 +88,12 @@ namespace LLM_Wiki.ViewModels.Pages
         {
             if (string.IsNullOrWhiteSpace(SelectedKb))
             {
-                MessageBox.Show("请先选择知识库", "保存 purpose.md", MessageBoxButton.OK);
+                _toastService.ShowWarning("请先选择知识库");
                 return;
             }
 
             _fileBridge.WriteText(SelectedKb, "purpose.md", content, out _);
-            MessageBox.Show("purpose.md 已保存", "保存", MessageBoxButton.OK);
+            _toastService.ShowSuccess("purpose.md 已保存");
         }
 
         [RelayCommand]
@@ -100,12 +101,12 @@ namespace LLM_Wiki.ViewModels.Pages
         {
             if (string.IsNullOrWhiteSpace(SelectedKb))
             {
-                MessageBox.Show("请先选择知识库", "保存 schema.md", MessageBoxButton.OK);
+                _toastService.ShowWarning("请先选择知识库");
                 return;
             }
 
             _fileBridge.WriteText(SelectedKb, "schema.md", content, out _);
-            MessageBox.Show("schema.md 已保存", "保存", MessageBoxButton.OK);
+            _toastService.ShowSuccess("schema.md 已保存");
         }
 
         [RelayCommand]
@@ -144,7 +145,7 @@ namespace LLM_Wiki.ViewModels.Pages
         {
             if (!IsPathValid)
             {
-                MessageBox.Show("存储路径无效，请先修正", "保存路径", MessageBoxButton.OK);
+                _toastService.ShowWarning("存储路径无效，请先修正");
                 return;
             }
 
@@ -152,28 +153,12 @@ namespace LLM_Wiki.ViewModels.Pages
             var ok = _configService.SetWikisDir(WikisDirInput, out error);
             if (!ok)
             {
-                MessageBox.Show(error, "保存路径失败", MessageBoxButton.OK);
+                _toastService.ShowError("保存路径失败：" + error);
                 return;
             }
 
             WikisDir = _configService.WikisDir;
-            MessageBox.Show($"存储路径已更新：{WikisDir}", "保存路径", MessageBoxButton.OK);
-        }
-
-        [RelayCommand]
-        private void BrowseWikisDir()
-        {
-            var dialog = new Microsoft.Win32.OpenFolderDialog
-            {
-                Title = "选择知识库存储目录",
-                InitialDirectory = WikisDirInput
-            };
-
-            if (dialog.ShowDialog() == true)
-            {
-                WikisDirInput = dialog.FolderName;
-                ValidateWikisDir();
-            }
+            _toastService.ShowSuccess("存储路径已更新：" + WikisDir);
         }
 
         [RelayCommand]
