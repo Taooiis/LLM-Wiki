@@ -24,7 +24,7 @@ namespace LLM_Wiki.Views.Dialogs
 
         public static readonly DependencyProperty FilePathProperty =
             DependencyProperty.Register(nameof(FilePath), typeof(string), typeof(EditorDialog),
-                new PropertyMetadata(""));
+                new PropertyMetadata("", OnFilePathChanged));
 
         public event Action<string>? Saved;
 
@@ -79,6 +79,15 @@ namespace LLM_Wiki.Views.Dialogs
             EditorContent = content;
             _savedContent = content;
             DirtyText.Visibility = Visibility.Collapsed;
+        }
+
+        private static void OnFilePathChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            // 弹窗顶部路径栏跟随 FilePath（Exist 模式显示完整相对路径）
+            if (d is EditorDialog dlg)
+            {
+                dlg.FilePathText.Text = (string)e.NewValue;
+            }
         }
 
         private static void OnModeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
