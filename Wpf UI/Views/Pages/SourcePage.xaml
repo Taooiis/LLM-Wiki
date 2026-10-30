@@ -18,6 +18,7 @@
 >
   <Page.Resources>
     <dialogs:EditorDialog x:Key="EditorDlg" />
+    <dialogs:ConfirmationDialog x:Key="ConfirmDlg" />
   </Page.Resources>
 
   <!-- 根布局：各区自带滚动（去外层 ScrollViewer，让 * 行真正撑满视口高度） -->
@@ -51,25 +52,22 @@
       <StackPanel Grid.Column="2"
                   Orientation="Horizontal"
                   HorizontalAlignment="Right">
-        <ui:TextBox
-          x:Name="NewFileNameInput"
-          Width="140"
-          Margin="0,0,8,0"
-          PlaceholderText="文件名（.md/.txt）"
-          Background="{DynamicResource ApplicationBackgroundBrush}"
-          Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-          BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
         <ui:Button
           Content="新建"
-          Command="{Binding ViewModel.CreateFileCommand}"
-          CommandParameter="{Binding ElementName=NewFileNameInput, Path=Text}"
+          Click="OnNewClick"
           Margin="0,0,8,0"
           Icon="Add24" />
         <ui:Button
           x:Name="UploadBtn"
           Content="上传"
           Click="OnUploadClick"
+          Margin="0,0,8,0"
           Icon="Upload24" />
+        <ui:Button
+          x:Name="DeleteFileBtn"
+          Content="删除"
+          Click="OnDeleteClick"
+          Icon="Delete24" />
       </StackPanel>
     </Grid>
 

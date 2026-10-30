@@ -73,12 +73,10 @@ namespace LLM_Wiki.ViewModels.Pages
                 return;
             }
 
-            foreach (var item in _fileBridge.Tree(kb))
+            // 只列源文档（raw/sources/ 下 md/txt），不再取树顶层
+            foreach (var name in _fileBridge.Sources(kb))
             {
-                if (item.Type == "file")
-                {
-                    Files.Add(item.Name);
-                }
+                Files.Add(name);
             }
         }
 
@@ -112,25 +110,6 @@ namespace LLM_Wiki.ViewModels.Pages
         }
 
         [RelayCommand]
-        private void CreateFile(string fileName)
-        {
-            if (string.IsNullOrWhiteSpace(SelectedKb) || string.IsNullOrWhiteSpace(fileName))
-            {
-                return;
-            }
-
-            var name = fileName.Trim();
-            if (!name.EndsWith(".md", StringComparison.OrdinalIgnoreCase) &&
-                !name.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
-            {
-                name += ".md";
-            }
-
-            _fileBridge.WriteText(SelectedKb, name, "", out _);
-            LoadFiles(SelectedKb);
-        }
-
-        [RelayCommand]
         private void DeleteFile(string fileName)
         {
             if (string.IsNullOrWhiteSpace(SelectedKb) || string.IsNullOrWhiteSpace(fileName))
@@ -138,7 +117,8 @@ namespace LLM_Wiki.ViewModels.Pages
                 return;
             }
 
-            _fileBridge.Delete(SelectedKb, fileName, out _);
+            // 列表存的是文件名，源文档统一位于 raw/sources/ 下
+            _fileBridge.Delete(SelectedKb, "raw/sources/" + fileName, out _);
             LoadFiles(SelectedKb);
             DocumentContent = string.Empty;
             SelectedFile = string.Empty;
