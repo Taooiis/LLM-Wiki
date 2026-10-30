@@ -71,6 +71,7 @@ namespace LLM_Wiki.ViewModels.Pages
                 return;
             }
 
+            // TODO(Task 6): 根目录改为走 FileBridge/ConfigService，此处为既有硬编码
             KbPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "wikis", kb));
             BuildPromptCards();
         }
@@ -87,21 +88,25 @@ namespace LLM_Wiki.ViewModels.Pages
 
             PromptCards.Add(new PromptCard(
                 "边界说明",
-                "定义 Agent 对本知识库的读写边界与行为规范。",
+                "定义 Agent 对本知识库的读写边界与行为规范。粘贴进 Agent 配置（全局 AGENTS.md 等）后可直接读取本库。",
                 BuildBoundaryPrompt(kbPath, SelectedKb)));
 
             PromptCards.Add(new PromptCard(
                 "Ingest（批量）",
-                "将知识库内所有源文档纳入索引，生成全量 Ingest 提示词。",
+                "将知识库内所有源文档纳入索引；在上方输入文件名（逗号分隔、留空=全部）后点生成可定制范围。",
                 BuildIngestPrompt(kbPath, false, null)));
 
             PromptCards.Add(new PromptCard(
                 "Ingest（增量）",
                 "仅处理 .changes.json 中标记的待处理变更文件。",
-                BuildIngestPrompt(kbPath, true, null)));            PromptCards.Add(new PromptCard(
+                BuildIngestPrompt(kbPath, true, null)));
+
+            PromptCards.Add(new PromptCard(
                 "Query",
                 "基于知识库内容回答问题，要求带来源引用。",
-                BuildQueryPrompt(kbPath)));
+                BuildQueryPrompt(kbPath, ""),
+                showInput: true,
+                inputPlaceholder: "输入你的问题，如：星尘X9的售价和续航？"));
 
             PromptCards.Add(new PromptCard(
                 "Lint",
@@ -111,7 +116,9 @@ namespace LLM_Wiki.ViewModels.Pages
             PromptCards.Add(new PromptCard(
                 "Compare",
                 "对比多个源文档的差异与共同点。",
-                BuildComparePrompt(kbPath)));
+                BuildComparePrompt(kbPath, ""),
+                showInput: true,
+                inputPlaceholder: "输入对比主题，如：Cursor vs Copilot"));
 
             PromptCards.Add(new PromptCard(
                 "Clean（级联清理）",
@@ -228,12 +235,16 @@ namespace LLM_Wiki.ViewModels.Pages
             return sb.ToString();
         }
 
-        private static string BuildQueryPrompt(string kbPath)
+        private static string BuildQueryPrompt(string kbPath, string question)
         {
+            var q = string.IsNullOrWhiteSpace(question) ? "（待填写：请在卡片输入框输入问题后复制）" : question.Trim();
             var sb = new StringBuilder();
             sb.AppendLine("# Query（" + kbPath + "）");
             sb.AppendLine();
             sb.AppendLine("你是一个基于知识库的问答 Agent，目标路径：" + kbPath);
+            sb.AppendLine();
+            sb.AppendLine("## 我的问题");
+            sb.AppendLine(q);
             sb.AppendLine();
             sb.AppendLine("## 任务");
             sb.AppendLine("- 根据用户问题，在 wiki/sources/、wiki/entities/、wiki/concepts/ 中检索相关内容");
@@ -267,12 +278,16 @@ namespace LLM_Wiki.ViewModels.Pages
             return sb.ToString();
         }
 
-        private static string BuildComparePrompt(string kbPath)
+        private static string BuildComparePrompt(string kbPath, string topic)
         {
+            var t = string.IsNullOrWhiteSpace(topic) ? "（待填写：请在卡片输入框输入对比主题后复制）" : topic.Trim();
             var sb = new StringBuilder();
             sb.AppendLine("# Compare（" + kbPath + "）");
             sb.AppendLine();
             sb.AppendLine("你是一个知识库对比 Agent，目标路径：" + kbPath);
+            sb.AppendLine();
+            sb.AppendLine("## 对比主题");
+            sb.AppendLine(t);
             sb.AppendLine();
             sb.AppendLine("## 任务");
             sb.AppendLine("- 用户指定两个或多个源文档");
@@ -319,15 +334,35 @@ namespace LLM_Wiki.ViewModels.Pages
                 return;
             }
 
+            // 参数化卡：复制前按当前输入重新生成，保证剪贴板内容与输入一致
+            var content = card.Title switch
+            {
+                "Query" => BuildQueryPrompt(KbPath, card.Input),
+                "Compare" => BuildComparePrompt(KbPath, card.Input),
+                _ => card.PromptContent
+            };
+            if (content != card.PromptContent)
+            {
+                card.PromptContent = content;
+            }
+
             try
             {
-                System.Windows.Clipboard.SetText(card.PromptContent);
+                System.Windows.Clipboard.SetText(content);
                 _toastService.ShowSuccess($"已复制：{card.Title}");
             }
             catch
             {
                 _toastService.ShowError("复制剪贴板失败");
             }
+        }
+
+        /// <summary>归一化源文件名：变更记录存的是含 raw/sources/ 前缀的相对路径，提示词统一用纯文件名，避免双前缀。</summary>
+        private static string NormalizeSourceName(string f)
+        {
+            var n = f.Trim().Replace('\\', '/');
+            const string prefix = "raw/sources/";
+            return n.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? n[prefix.Length..] : n;
         }
 
         [RelayCommand]
@@ -338,7 +373,7 @@ namespace LLM_Wiki.ViewModels.Pages
             {
                 files = IngestFiles
                     .Split(new[] { ',', '，', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
-                    .Select(f => f.Trim())
+                    .Select(NormalizeSourceName)
                     .Where(f => f.Length > 0)
                     .ToList();
             }
@@ -356,5 +391,32 @@ namespace LLM_Wiki.ViewModels.Pages
         }
     }
 
-    public record PromptCard(string Title, string Description, string PromptContent);
+    /// <summary>工作流提示词卡；Query/Compare 带输入框，复制前按输入重新生成。</summary>
+    public partial class PromptCard : ObservableObject
+    {
+        public string Title { get; }
+        public string Description { get; }
+
+        [ObservableProperty]
+        private string _promptContent;
+
+        /// <summary>是否显示参数输入框（Query/Compare）。</summary>
+        public bool ShowInput { get; }
+
+        /// <summary>输入框占位文案。</summary>
+        public string InputPlaceholder { get; }
+
+        [ObservableProperty]
+        private string _input = "";
+
+        public PromptCard(string title, string description, string promptContent,
+            bool showInput = false, string inputPlaceholder = "")
+        {
+            Title = title;
+            Description = description;
+            _promptContent = promptContent;
+            ShowInput = showInput;
+            InputPlaceholder = inputPlaceholder;
+        }
+    }
 }

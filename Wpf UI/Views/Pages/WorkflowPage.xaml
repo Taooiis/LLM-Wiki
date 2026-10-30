@@ -15,8 +15,12 @@
   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
   mc:Ignorable="d"
 >
-  <Grid>
+  <Page.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+  </Page.Resources>
+  <Grid Margin="{StaticResource PageContentMargin}" MaxWidth="1100">
     <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
@@ -27,39 +31,46 @@
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
-      <TextBlock Grid.Column="0" FontSize="20" FontWeight="Medium" Text="工作流 - 提示词生成" />
-      <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-        <TextBlock
-          Text="{Binding ViewModel.KbPath, StringFormat='库: {0}'}"
-          Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-          VerticalAlignment="Center" />
-      </StackPanel>
+      <TextBlock Grid.Column="0" Style="{StaticResource PageTitleText}" Text="工作流 - 提示词生成" />
+      <TextBlock
+        Grid.Column="1"
+        Text="{Binding ViewModel.KbPath, StringFormat='库: {0}'}"
+        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+        VerticalAlignment="Center" />
     </Grid>
 
-    <!-- Ingest 文件名输入 -->
-    <Grid Grid.Row="0" Grid.RowSpan="1" Margin="0,40,0,0">
+    <!-- Ingest 文件名输入（独立一行，替代原先 Margin=0,40 的硬叠加） -->
+    <Grid Grid.Row="1" Margin="0,0,0,12">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="Auto" />
         <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
       <TextBlock
         Grid.Column="0"
         VerticalAlignment="Center"
         Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-        FontSize="13"
+        FontSize="{StaticResource FontSizeBody}"
         Text="Ingest 文件名：" />
       <ui:TextBox
         Grid.Column="1"
+        MinWidth="320"
         Margin="8,0,0,0"
         Text="{Binding ViewModel.IngestFiles, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
         PlaceholderText="如 xxx.md，多个用逗号分隔；留空=全部源文档"
         Background="{DynamicResource ApplicationBackgroundBrush}"
         Foreground="{DynamicResource TextFillColorPrimaryBrush}"
         BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
+      <ui:Button
+        Grid.Column="2"
+        Content="生成提示词"
+        Command="{Binding ViewModel.GenerateIngestCommand}"
+        Margin="8,0,0,0"
+        Icon="Sparkle24" />
     </Grid>
 
     <!-- 提示词卡片列表 -->
-    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
       <ItemsControl ItemsSource="{Binding ViewModel.PromptCards, Mode=OneWay}">
         <ItemsControl.ItemTemplate>
           <DataTemplate>
@@ -78,23 +89,34 @@
                   </Grid.ColumnDefinitions>
                   <TextBlock
                     Grid.Column="0"
-                    FontSize="16"
+                    FontSize="{StaticResource FontSizeBody}"
                     FontWeight="SemiBold"
+                    VerticalAlignment="Center"
                     Text="{Binding Title}" />
                   <ui:Button
                     Grid.Column="1"
                     Content="复制"
-                    Command="{Binding DataContext.CopyPromptCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                    Command="{Binding ViewModel.CopyPromptCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                     CommandParameter="{Binding Title}"
                     Margin="8,0,0,0"
-                    Icon="Fluent24" />
+                    Icon="Copy24" />
                 </Grid>
                 <TextBlock
                   Margin="0,4,0,8"
+                  FontSize="{StaticResource FontSizeBody}"
                   Text="{Binding Description}"
                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                   TextWrapping="Wrap" />
-                <TextBox
+                <!-- Query/Compare 的参数输入框：复制时按输入重新生成提示词 -->
+                <ui:TextBox
+                  Margin="0,0,0,8"
+                  Visibility="{Binding ShowInput, Converter={StaticResource BoolToVis}}"
+                  PlaceholderText="{Binding InputPlaceholder}"
+                  Text="{Binding Input, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                  Background="{DynamicResource ApplicationBackgroundBrush}"
+                  Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                  BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
+                <ui:TextBox
                   MinHeight="120"
                   MaxHeight="240"
                   Text="{Binding PromptContent, Mode=OneWay}"
