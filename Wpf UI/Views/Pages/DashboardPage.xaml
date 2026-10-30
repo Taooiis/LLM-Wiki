@@ -98,22 +98,22 @@
       <!-- ============ 欢迎 Banner（设计文档 01§3.2：纯色 #252B30，不用渐变） ============ -->
       <Border
         Grid.Row="2"
-        Height="116"
+        MinHeight="116"
         Margin="0,0,0,16"
-        Padding="24"
+        Padding="24,16,24,18"
         CornerRadius="10"
         Background="{DynamicResource BannerBackgroundBrush}">
         <Grid>
           <StackPanel VerticalAlignment="Center">
             <TextBlock
-              FontSize="20"
+              FontSize="18"
               FontWeight="SemiBold"
               Text="欢迎使用 LLM Wiki" />
             <TextBlock
-              Margin="0,6,0,0"
+              Margin="0,4,0,0"
               Text="把分散的资料整理为可持续维护的知识库。"
               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-            <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+            <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
               <ui:Button
                 Appearance="Primary"
                 Content="打开源文档"
@@ -315,6 +315,7 @@
                         Grid.Column="1"
                         VerticalAlignment="Center"
                         Appearance="Secondary"
+                        Content="删除"
                         Icon="Delete24"
                         ToolTip="删除该知识库"
                         Click="OnDeleteKbClick"

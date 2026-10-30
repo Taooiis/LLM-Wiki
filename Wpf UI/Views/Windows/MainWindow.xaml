@@ -56,6 +56,7 @@
             HorizontalAlignment="Right"
             VerticalAlignment="Center"
             Appearance="Secondary"
+            Content="指南"
             Click="OnGuideClick"
             Icon="Info24"
             ToolTip="小白指南" />
