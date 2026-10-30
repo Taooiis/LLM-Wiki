@@ -51,8 +51,6 @@ namespace LLM_Wiki
 
                 services.AddSingleton<DashboardPage>();
                 services.AddSingleton<DashboardViewModel>();
-                services.AddSingleton<DataPage>();
-                services.AddSingleton<DataViewModel>();
                 services.AddSingleton<SettingsPage>();
                 services.AddSingleton<SettingsViewModel>();
                 services.AddSingleton<SourcePage>();
@@ -71,8 +69,9 @@ namespace LLM_Wiki
 
                 // 功能迁移：本地服务（无 WebView2，Wpf UI 项目独立）
                 services.AddSingleton<ConfigService>(sp => new ConfigService(AppContext.BaseDirectory));
-                services.AddSingleton<FileBridge>(sp => new FileBridge(Path.Combine(AppContext.BaseDirectory, "wikis")));
-                services.AddSingleton<KbService>(sp => new KbService(Path.Combine(AppContext.BaseDirectory, "wikis")));
+                // FileBridge/KbService 构造接 ConfigService，存储路径改动全局即时生效（Task 6）
+                services.AddSingleton<FileBridge>();
+                services.AddSingleton<KbService>();
                 services.AddSingleton<ISnackbarService, SnackbarService>();
                 services.AddSingleton<ToastService>();
                 services.AddSingleton<UpdateService>();

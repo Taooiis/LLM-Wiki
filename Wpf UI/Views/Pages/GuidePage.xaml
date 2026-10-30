@@ -14,14 +14,14 @@
   ui:Design.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
   mc:Ignorable="d">
-  <Grid>
+  <Grid Margin="{StaticResource PageContentMargin}" MaxWidth="900">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
 
     <!-- 标题 -->
-    <TextBlock Grid.Row="0" FontSize="20" FontWeight="Medium" Text="小白指南（分类速查）" Margin="0,0,0,16" />
+    <TextBlock Grid.Row="0" Style="{StaticResource PageTitleText}" Text="小白指南（分类速查）" />
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
       <StackPanel Margin="0,0,0,12">
@@ -29,8 +29,6 @@
         <!-- 快速上手 -->
         <Expander
           Grid.Row="0"
-          FontSize="16"
-          FontWeight="SemiBold"
           IsExpanded="True"
           Margin="0,0,0,12">
           <Expander.Header>
@@ -46,8 +44,6 @@
         <!-- 日常使用 -->
         <Expander
           Grid.Row="1"
-          FontSize="16"
-          FontWeight="SemiBold"
           IsExpanded="True"
           Margin="0,0,0,12">
           <Expander.Header>
@@ -65,8 +61,6 @@
         <!-- 管理与配置 -->
         <Expander
           Grid.Row="2"
-          FontSize="16"
-          FontWeight="SemiBold"
           IsExpanded="False"
           Margin="0,0,0,12">
           <Expander.Header>
@@ -82,8 +76,6 @@
         <!-- AI 协作 -->
         <Expander
           Grid.Row="3"
-          FontSize="16"
-          FontWeight="SemiBold"
           IsExpanded="False"
           Margin="0,0,0,12">
           <Expander.Header>
@@ -99,8 +91,6 @@
         <!-- 运行与网络 -->
         <Expander
           Grid.Row="4"
-          FontSize="16"
-          FontWeight="SemiBold"
           IsExpanded="False"
           Margin="0,0,0,12">
           <Expander.Header>

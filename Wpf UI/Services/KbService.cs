@@ -4,10 +4,11 @@ namespace LLM_Wiki.Services;
 
 /// <summary>
 /// 知识库生命周期：列表 / 建库骨架（含场景模板）/ 删库（spec D7 语义）。
-/// 依赖注入 wikisDir（来自 ConfigService），不自己读配置。
+/// 依赖注入 config.WikisDir（来自 ConfigService），不自己读配置。
 /// </summary>
-public class KbService(string wikisDir)
+public class KbService(ConfigService config)
 {
+    private string WikisDir => config.WikisDir;
     // 新建库的骨架目录（对照 Demo server.js:51-55，新增 raw/original）
     private static readonly string[] SkeletonDirs =
     [
@@ -19,9 +20,9 @@ public class KbService(string wikisDir)
     /// <summary>现存库名列表（目录即库，跳过隐藏目录）。</summary>
     public IReadOnlyList<string> ListKbs()
     {
-        if (!Directory.Exists(wikisDir)) return [];
+        if (!Directory.Exists(config.WikisDir)) return [];
         return Directory
-            .EnumerateDirectories(wikisDir)
+            .EnumerateDirectories(config.WikisDir)
             .Select(d => Path.GetFileName(d))
             .Where(n => !n.StartsWith('.') && PathGuard.ValidKb(n))
             .OrderBy(n => n, StringComparer.Ordinal)
@@ -34,7 +35,7 @@ public class KbService(string wikisDir)
         if (!PathGuard.ValidKb(name))
             throw new ArgumentException("知识库名只允许中英文、数字、下划线、中划线", nameof(name));
 
-        var root = Path.Combine(wikisDir, name);
+        var root = Path.Combine(config.WikisDir, name);
         foreach (var d in SkeletonDirs) Directory.CreateDirectory(Path.Combine(root, d));
 
         // 场景模板：只影响 purpose/schema 文案（spec 02 §5）
@@ -65,7 +66,7 @@ public class KbService(string wikisDir)
         if (!PathGuard.ValidKb(name)) return (false, "知识库名非法");
         try { _ = ListKbs(); }
         catch (Exception e) { return (false, "存储路径不可达，禁止删除：" + e.Message); }
-        var root = Path.Combine(wikisDir, name);
+        var root = Path.Combine(config.WikisDir, name);
         if (!Directory.Exists(root)) return (false, "知识库不存在");
         return (true, "");
     }
@@ -75,6 +76,6 @@ public class KbService(string wikisDir)
     {
         var (ok, error) = ValidateDelete(name);
         if (!ok) throw new InvalidOperationException(error);
-        Directory.Delete(Path.Combine(wikisDir, name), true);
+        Directory.Delete(Path.Combine(config.WikisDir, name), true);
     }
 }

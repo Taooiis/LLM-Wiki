@@ -27,8 +27,8 @@ public class ShareService(ConfigService config)
 {
     // 存储路径与服务实例每次请求现取：改路径后分享立刻跟随新目录（不再固化构造时的旧值）
     private string Wikis => config.WikisDir;
-    private FileBridge Files => new(config.WikisDir);
-    private KbService Kbs => new(config.WikisDir);
+    private FileBridge Files => new(config);
+    private KbService Kbs => new(config);
     private IHost? _host;
     private IApplicationBuilder? _app;
     private int _port;

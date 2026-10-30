@@ -27,7 +27,7 @@
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
-      <TextBox
+      <ui:TextBox
         x:Name="FileNameInput"
         Grid.Column="0"
         Margin="0,0,8,0"
@@ -41,7 +41,7 @@
         Grid.Column="0"
         VerticalAlignment="Center"
         Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-        FontSize="12" />
+        FontSize="{StaticResource FontSizeCaption}" />
       <TextBlock
         x:Name="DirtyText"
         Grid.Column="1"
@@ -57,7 +57,7 @@
       Grid.Row="1"
       Margin="0,0,0,8"
       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-      FontSize="12"
+      FontSize="{StaticResource FontSizeCaption}"
       TextWrapping="Wrap" />
 
     <ui:TextBox
@@ -76,7 +76,7 @@
       Grid.Row="3"
       HorizontalAlignment="Right"
       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-      FontSize="12"
+      FontSize="{StaticResource FontSizeCaption}"
       Text="Ctrl+S 保存 · Esc 关闭 · 未保存会提醒" />
   </Grid>
 </ui:ContentDialog>

@@ -14,15 +14,16 @@ public record TreeItem(
 /// 文件桥：目录树 / md·txt 读写 / 删除 / 源列表 / 变更清单。
 /// 只服务纯文本文件；office 上传删除归 UploadService（成对语义，spec 02 §4）。
 /// </summary>
-public class FileBridge(string wikisDir)
+public class FileBridge(ConfigService config)
 {
+    private string WikisDir => config.WikisDir;
     private static readonly char[] Separators = ['\\', '/'];
 
     /// <summary>库根目录完整路径（显示与跨页共享用；Task 6 起根目录来源切到 ConfigService）。</summary>
-    public string KbRoot(string kb) => Path.GetFullPath(Path.Combine(wikisDir, kb));
+    public string KbRoot(string kb) => Path.GetFullPath(Path.Combine(config.WikisDir, kb));
 
     /// <summary>递归目录树：目录在前按名排序；跳过点号开头与 node_modules；wiki 区只认 md/txt，raw/original 下原件全认（spec 02 §4）。RelPath 相对库根。</summary>
-    public TreeItem[] Tree(string kb) => TreeDir(Path.Combine(wikisDir, kb), 0, inOriginal: false, rootDir: Path.Combine(wikisDir, kb));
+    public TreeItem[] Tree(string kb) => TreeDir(Path.Combine(config.WikisDir, kb), 0, inOriginal: false, rootDir: Path.Combine(config.WikisDir, kb));
 
     private TreeItem[] TreeDir(string dir, int depth, bool inOriginal, string rootDir)
     {
@@ -72,7 +73,7 @@ public class FileBridge(string wikisDir)
     public string? ReadText(string kb, string rel, out string error)
     {
         error = "";
-        var p = PathGuard.SafeJoin(wikisDir, kb, rel);
+        var p = PathGuard.SafeJoin(config.WikisDir, kb, rel);
         if (p == null || !FileHelper.IsTextFile(Path.GetFileName(p)))
         {
             error = "只允许读写 md/txt";
@@ -90,7 +91,7 @@ public class FileBridge(string wikisDir)
     public bool WriteText(string kb, string rel, string content, out string error)
     {
         error = "";
-        var p = PathGuard.SafeJoin(wikisDir, kb, rel);
+        var p = PathGuard.SafeJoin(config.WikisDir, kb, rel);
         if (p == null || rel == null || !FileHelper.IsTextFile(Path.GetFileName(p)))
         {
             error = "只允许读写 md/txt";
@@ -102,12 +103,12 @@ public class FileBridge(string wikisDir)
         var n = rel.Replace(Separators[0], Separators[1]);
         if (IsSourceRel(n))
         {
-            LogWriter.AppendSource(wikisDir, kb, n, "源文档编辑保存");
-            ChangeStore.Record(wikisDir, kb, n, "编辑", HashUtil.Sha256Text(content));
+            LogWriter.AppendSource(config.WikisDir, kb, n, "源文档编辑保存");
+            ChangeStore.Record(config.WikisDir, kb, n, "编辑", HashUtil.Sha256Text(content));
         }
         else if (n == "purpose.md" || n == "schema.md")
         {
-            LogWriter.AppendSource(wikisDir, kb, n, "配置更新", "");
+            LogWriter.AppendSource(config.WikisDir, kb, n, "配置更新", "");
         }
         return true;
     }
@@ -116,7 +117,7 @@ public class FileBridge(string wikisDir)
     public bool Delete(string kb, string rel, out string error)
     {
         error = "";
-        var p = PathGuard.SafeJoin(wikisDir, kb, rel);
+        var p = PathGuard.SafeJoin(config.WikisDir, kb, rel);
         if (p == null || rel == null || !FileHelper.IsTextFile(Path.GetFileName(p)))
         {
             error = "只允许删除 md/txt";
@@ -127,8 +128,8 @@ public class FileBridge(string wikisDir)
         var n = rel.Replace(Separators[0], Separators[1]);
         if (IsSourceRel(n))
         {
-            LogWriter.AppendSource(wikisDir, kb, n, "源文档删除");
-            ChangeStore.Record(wikisDir, kb, n, "删除", "");
+            LogWriter.AppendSource(config.WikisDir, kb, n, "源文档删除");
+            ChangeStore.Record(config.WikisDir, kb, n, "删除", "");
         }
         return true;
     }
@@ -136,20 +137,20 @@ public class FileBridge(string wikisDir)
     /// <summary>源列表：raw/sources/ 下 md/txt（office 副本为 .docx.md 形式，自然在列）。</summary>
     public string[] Sources(string kb)
     {
-        var dir = Path.Combine(wikisDir, kb, "raw", "sources");
+        var dir = Path.Combine(config.WikisDir, kb, "raw", "sources");
         return Directory.Exists(dir)
             ? [.. Directory.GetFiles(dir).Where(f => FileHelper.IsTextFile(Path.GetFileName(f))).Select(Path.GetFileName)!]
             : [];
     }
 
-    public List<Change> Changes(string kb) => ChangeStore.Load(wikisDir, kb);
+    public List<Change> Changes(string kb) => ChangeStore.Load(config.WikisDir, kb);
 
     /// <summary>标记已处理：按 file 清单清除；空清单清空全部（同 Demo /api/changes/clear）。</summary>
     public void ClearChanges(string kb, string[] files)
     {
-        var list = ChangeStore.Load(wikisDir, kb);
+        var list = ChangeStore.Load(config.WikisDir, kb);
         list = files.Length == 0 ? [] : [.. list.Where(e => !files.Contains(e.File))];
-        ChangeStore.SaveAll(wikisDir, kb, list);
+        ChangeStore.SaveAll(config.WikisDir, kb, list);
     }
 
     // raw/sources/ 判断（照 server.js:82-85）

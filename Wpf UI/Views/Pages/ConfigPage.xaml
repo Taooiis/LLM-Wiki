@@ -44,16 +44,18 @@
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto" />
               <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <!-- 当前路径 -->
             <TextBlock Grid.Row="0" Grid.Column="0"
-                       Grid.ColumnSpan="3"
+                       Grid.ColumnSpan="4"
                        Text="{Binding ViewModel.WikisDir, StringFormat='当前: {0}'}"
                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                        Margin="0,0,0,8" />
@@ -77,11 +79,16 @@
                        Content="保存"
                        Command="{Binding ViewModel.SaveWikisDirCommand}"
                        IsEnabled="{Binding ViewModel.IsPathValid}"
-                       Margin="0,0,0,0"
+                       Margin="0,0,8,0"
                        Icon="Save24" />
 
+            <ui:Button Grid.Row="1" Grid.Column="3"
+                       Content="恢复默认"
+                       Command="{Binding ViewModel.ResetWikisDirCommand}"
+                       Icon="ArrowCounterclockwise24" />
+
             <!-- 错误提示 -->
-            <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
+            <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="4"
                        Text="{Binding ViewModel.PathErrorMessage}"
                        Foreground="{DynamicResource TextFillColorDangerBrush}"
                        Margin="0,4,0,0" />

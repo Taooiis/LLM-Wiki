@@ -27,7 +27,7 @@
         Tag="Desktop"
         Margin="2,0"
         Width="80"
-        Icon="Fluent24" />
+        Icon="FolderOpen24" />
       <ui:Button
         x:Name="DocumentsBtn"
         Content="我的文档"
@@ -35,7 +35,7 @@
         Tag="Documents"
         Margin="2,0"
         Width="80"
-        Icon="Fluent24" />
+        Icon="FolderOpen24" />
       <ui:Button
         x:Name="AppDirBtn"
         Content="程序目录"
@@ -43,41 +43,42 @@
         Tag="AppDir"
         Margin="2,0"
         Width="80"
-        Icon="Fluent24" />
+        Icon="FolderOpen24" />
       <ui:Button
         x:Name="NetworkBtn"
         Content="网络"
         Click="OnNetworkClick"
         Margin="2,0"
         Width="80"
-        Icon="NetworkConnected24" />
+        Icon="Globe24" />
     </WrapPanel>
 
-    <!-- 面包屑导航 -->
-    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+    <!-- 面包屑导航：Grid 布局，路径长时输入框自适应收缩而不是溢出 -->
+    <Grid Grid.Row="1" Margin="0,0,0,8">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
       <TextBlock
         x:Name="BreadcrumbText"
+        Grid.Column="0"
         VerticalAlignment="Center"
         Foreground="{DynamicResource TextFillColorSecondaryBrush}"
         Text="当前路径：" />
-      <TextBlock
-        x:Name="CurrentPathText"
-        Margin="4,0"
-        VerticalAlignment="Center"
-        Text="{Binding CurrentPath, RelativeSource={RelativeSource AncestorType=ui:ContentDialog}}"
-        TextWrapping="NoWrap" />
-      <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Text="|" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
       <ui:TextBox
         x:Name="AddressInput"
-        Width="300"
+        Grid.Column="1"
+        Margin="4,0"
         VerticalAlignment="Center"
         Text="{Binding Address, RelativeSource={RelativeSource AncestorType=ui:ContentDialog}, UpdateSourceTrigger=PropertyChanged}" />
       <ui:Button
+        Grid.Column="2"
         Content="前往"
         Click="OnNavigateToAddress"
         Margin="4,0,0,0"
-        Icon="Fluent24" />
-    </StackPanel>
+        Icon="ArrowRight24" />
+    </Grid>
 
     <!-- 文件夹列表 -->
     <Grid Grid.Row="2">
@@ -104,7 +105,7 @@
       <ui:ListView
         x:Name="FolderList"
         Grid.Column="1"
-        SelectionChanged=" Folder_SelectionChanged">
+        SelectionChanged="Folder_SelectionChanged">
         <ui:ListView.ItemTemplate>
           <DataTemplate>
             <TextBlock>

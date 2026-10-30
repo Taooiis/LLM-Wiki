@@ -71,8 +71,7 @@ namespace LLM_Wiki.ViewModels.Pages
                 return;
             }
 
-            // TODO(Task 6): 根目录改为走 FileBridge/ConfigService，此处为既有硬编码
-            KbPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "wikis", kb));
+            KbPath = _fileBridge.KbRoot(kb);
             BuildPromptCards();
         }
 

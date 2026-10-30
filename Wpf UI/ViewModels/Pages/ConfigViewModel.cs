@@ -15,13 +15,15 @@ namespace LLM_Wiki.ViewModels.Pages
         private readonly ConfigService _configService;
         private readonly FileBridge _fileBridge;
         private readonly MainWindowViewModel _mainViewModel;
+        private readonly DashboardViewModel _dashboardViewModel;
         private readonly ToastService _toastService;
 
-        public ConfigViewModel(ConfigService configService, FileBridge fileBridge, MainWindowViewModel mainViewModel, ToastService toastService)
+        public ConfigViewModel(ConfigService configService, FileBridge fileBridge, MainWindowViewModel mainViewModel, DashboardViewModel dashboardViewModel, ToastService toastService)
         {
             _configService = configService;
             _fileBridge = fileBridge;
             _mainViewModel = mainViewModel;
+            _dashboardViewModel = dashboardViewModel;
             _toastService = toastService;
 
             _mainViewModel.PropertyChanged += MainViewModel_PropertyChanged;
@@ -158,16 +160,21 @@ namespace LLM_Wiki.ViewModels.Pages
             }
 
             WikisDir = _configService.WikisDir;
+            WikisDirInput = WikisDir;
+            // 存储路径变更立即生效：重载库列表（选中失效时自动回退到首个库，见 Dashboard.LoadKbs）
+            _dashboardViewModel.LoadKbs();
             _toastService.ShowSuccess("存储路径已更新：" + WikisDir);
         }
 
         [RelayCommand]
         private void ResetWikisDir()
         {
+            // 恢复默认并立即保存生效（对齐 Demo"恢复默认"行为）
             var defaultWikis = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LLM_Wiki", "wikis");
             WikisDirInput = defaultWikis;
             ValidateWikisDir();
+            SaveWikisDir();
         }
     }
 }

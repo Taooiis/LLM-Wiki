@@ -15,14 +15,14 @@
   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
   mc:Ignorable="d"
 >
-  <Grid>
+  <Grid Margin="{StaticResource PageContentMargin}" MaxWidth="900">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
 
     <!-- 标题 -->
-    <TextBlock Grid.Row="0" FontSize="20" FontWeight="Medium" Text="分享（局域网只读访问）" Margin="0,0,0,16" />
+    <TextBlock Grid.Row="0" Style="{StaticResource PageTitleText}" Text="分享（局域网只读访问）" />
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
       <StackPanel Margin="0,0,0,12">
@@ -36,7 +36,7 @@
           BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
           BorderThickness="1">
           <StackPanel>
-            <TextBlock FontSize="16" FontWeight="SemiBold" Text="只读分享服务" Margin="0,0,0,12" />
+            <TextBlock Style="{StaticResource SectionTitleText}" Text="只读分享服务" />
             <TextBlock Text="开启后，局域网内其它设备可通过浏览器只读浏览知识库。不支持上传/编辑/删除。" Margin="0,0,0,12" />
             <ui:ToggleSwitch
               OnContent="{Binding ViewModel.ToggleText}"
@@ -61,7 +61,7 @@
           BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
           BorderThickness="1">
           <StackPanel>
-            <TextBlock FontSize="16" FontWeight="SemiBold" Text="访问地址" Margin="0,0,0,12" />
+            <TextBlock Style="{StaticResource SectionTitleText}" Text="访问地址" />
             <TextBlock Text="手机或其它电脑在局域网内打开以下地址，输入 PIN 即可浏览：" Margin="0,0,0,8" />
             
             <TextBlock Text="本机地址：" FontWeight="SemiBold" Margin="0,8,0,4" />
@@ -91,14 +91,14 @@
               IsReadOnly="True"
               Background="{DynamicResource ApplicationBackgroundBrush}"
               BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
-            <TextBlock Text="(如为空表示 mDNS 不可用，请使用上面的 IP 地址)" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,4,0,0" />
+            <TextBlock Text="(如为空表示 mDNS 不可用，请使用上面的 IP 地址)" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="{StaticResource FontSizeCaption}" Margin="0,4,0,0" />
 
             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
               <ui:Button
                 Content="复制地址"
                 Command="{Binding ViewModel.CopyUrlCommand}"
                 Margin="0,0,8,0"
-                Icon="Fluent24" />
+                Icon="Copy24" />
             </StackPanel>
           </StackPanel>
         </Border>
@@ -112,7 +112,7 @@
           BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
           BorderThickness="1">
           <StackPanel>
-            <TextBlock FontSize="14" FontWeight="SemiBold" Text="使用说明" Margin="0,0,0,8" />
+            <TextBlock Style="{StaticResource SectionTitleText}" Text="使用说明" />
             <TextBlock Text="1. 点击开关启动分享服务（默认端口 8765）。" Margin="0,0,0,4" />
             <TextBlock Text="2. 在手机或其它电脑浏览器打开上方显示的地址。" Margin="0,0,0,4" />
             <TextBlock Text="3. 输入显示的 4 位 PIN 码进入只读页面。" Margin="0,0,0,4" />

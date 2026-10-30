@@ -67,6 +67,12 @@ namespace LLM_Wiki.ViewModels.Pages
             {
                 Kbs.Add(kb);
             }
+
+            // 选中失效（如存储路径变更后原库不在新目录）：回退到首个库或清空
+            if (!string.IsNullOrEmpty(SelectedKb) && !Kbs.Contains(SelectedKb))
+            {
+                SelectedKb = Kbs.Count > 0 ? Kbs[0] : "";
+            }
         }
 
         public void LoadFiles(string kb)

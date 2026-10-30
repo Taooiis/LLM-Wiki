@@ -15,19 +15,19 @@
   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
   mc:Ignorable="d"
 >
-  <Grid>
+  <Grid Margin="{StaticResource PageContentMargin}" MaxWidth="1100">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
 
     <!-- 标题 + 工具栏 -->
-    <Grid Grid.Row="0" Margin="0,0,0,8">
+    <Grid Grid.Row="0" Margin="0,0,0,12">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
-      <TextBlock Grid.Column="0" FontSize="20" FontWeight="Medium" Text="目录浏览" />
+      <TextBlock Grid.Column="0" Style="{StaticResource PageTitleText}" Text="目录浏览" />
       <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
         <TextBlock
           VerticalAlignment="Center"
@@ -58,7 +58,7 @@
                 <TextBlock Text="{Binding Name}" Margin="4,2" />
                 <TextBlock
                   Text="{Binding Type}"
-                  FontSize="10"
+                  FontSize="{StaticResource FontSizeCaption}"
                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                   Margin="4,0,0,0"
                   VerticalAlignment="Center" />
@@ -78,9 +78,9 @@
 
         <TextBlock
           Grid.Row="0"
-          FontSize="14"
+          FontSize="{StaticResource FontSizeBody}"
           FontWeight="SemiBold"
-          Margin="0,8,0,4"
+          Margin="0,0,0,4"
           Text="{Binding ViewModel.SelectedFilePath, StringFormat='文件: {0}', TargetNullValue='请选择文件'}"
           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
@@ -102,13 +102,12 @@
             Command="{Binding ViewModel.SavePreviewCommand}"
             CommandParameter="{Binding ElementName=PreviewEditor, Path=Text}"
             Margin="0,0,8,0"
-            Icon="Fluent24"
+            Icon="Save24"
             IsEnabled="{Binding ViewModel.IsEditMode}" />
           <ui:Button
             Content="关闭"
             Command="{Binding ViewModel.ClosePreviewCommand}"
-            Margin="8,0,0,0"
-            Icon="Fluent24" />
+            Icon="Dismiss24" />
         </StackPanel>
       </Grid>
     </Grid>

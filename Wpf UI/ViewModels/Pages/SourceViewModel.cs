@@ -263,7 +263,7 @@ namespace LLM_Wiki.ViewModels.Pages
 
         private string GetKbRoot()
         {
-            return Path.Combine(AppContext.BaseDirectory, "wikis", SelectedKb);
+            return _fileBridge.KbRoot(SelectedKb);
         }
     }
 
