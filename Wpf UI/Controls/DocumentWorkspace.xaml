@@ -16,7 +16,8 @@
       <controls:EmptyState
         Icon="📄"
         Title="选择一个文件查看内容"
-        Description="从左侧选择文件，或新建 / 上传文件">
+        Description="从左侧选择文件，或新建 / 上传文件"
+        ActionContent="{Binding EmptyAction, RelativeSource={RelativeSource AncestorType=UserControl}}">
         <controls:EmptyState.Style>
           <Style TargetType="controls:EmptyState">
             <Setter Property="Visibility" Value="Collapsed" />

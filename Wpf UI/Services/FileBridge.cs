@@ -11,6 +11,38 @@ public record TreeItem(
     [property: JsonPropertyName("rel")] string? RelPath = null);
 
 /// <summary>
+/// 源文件条目：文件名 + 大小 + 修改时间（源文档页列表行元数据，设计 02§3.2）。
+/// 含展示格式化与类型筛选判断，避免 XAML 侧再堆 converter。
+/// </summary>
+public record SourceEntry(string Name, long Size, DateTime Modified)
+{
+    /// <summary>类型标签（白名单内源文档只有 md/txt 两类）。</summary>
+    public string TypeText => Name.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ? "Markdown" : "文本";
+
+    /// <summary>大小展示文本（如 4.2 KB）。</summary>
+    public string SizeText => Size < 1024 ? $"{Size} B"
+        : Size < 1024 * 1024 ? $"{Size / 1024.0:0.#} KB"
+        : $"{Size / 1024.0 / 1024.0:0.#} MB";
+
+    /// <summary>修改时间展示文本（今天/昨天显示相对时间，更早显示日期）。</summary>
+    public string ModifiedText
+    {
+        get
+        {
+            var today = DateTime.Today;
+            var day = Modified.Date;
+            return day == today ? $"今天 {Modified:HH:mm}"
+                : day == today.AddDays(-1) ? $"昨天 {Modified:HH:mm}"
+                : Modified.ToString("MM-dd HH:mm");
+        }
+    }
+
+    /// <summary>类型筛选匹配（"全部"以外的筛选键直接对比类型标签）。</summary>
+    public bool MatchesType(string filter) =>
+        filter is null || filter == "全部" || filter == TypeText;
+}
+
+/// <summary>
 /// 文件桥：目录树 / md·txt 读写 / 删除 / 源列表 / 变更清单。
 /// 只服务纯文本文件；office 上传删除归 UploadService（成对语义，spec 02 §4）。
 /// </summary>
@@ -141,6 +173,21 @@ public class FileBridge(ConfigService config)
         return Directory.Exists(dir)
             ? [.. Directory.GetFiles(dir).Where(f => FileHelper.IsTextFile(Path.GetFileName(f))).Select(Path.GetFileName)!]
             : [];
+    }
+
+    /// <summary>源条目列表（含元数据，按文件名稳定排序）：raw/sources/ 下 md/txt。</summary>
+    public SourceEntry[] SourceEntries(string kb)
+    {
+        var dir = Path.Combine(config.WikisDir, kb, "raw", "sources");
+        if (!Directory.Exists(dir)) return [];
+        return [.. Directory.GetFiles(dir)
+            .Where(f => FileHelper.IsTextFile(Path.GetFileName(f)))
+            .Select(f =>
+            {
+                var fi = new FileInfo(f);
+                return new SourceEntry(fi.Name, fi.Length, fi.LastWriteTime);
+            })
+            .OrderBy(e => e.Name, StringComparer.Ordinal)];
     }
 
     public List<Change> Changes(string kb) => ChangeStore.Load(config.WikisDir, kb);

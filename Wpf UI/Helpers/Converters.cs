@@ -63,4 +63,25 @@ namespace LLM_Wiki.Helpers
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => throw new NotSupportedException();
     }
+
+    /// <summary>
+    /// 文件/目录标识 → Fluent 图标（设计 02§3.2、03§3）：
+    /// 传 "dir" 显示文件夹；传文件名按扩展名给文档图标（.md / .txt），其余回落通用文档。
+    /// </summary>
+    public class FileNodeIconConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is string s)
+            {
+                if (s == "dir") return Wpf.Ui.Controls.SymbolRegular.Folder24;
+                if (s.EndsWith(".md", StringComparison.OrdinalIgnoreCase)) return Wpf.Ui.Controls.SymbolRegular.Document24;
+                if (s.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)) return Wpf.Ui.Controls.SymbolRegular.DocumentText24;
+            }
+            return Wpf.Ui.Controls.SymbolRegular.Document24;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
 }

@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Windows.Data;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -31,6 +32,12 @@ namespace LLM_Wiki.ViewModels.Pages
             _mainViewModel = mainViewModel;
             _navigationService = navigationService;
             _toastService = toastService;
+
+            // 过滤视图：文件名包含搜索词 且 类型匹配（全部/Markdown/文本）
+            FilteredFiles = CollectionViewSource.GetDefaultView(Files);
+            FilteredFiles.Filter = o => o is SourceEntry e
+                && (string.IsNullOrWhiteSpace(SearchKeyword) || e.Name.Contains(SearchKeyword.Trim(), StringComparison.OrdinalIgnoreCase))
+                && e.MatchesType(TypeFilter);
 
             // 文档工作区（指南阶段 2）：源文档页编辑/新建/预览统一走右侧工作区
             Workspace = new DocumentWorkspaceViewModel(_fileBridge, _toastService)
@@ -104,13 +111,28 @@ namespace LLM_Wiki.ViewModels.Pages
         private string _selectedKb = "";
 
         [ObservableProperty]
-        private ObservableCollection<string> _files = new();
+        private ObservableCollection<SourceEntry> _files = new();
 
         [ObservableProperty]
         private string _selectedFile = "";
 
+        /// <summary>文件名搜索词：只过滤当前已加载列表（02§3.1，不触发磁盘读取）。</summary>
+        [ObservableProperty]
+        private string _searchKeyword = "";
+
+        /// <summary>类型筛选键：全部 / Markdown / 文本（02§3.1，仅覆盖白名单内类型）。</summary>
+        [ObservableProperty]
+        private string _typeFilter = "全部";
+
+        /// <summary>过滤后的文件视图（搜索词 + 类型筛选，供列表绑定与计数）。</summary>
+        public ICollectionView FilteredFiles { get; }
+
         [ObservableProperty]
         private ObservableCollection<ChangeItem> _changes = new();
+
+        partial void OnSearchKeywordChanged(string value) => FilteredFiles.Refresh();
+
+        partial void OnTypeFilterChanged(string value) => FilteredFiles.Refresh();
 
         public void LoadKb(string kb)
         {
@@ -128,11 +150,12 @@ namespace LLM_Wiki.ViewModels.Pages
                 return;
             }
 
-            // 只列源文档（raw/sources/ 下 md/txt），不再取树顶层
-            foreach (var name in _fileBridge.Sources(kb))
+            // 只列源文档（raw/sources/ 下 md/txt，含大小/修改时间元数据），不再取树顶层
+            foreach (var entry in _fileBridge.SourceEntries(kb))
             {
-                Files.Add(name);
+                Files.Add(entry);
             }
+            FilteredFiles.Refresh();
         }
 
         /// <summary>清空工作区（切库/无库时回到空态引导）。</summary>

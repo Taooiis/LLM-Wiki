@@ -36,12 +36,12 @@ namespace LLM_Wiki.Views.Pages
         /// <summary>选中文件：经未保存保护后加载到工作区预览。</summary>
         private async void FileList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (sender is not ListBox list || list.SelectedItem is not string file)
+            if (sender is not ListBox list || list.SelectedItem is not Services.SourceEntry entry)
             {
                 return;
             }
 
-            await ViewModel.SelectFileAsync(file);
+            await ViewModel.SelectFileAsync(entry.Name);
         }
 
         /// <summary>新建文档：右侧工作区直接进入编辑（不再弹窗，指南 §6.4）。</summary>
@@ -71,7 +71,10 @@ namespace LLM_Wiki.Views.Pages
             }
 
             var confirm = (ConfirmationDialog)Resources["ConfirmDlg"];
-            if (await confirm.ShowAsync($"确定要删除 \"{ViewModel.SelectedFile}\" 吗？\n此操作不可恢复。", "确认删除"))
+            if (await confirm.ShowAsync(
+                    $"确定删除\"{ViewModel.SelectedFile}\"吗？删除后会记录一条待处理变更，后续可通过增量 Ingest 更新 Wiki。",
+                    "删除源文档",
+                    primaryButtonText: "删除文件"))
             {
                 ViewModel.DeleteFileCommand.Execute(ViewModel.SelectedFile);
             }
