@@ -52,13 +52,13 @@ namespace LLM_Wiki.ViewModels.Pages
 
         private void ProcessPendingIngest()
         {
-            if (_mainViewModel.PendingIngestFiles == null || _mainViewModel.PendingIngestFiles.Count == 0)
+            var files = _mainViewModel.PendingIngestFiles;
+            if (string.IsNullOrWhiteSpace(files))
             {
                 return;
             }
 
-            IngestFiles = string.Join(",", _mainViewModel.PendingIngestFiles);
-            _mainViewModel.PendingIngestFiles.Clear();
+            IngestFiles = files;
             GenerateIngestCommand.Execute(null);
         }
 

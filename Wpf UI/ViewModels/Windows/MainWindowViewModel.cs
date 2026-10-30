@@ -20,12 +20,6 @@ namespace LLM_Wiki.ViewModels.Windows
                 Icon = new SymbolIcon { Symbol = SymbolRegular.Home24 },
                 TargetPageType = typeof(Views.Pages.DashboardPage)
             },
-            //new NavigationViewItem()
-            //{
-            //    Content = "Data",
-            //    Icon = new SymbolIcon { Symbol = SymbolRegular.DataHistogram24 },
-            //    TargetPageType = typeof(Views.Pages.DataPage)
-            //},
             new NavigationViewItem()
             {
                 Content = "源文档",
@@ -85,9 +79,9 @@ namespace LLM_Wiki.ViewModels.Windows
         [ObservableProperty]
         private string _currentKb = "";
 
-        /// <summary>从源文档页“待处理变更”点击“生成 Ingest”后，传递给工作流页的文件列表。</summary>
+        /// <summary>从源文档页“待处理变更”点击“生成 Ingest”后，传递给工作流页的文件清单（逗号分隔，含 raw/sources/ 前缀）。</summary>
         [ObservableProperty]
-        private ObservableCollection<string> _pendingIngestFiles = new();
+        private string _pendingIngestFiles = "";
 
         /// <summary>对应的知识库名。</summary>
         [ObservableProperty]

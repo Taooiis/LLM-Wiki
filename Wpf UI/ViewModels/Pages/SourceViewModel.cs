@@ -151,17 +151,16 @@ namespace LLM_Wiki.ViewModels.Pages
         [RelayCommand]
         private void GenerateIngestForSelected()
         {
+            // 勾选变更的 File 为含 raw/sources/ 前缀的相对路径；
+            // 归一化统一在 WorkflowViewModel.GenerateIngest 入口做（见 ledger Ruling T4）
             var selected = Changes.Where(c => c.IsSelected).Select(c => c.File).ToList();
             if (selected.Count == 0)
             {
+                _toastService.ShowWarning("请先勾选要处理的变更");
                 return;
             }
 
-            _mainViewModel.PendingIngestFiles.Clear();
-            foreach (var f in selected)
-            {
-                _mainViewModel.PendingIngestFiles.Add(f);
-            }
+            _mainViewModel.PendingIngestFiles = string.Join(",", selected);
             _mainViewModel.PendingIngestKb = SelectedKb;
 
             _navigationService.Navigate(typeof(Views.Pages.WorkflowPage));
