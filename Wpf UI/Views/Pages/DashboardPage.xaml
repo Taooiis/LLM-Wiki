@@ -52,7 +52,7 @@
           Grid.Column="0"
           Margin="0,0,8,0"
           PlaceholderText="搜索知识库..."
-          Text="{Binding ViewModel.SearchText, Mode=TwoWay}"
+          Text="{Binding ViewModel.KbSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
           Background="{DynamicResource ApplicationBackgroundBrush}"
           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
           BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
@@ -61,7 +61,7 @@
         <ui:ListView
           x:Name="KbList"
           Grid.Column="1"
-          ItemsSource="{Binding ViewModel.Kbs, Mode=OneWay}"
+          ItemsSource="{Binding ViewModel.KbsView, Mode=OneWay}"
           SelectedItem="{Binding ViewModel.SelectedKb, Mode=TwoWay}"
           Background="{DynamicResource ApplicationBackgroundBrush}"
           BorderThickness="0"
@@ -70,19 +70,8 @@
             <DataTemplate>
               <Border Padding="8,4" Margin="2"
                       Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-                <Grid>
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                  </Grid.ColumnDefinitions>
-                  <TextBlock Grid.Column="0" Text="{Binding}"
-                             Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                  <ui:Button Grid.Column="1"
-                             Content="编辑"
-                             Margin="8,0,0,0"
-                             Icon="Edit24"
-                             FontSize="{StaticResource FontSizeCaption}" />
-                </Grid>
+                <TextBlock Text="{Binding}"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
               </Border>
             </DataTemplate>
           </ui:ListView.ItemTemplate>
@@ -132,14 +121,14 @@
             Grid.Row="0"
             Margin="0,0,8,8"
             PlaceholderText="搜索文件..."
-            Text="{Binding ViewModel.SearchText, Mode=TwoWay}"
+            Text="{Binding ViewModel.FileSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
             Background="{DynamicResource ApplicationBackgroundBrush}"
             Foreground="{DynamicResource TextFillColorPrimaryBrush}"
             BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
           <ui:ListView
             x:Name="FileList"
             Grid.Row="1"
-            ItemsSource="{Binding ViewModel.Files, Mode=OneWay}"
+            ItemsSource="{Binding ViewModel.FilesView, Mode=OneWay}"
             Background="Transparent"
             BorderThickness="0"
             ScrollViewer.VerticalScrollBarVisibility="Auto"
@@ -152,19 +141,32 @@
           </ui:ListView>
         </Grid>
 
-        <!-- 右侧：文件预览（撑满剩余空间，不再固定 200 高） -->
-        <ui:TextBox
-          x:Name="PreviewBox"
-          Grid.Column="1"
-          Margin="8,0,0,0"
-          VerticalAlignment="Stretch"
-          VerticalContentAlignment="Top"
-          Text="{Binding ViewModel.MarkdownText, Mode=TwoWay}"
-          AcceptsReturn="True"
-          TextWrapping="Wrap"
-          VerticalScrollBarVisibility="Auto"
-          Background="{DynamicResource ApplicationBackgroundBrush}"
-          Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+        <!-- 右侧：文件预览（撑满剩余空间，顶部保存按钮） -->
+        <Grid Grid.Column="1" Margin="8,0,0,0">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+          <ui:Button
+            Grid.Row="0"
+            Content="保存"
+            HorizontalAlignment="Right"
+            Command="{Binding ViewModel.SaveFileCommand}"
+            CommandParameter="{Binding ElementName=PreviewBox, Path=Text}"
+            Margin="0,0,0,8"
+            Icon="Save24" />
+          <ui:TextBox
+            x:Name="PreviewBox"
+            Grid.Row="1"
+            VerticalAlignment="Stretch"
+            VerticalContentAlignment="Top"
+            Text="{Binding ViewModel.MarkdownText, Mode=TwoWay}"
+            AcceptsReturn="True"
+            TextWrapping="Wrap"
+            VerticalScrollBarVisibility="Auto"
+            Background="{DynamicResource ApplicationBackgroundBrush}"
+            Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+        </Grid>
       </Grid>
     </Grid>
   </ScrollViewer>

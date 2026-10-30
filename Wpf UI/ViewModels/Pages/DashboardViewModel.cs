@@ -47,7 +47,43 @@ namespace LLM_Wiki.ViewModels.Pages
         private string _markdownText = "";
 
         [ObservableProperty]
-        private string _searchText = "";
+        private string _kbSearchText = "";
+
+        [ObservableProperty]
+        private string _fileSearchText = "";
+
+        /// <summary>过滤后的视图集合：搜索即时本地过滤，不回读磁盘。</summary>
+        public ObservableCollection<string> KbsView { get; } = new();
+
+        public ObservableCollection<string> FilesView { get; } = new();
+
+        partial void OnKbSearchTextChanged(string value) => ApplyKbFilter();
+
+        partial void OnFileSearchTextChanged(string value) => ApplyFileFilter();
+
+        private void ApplyKbFilter()
+        {
+            KbsView.Clear();
+            foreach (var k in Kbs)
+            {
+                if (string.IsNullOrWhiteSpace(KbSearchText) || k.Contains(KbSearchText, StringComparison.OrdinalIgnoreCase))
+                {
+                    KbsView.Add(k);
+                }
+            }
+        }
+
+        private void ApplyFileFilter()
+        {
+            FilesView.Clear();
+            foreach (var f in Files)
+            {
+                if (string.IsNullOrWhiteSpace(FileSearchText) || f.Contains(FileSearchText, StringComparison.OrdinalIgnoreCase))
+                {
+                    FilesView.Add(f);
+                }
+            }
+        }
 
         /// <summary>当前库根目录完整路径（显示用，对齐 Demo 顶部路径行）。</summary>
         [ObservableProperty]
@@ -67,6 +103,7 @@ namespace LLM_Wiki.ViewModels.Pages
             {
                 Kbs.Add(kb);
             }
+            ApplyKbFilter();
 
             // 选中失效（如存储路径变更后原库不在新目录）：回退到首个库或清空
             if (!string.IsNullOrEmpty(SelectedKb) && !Kbs.Contains(SelectedKb))
@@ -80,6 +117,7 @@ namespace LLM_Wiki.ViewModels.Pages
             Files.Clear();
             if (string.IsNullOrWhiteSpace(kb))
             {
+                ApplyFileFilter();
                 return;
             }
 
@@ -87,6 +125,7 @@ namespace LLM_Wiki.ViewModels.Pages
             {
                 Files.Add(item.Name);
             }
+            ApplyFileFilter();
         }
 
         public void LoadFileContent(string kb, string file)
@@ -101,62 +140,6 @@ namespace LLM_Wiki.ViewModels.Pages
             var content = _fileBridge.ReadText(kb, file, out error);
             MarkdownText = content ?? string.Empty;
             SelectedFile = file;
-        }
-
-        public void SearchFiles(string kb, string keyword)
-        {
-            Files.Clear();
-            if (string.IsNullOrWhiteSpace(kb) || string.IsNullOrWhiteSpace(keyword))
-            {
-                return;
-            }
-
-            foreach (var name in FlattenFiles(_fileBridge.Tree(kb), keyword))
-            {
-                Files.Add(name);
-            }
-        }
-
-        private static IEnumerable<string> FlattenFiles(TreeItem[] nodes, string keyword)
-        {
-            foreach (var node in nodes)
-            {
-                if (node.Type == "file" && node.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase))
-                {
-                    yield return node.Name;
-                }
-                if (node.Children != null)
-                {
-                    foreach (var f in FlattenFiles(node.Children, keyword))
-                    {
-                        yield return f;
-                    }
-                }
-            }
-        }
-
-        // WPF 文件选择器简化：用 OpenFileDialog
-        // 这里返回的文件路径通过 ViewModel 保存到 KB
-        [RelayCommand]
-        private void UploadFile(string kb)
-        {
-            // 占位：实际上传需在 View 中调 MsDialog/OpenFolderDialog
-            _toastService.ShowWarning("上传功能：请选文件 → 调用 FileBridge.WriteText");
-        }
-
-        [RelayCommand]
-        private void SearchKb(string kbName)
-        {
-            if (string.IsNullOrWhiteSpace(kbName))
-            {
-                return;
-            }
-
-            LoadFiles(kbName);
-            // 触发搜索
-            var found = FlattenFiles(_fileBridge.Tree(kbName), SearchText);
-            Files.Clear();
-            foreach (var f in found) Files.Add(f);
         }
 
         [RelayCommand]
