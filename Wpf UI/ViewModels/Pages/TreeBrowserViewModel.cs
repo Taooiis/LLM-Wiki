@@ -64,19 +64,18 @@ namespace LLM_Wiki.ViewModels.Pages
             }
         }
 
-        public void SelectFile(string filePath)
+        public void SelectFile(string relPath)
         {
-            SelectedFilePath = filePath;
+            SelectedFilePath = relPath;
             var kb = SelectedKb;
-            var file = System.IO.Path.GetFileName(filePath);
 
             var error = "";
-            var content = _fileBridge.ReadText(kb, file, out error);
+            var content = _fileBridge.ReadText(kb, relPath, out error);
             PreviewContent = content ?? string.Empty;
 
             // 只有 md/txt 才可编辑
-            IsEditMode = file.EndsWith(".md", System.StringComparison.OrdinalIgnoreCase)
-                || file.EndsWith(".txt", System.StringComparison.OrdinalIgnoreCase);
+            IsEditMode = relPath.EndsWith(".md", System.StringComparison.OrdinalIgnoreCase)
+                || relPath.EndsWith(".txt", System.StringComparison.OrdinalIgnoreCase);
 
             IsPreviewOpen = true;
         }
@@ -89,8 +88,8 @@ namespace LLM_Wiki.ViewModels.Pages
                 return;
             }
 
-            var file = System.IO.Path.GetFileName(SelectedFilePath);
-            _fileBridge.WriteText(SelectedKb, file, content, out _);
+            // SelectedFilePath 为相对库根路径（如 wiki/index.md），原样写回，不再丢目录
+            _fileBridge.WriteText(SelectedKb, SelectedFilePath, content, out _);
             IsPreviewOpen = false;
         }
 
@@ -112,6 +111,8 @@ namespace LLM_Wiki.ViewModels.Pages
 
         public string Name => _item.Name;
         public string Type => _item.Type;
+        /// <summary>相对库根的路径（如 wiki/index.md）；树构建时由 FileBridge 算好。</summary>
+        public string RelPath => _item.RelPath ?? _item.Name;
         public bool HasChildren => _item.Children != null && _item.Children.Length > 0;
 
         public ObservableCollection<TreeItemViewModel> Children

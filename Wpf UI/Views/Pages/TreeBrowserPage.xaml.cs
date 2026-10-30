@@ -28,7 +28,7 @@ namespace LLM_Wiki.Views.Pages
 
             if (item.Type == "file")
             {
-                ViewModel.SelectFile(item.Name);
+                ViewModel.SelectFile(item.RelPath);
             }
         }
 
