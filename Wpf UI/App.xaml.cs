@@ -64,6 +64,9 @@ namespace LLM_Wiki
                 services.AddSingleton<SharePage>();
                 services.AddSingleton<ShareViewModel>();
                 services.AddSingleton<ShareService>();
+                services.AddSingleton<McpAccessPolicy>();
+                services.AddSingleton<McpServerContext>();
+                services.AddSingleton<McpService>();
                 services.AddSingleton<GuidePage>();
                 services.AddSingleton<GuideViewModel>();
 
@@ -72,6 +75,7 @@ namespace LLM_Wiki
                 // FileBridge/KbService 构造接 ConfigService，存储路径改动全局即时生效（Task 6）
                 services.AddSingleton<FileBridge>();
                 services.AddSingleton<KbService>();
+                services.AddSingleton<WorkflowPromptService>();
                 services.AddSingleton<ISnackbarService, SnackbarService>();
                 services.AddSingleton<ToastService>();
                 services.AddSingleton<UpdateService>();
@@ -98,6 +102,9 @@ namespace LLM_Wiki
         /// </summary>
         private async void OnExit(object sender, ExitEventArgs e)
         {
+            // MCP 宿主独立于 WPF Host 生命周期，退出前显式停止
+            try { Services.GetService<Share.McpService>()?.Stop(); } catch { }
+
             await _host.StopAsync();
 
             _host.Dispose();

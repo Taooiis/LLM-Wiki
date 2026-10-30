@@ -44,6 +44,16 @@ namespace LLM_Wiki.Helpers
             => throw new NotSupportedException();
     }
 
+    /// <summary>true → Visible，false → Collapsed。</summary>
+    public class BoolToVisibilityConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            => value is bool b && b ? Visibility.Visible : Visibility.Collapsed;
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
     /// <summary>bool 取反：用于"IsBusy 时禁用"这类 IsEnabled 绑定。</summary>
     public class InverseBoolConverter : IValueConverter
     {

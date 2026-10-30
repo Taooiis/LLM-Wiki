@@ -6,6 +6,9 @@
   xmlns:local="clr-namespace:LLM_Wiki.Views.Pages"
   xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
   xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  xmlns:controls="clr-namespace:LLM_Wiki.Controls"
+  xmlns:helpers="clr-namespace:LLM_Wiki.Helpers"
+  xmlns:dialogs="clr-namespace:LLM_Wiki.Views.Dialogs"
   Title="TreeBrowserPage"
   d:DataContext="{d:DesignInstance local:TreeBrowserPage, IsDesignTimeCreatable=False}"
   d:DesignHeight="600"
@@ -15,101 +18,195 @@
   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
   mc:Ignorable="d"
 >
+  <Page.Resources>
+    <dialogs:UnsavedChangesDialog x:Key="UnsavedDlg" />
+    <helpers:FileNodeIconConverter x:Key="FileNodeIcon" />
+    <helpers:BoolToVisibilityConverter x:Key="BoolToVis" />
+    <helpers:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis" />
+  </Page.Resources>
+
+  <!-- 根布局：各区自带滚动，撑满视口高度 -->
   <Grid Margin="{StaticResource PageContentMargin}" MaxWidth="1100">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
 
-    <!-- 标题 + 工具栏 -->
+    <!-- 标题 + 工具栏（03§2：刷新目录 / 展开全部 / 折叠全部） -->
     <Grid Grid.Row="0" Margin="0,0,0,12">
       <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
-      <TextBlock Grid.Column="0" Style="{StaticResource PageTitleText}" Text="目录浏览" />
-      <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
-        <TextBlock
-          VerticalAlignment="Center"
-          Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-          Text="{Binding ViewModel.SelectedKb, StringFormat='当前库: {0}'}"
-          Margin="0,0,12,0" />
+      <TextBlock Grid.Column="0" Style="{StaticResource PageTitleText}" Margin="0" Text="目录浏览" />
+      <TextBlock
+        Grid.Column="1"
+        VerticalAlignment="Center"
+        Margin="16,0,0,0"
+        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+        Text="浏览当前知识库的 Wiki 页面和相关资料。"
+        TextWrapping="Wrap" />
+      <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+        <ui:Button
+          Content="刷新目录"
+          Command="{Binding ViewModel.RefreshTreeCommand}"
+          Margin="0,0,8,0"
+          Icon="ArrowClockwise24" />
+        <ui:Button
+          Content="展开全部"
+          Command="{Binding ViewModel.ExpandAllCommand}"
+          Margin="0,0,8,0"
+          Icon="ChevronDown24" />
+        <ui:Button
+          Content="折叠全部"
+          Command="{Binding ViewModel.CollapseAllCommand}"
+          Icon="ChevronRight24" />
       </StackPanel>
     </Grid>
 
-    <!-- 内容区：左树 + 右预览 -->
+    <!-- 内容区：左树 + 右文档工作区（03§2） -->
     <Grid Grid.Row="1">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="300" />
+        <ColumnDefinition Width="280" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
 
-      <!-- 左侧：目录树 -->
-      <Border Grid.Column="0" BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" BorderThickness="0,0,1,0">
-        <TreeView
-          x:Name="FolderTree"
-          ItemsSource="{Binding ViewModel.TreeItems, Mode=OneWay}"
-          Background="Transparent"
-          BorderThickness="0"
-          SelectedItemChanged="FolderTree_SelectedItemChanged">
-          <TreeView.ItemTemplate>
-            <HierarchicalDataTemplate ItemsSource="{Binding Children}">
-              <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding Name}" Margin="4,2" />
-                <TextBlock
-                  Text="{Binding Type}"
-                  FontSize="{StaticResource FontSizeCaption}"
-                  Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                  Margin="4,0,0,0"
-                  VerticalAlignment="Center" />
-              </StackPanel>
-            </HierarchicalDataTemplate>
-          </TreeView.ItemTemplate>
-        </TreeView>
-      </Border>
-
-      <!-- 右侧：预览/编辑 -->
-      <Grid Grid.Column="1">
+      <!-- 左侧：当前库 + 搜索 + 目录树（03§3） -->
+      <Grid Grid.Column="0">
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />
-          <RowDefinition Height="*" />
           <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TextBlock
-          Grid.Row="0"
-          FontSize="{StaticResource FontSizeBody}"
-          FontWeight="SemiBold"
-          Margin="0,0,0,4"
-          Text="{Binding ViewModel.SelectedFilePath, StringFormat='文件: {0}', TargetNullValue='请选择文件'}"
-          Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+        <!-- 当前知识库名称持续可见 -->
+        <TextBlock Grid.Row="0"
+                   FontSize="{StaticResource FontSizeCaption}"
+                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                   Margin="8,0,8,2"
+                   Text="当前知识库" />
+        <TextBlock Grid.Row="1"
+                   FontSize="{StaticResource FontSizeBody}"
+                   FontWeight="SemiBold"
+                   Margin="8,0,8,8"
+                   TextTrimming="CharacterEllipsis"
+                   Text="{Binding ViewModel.SelectedKb, TargetNullValue='未选择'}" />
 
+        <!-- 搜索：过滤目录树，保留父级路径（03§3） -->
         <ui:TextBox
-          Grid.Row="1"
-          x:Name="PreviewEditor"
-          Margin="0,0,0,8"
-          Text="{Binding ViewModel.PreviewContent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-          AcceptsReturn="True"
-          TextWrapping="Wrap"
-          VerticalScrollBarVisibility="Auto"
-          IsReadOnly="{Binding ViewModel.IsPreviewReadOnly}"
-          Background="{DynamicResource ApplicationBackgroundBrush}"
-          Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+          Grid.Row="2"
+          Margin="8,0,8,8"
+          PlaceholderText="搜索目录或文件…"
+          Icon="Search24"
+          Text="{Binding ViewModel.SearchKeyword, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
-          <ui:Button
-            Content="保存"
-            Command="{Binding ViewModel.SavePreviewCommand}"
-            CommandParameter="{Binding ElementName=PreviewEditor, Path=Text}"
-            Margin="0,0,8,0"
-            Icon="Save24"
-            IsEnabled="{Binding ViewModel.IsEditMode}" />
-          <ui:Button
-            Content="关闭"
-            Command="{Binding ViewModel.ClosePreviewCommand}"
-            Icon="Dismiss24" />
-        </StackPanel>
+        <Grid Grid.Row="3">
+          <!-- 错误态：目录不可访问 → 说明 + 重试，不用空树冒充（03§6） -->
+          <controls:EmptyState
+            Icon="⚠️"
+            Title="目录不可访问"
+            Description="{Binding ViewModel.LoadError}"
+            Visibility="{Binding ViewModel.HasLoadError, Converter={StaticResource BoolToVis}}">
+            <controls:EmptyState.ActionContent>
+              <ui:Button
+                Content="重试"
+                Appearance="Primary"
+                Command="{Binding ViewModel.RefreshTreeCommand}" />
+            </controls:EmptyState.ActionContent>
+          </controls:EmptyState>
+
+          <Grid Visibility="{Binding ViewModel.HasLoadError, Converter={StaticResource InverseBoolToVis}}">
+            <Grid.Style>
+              <Style TargetType="Grid">
+                <Setter Property="Visibility" Value="Visible" />
+              </Style>
+            </Grid.Style>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="*" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TreeView
+              x:Name="FolderTree"
+              Grid.Row="0"
+              ItemsSource="{Binding ViewModel.TreeItems, Mode=OneWay}"
+              Background="Transparent"
+              BorderThickness="0"
+              VirtualizingPanel.IsVirtualizing="True"
+              VirtualizingPanel.VirtualizationMode="Recycling"
+              SelectedItemChanged="FolderTree_SelectedItemChanged">
+              <TreeView.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <VirtualizingStackPanel />
+                </ItemsPanelTemplate>
+              </TreeView.ItemsPanel>
+              <TreeView.ItemContainerStyle>
+                <Style TargetType="TreeViewItem">
+                  <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                  <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                  <Setter Property="Padding" Value="4,3" />
+                  <Setter Property="ItemsPanel">
+                    <Setter.Value>
+                      <ItemsPanelTemplate>
+                        <VirtualizingStackPanel />
+                      </ItemsPanelTemplate>
+                    </Setter.Value>
+                  </Setter>
+                </Style>
+              </TreeView.ItemContainerStyle>
+              <TreeView.ItemTemplate>
+                <HierarchicalDataTemplate ItemsSource="{Binding VisibleChildren}">
+                  <!-- 树行：类型图标 + 名称；选中态低饱和蓝底 + 左侧 2px 蓝线（03§3） -->
+                  <Border x:Name="RowRoot"
+                          Padding="6,3"
+                          Margin="0,1"
+                          CornerRadius="4"
+                          BorderThickness="2,1,1,1"
+                          BorderBrush="Transparent"
+                          Background="Transparent">
+                    <StackPanel Orientation="Horizontal">
+                      <ui:SymbolIcon
+                        FontSize="16"
+                        Margin="0,0,8,0"
+                        VerticalAlignment="Center"
+                        Foreground="{DynamicResource AccentFillColorDefaultBrush}"
+                        Symbol="{Binding IconKey, Converter={StaticResource FileNodeIcon}}" />
+                      <TextBlock
+                        Text="{Binding Name}"
+                        FontSize="{StaticResource FontSizeBody}"
+                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                        TextTrimming="CharacterEllipsis"
+                        VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Border>
+                  <HierarchicalDataTemplate.Triggers>
+                    <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TreeViewItem}}" Value="True">
+                      <Setter TargetName="RowRoot" Property="Background" Value="{DynamicResource AccentFillColorSecondaryBrush}" />
+                      <Setter TargetName="RowRoot" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                    </DataTrigger>
+                  </HierarchicalDataTemplate.Triggers>
+                </HierarchicalDataTemplate>
+              </TreeView.ItemTemplate>
+            </TreeView>
+
+            <!-- 目录项计数（03§2 布局） -->
+            <TextBlock
+              Grid.Row="1"
+              Margin="8,6,8,0"
+              FontSize="{StaticResource FontSizeCaption}"
+              Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+              Text="{Binding ViewModel.VisibleCount, StringFormat='目录项 {0}'}" />
+          </Grid>
+        </Grid>
       </Grid>
+
+      <!-- 右侧：复用文档工作区（预览/编辑/只读/未保存保护，03§4） -->
+      <controls:DocumentWorkspace
+        Grid.Column="1"
+        Margin="8,0,0,0"
+        DataContext="{Binding ViewModel.Workspace}" />
     </Grid>
   </Grid>
 </Page>

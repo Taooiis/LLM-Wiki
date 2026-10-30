@@ -121,6 +121,16 @@ public class FileBridge(ConfigService config)
 
     /// <summary>写 md/txt；source 范围动作记 log 与变更（带指纹），purpose/schema 走配置更新（spec 02 §7）。</summary>
     public bool WriteText(string kb, string rel, string content, out string error)
+        => WriteTextCore(kb, rel, content, atomic: false, out error);
+
+    /// <summary>
+    /// 原子写：先写同目录临时文件再替换，失败不产生半截文件（设计 08§5.4）。
+    /// 变更登记规则与 <see cref="WriteText"/> 完全一致。
+    /// </summary>
+    public bool WriteTextAtomic(string kb, string rel, string content, out string error)
+        => WriteTextCore(kb, rel, content, atomic: true, out error);
+
+    private bool WriteTextCore(string kb, string rel, string content, bool atomic, out string error)
     {
         error = "";
         var p = PathGuard.SafeJoin(config.WikisDir, kb, rel);
@@ -130,7 +140,24 @@ public class FileBridge(ConfigService config)
             return false;
         }
         Directory.CreateDirectory(Path.GetDirectoryName(p)!);
-        File.WriteAllText(p, content);
+        if (atomic)
+        {
+            var tmp = p + ".tmp-" + Guid.NewGuid().ToString("N");
+            try
+            {
+                File.WriteAllText(tmp, content);
+                File.Move(tmp, p, overwrite: true);
+            }
+            catch
+            {
+                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                throw;
+            }
+        }
+        else
+        {
+            File.WriteAllText(p, content);
+        }
 
         var n = rel.Replace(Separators[0], Separators[1]);
         if (IsSourceRel(n))

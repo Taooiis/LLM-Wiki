@@ -114,7 +114,7 @@
       </Grid>
     </Border>
 
-    <ContentPresenter x:Name="RootContentDialog" Grid.Row="0" Grid.RowSpan="3" />
+    <ui:ContentDialogHost x:Name="RootDialogHost" Grid.Row="0" Grid.RowSpan="3" />
     <ui:TitleBar
       x:Name="TitleBar"
       Title="{Binding ViewModel.ApplicationTitle}"

@@ -20,25 +20,46 @@ namespace LLM_Wiki.ViewModels.Pages
     public partial class ShareViewModel : ObservableObject, INavigationAware
     {
         private readonly ShareService _shareService;
+        private readonly McpService _mcpService;
         private readonly ConfigService _configService;
         private readonly MainWindowViewModel _mainViewModel;
         private readonly ToastService _toastService;
 
         public ShareViewModel(
             ShareService shareService,
+            McpService mcpService,
             ConfigService configService,
             MainWindowViewModel mainViewModel,
             ToastService toastService)
         {
             _shareService = shareService;
+            _mcpService = mcpService;
             _configService = configService;
             _mainViewModel = mainViewModel;
             _toastService = toastService;
 
             _mainViewModel.PropertyChanged += MainViewModel_PropertyChanged;
+            _mcpService.Changed += OnMcpServiceChanged;
             SelectedKb = _mainViewModel.CurrentKb;
 
             Refresh();
+            RefreshMcpStatus();
+        }
+
+        /// <summary>写入档二次确认由页面提供（07§3：对话框不嵌套）。</summary>
+        public Func<Task<bool>>? ConfirmEnableMcpWrite { get; set; }
+
+        private void OnMcpServiceChanged()
+        {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher == null || dispatcher.CheckAccess())
+            {
+                RefreshMcpStatus();
+            }
+            else
+            {
+                dispatcher.BeginInvoke(RefreshMcpStatus);
+            }
         }
 
         private void MainViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -133,6 +154,9 @@ namespace LLM_Wiki.ViewModels.Pages
             OnPropertyChanged(nameof(CanStart));
             OnPropertyChanged(nameof(CanToggle));
             OnPropertyChanged(nameof(EmptyKbHint));
+            OnPropertyChanged(nameof(McpCanStart));
+            OnPropertyChanged(nameof(McpEmptyKbHint));
+            RefreshMcpStatus();
         }
 
         partial void OnIsBusyChanged(bool value) => OnPropertyChanged(nameof(CanToggle));
@@ -156,6 +180,7 @@ namespace LLM_Wiki.ViewModels.Pages
         public Task OnNavigatedToAsync()
         {
             Refresh();
+            RefreshMcpStatus();
             return Task.CompletedTask;
         }
 
@@ -166,6 +191,102 @@ namespace LLM_Wiki.ViewModels.Pages
             var addr = string.IsNullOrEmpty(FriendlyAddress) ? LocalAddress : FriendlyAddress;
             AccessUrl = _shareService.AccessUrl(addr);
         }
+
+        #endregion
+
+        #region Agent 接入（MCP，设计 08）
+
+        [ObservableProperty]
+        private bool _mcpIsRunning;
+
+        [ObservableProperty]
+        private bool _mcpIsBusy;
+
+        /// <summary>写入档：仅当服务处于 ReadWrite 时为 true。</summary>
+        [ObservableProperty]
+        private bool _mcpWriteEnabled;
+
+        [ObservableProperty]
+        private bool _mcpAllowLan;
+
+        [ObservableProperty]
+        private bool _mcpTokenVisible;
+
+        [ObservableProperty]
+        private string _mcpTokenDisplay = "";
+
+        [ObservableProperty]
+        private string _mcpEndpoint = "";
+
+        [ObservableProperty]
+        private ObservableCollection<string> _mcpLanEndpoints = new();
+
+        [ObservableProperty]
+        private string _mcpClientConfigJson = "";
+
+        [ObservableProperty]
+        private ObservableCollection<McpCallRecord> _mcpRecentCalls = new();
+
+        [ObservableProperty]
+        private string _mcpLastError = "";
+
+        public bool McpCanStart => CanStart && !McpIsBusy;
+
+        public bool McpHasError => !string.IsNullOrEmpty(McpLastError);
+
+        public bool McpShowDetails => McpIsRunning;
+
+        /// <summary>状态徽标：关闭 / 只读 / 写入（设计 08§9）。</summary>
+        public string McpStatusText => !McpIsRunning ? "关闭" : McpWriteEnabled ? "写入" : "只读";
+
+        public string McpTokenButtonText => McpTokenVisible ? "隐藏" : "显示";
+
+        public string McpExposedToolsText =>
+            "Resources：purpose.md / schema.md / index / 单文件内容\n" +
+            "Prompts：boundary / batch_ingest / incremental_ingest / query / lint / compare / clean\n" +
+            "Tools：list_knowledge_bases / list_tree / read_file / search_content / get_pending_changes" +
+            (McpWriteEnabled ? "\n写入档额外：write_wiki_file（仅 wiki/）" : "\n写入档关闭时：write_wiki_file 返回 READ_ONLY_MODE");
+
+        public string McpEmptyKbHint => CanStart ? "" : "请先在首页选择或创建知识库，再开启 Agent 接入。";
+
+        partial void OnMcpIsRunningChanged(bool value)
+        {
+            OnPropertyChanged(nameof(McpStatusText));
+            OnPropertyChanged(nameof(McpShowDetails));
+        }
+
+        partial void OnMcpWriteEnabledChanged(bool value)
+        {
+            OnPropertyChanged(nameof(McpStatusText));
+            OnPropertyChanged(nameof(McpExposedToolsText));
+        }
+
+        partial void OnMcpIsBusyChanged(bool value) => OnPropertyChanged(nameof(McpCanStart));
+
+        partial void OnMcpTokenVisibleChanged(bool value)
+        {
+            OnPropertyChanged(nameof(McpTokenButtonText));
+            UpdateMcpTokenDisplay();
+        }
+
+        partial void OnMcpLastErrorChanged(string value) => OnPropertyChanged(nameof(McpHasError));
+
+        /// <summary>从服务读取真实 MCP 状态；页面进入、启停、令牌变化后调用。</summary>
+        public void RefreshMcpStatus()
+        {
+            McpIsRunning = _mcpService.Running;
+            McpWriteEnabled = _mcpService.Policy.Mode == McpMode.ReadWrite;
+            McpAllowLan = _mcpService.AllowLan;
+            McpEndpoint = _mcpService.LocalEndpoint;
+            McpLanEndpoints = new ObservableCollection<string>(_mcpService.LanEndpoints());
+            McpClientConfigJson = _mcpService.ClientConfigJson();
+            McpRecentCalls = new ObservableCollection<McpCallRecord>(_mcpService.RecentCalls);
+            McpLastError = _mcpService.LastError;
+            UpdateMcpTokenDisplay();
+        }
+
+        private void UpdateMcpTokenDisplay()
+            => McpTokenDisplay = McpTokenVisible ? _mcpService.Token : _mcpService.TokenMasked();
 
         #endregion
 
@@ -313,6 +434,172 @@ namespace LLM_Wiki.ViewModels.Pages
             {
                 _toastService.ShowError("复制剪贴板失败");
             }
+        }
+
+        #endregion
+
+        #region MCP 命令（设计 08§9）
+
+        [RelayCommand]
+        private async Task ToggleMcpAsync()
+        {
+            if (McpIsBusy) return;
+            if (!McpIsRunning && !CanStart)
+            {
+                McpLastError = "请先在首页选择或创建知识库";
+                return;
+            }
+
+            McpIsBusy = true;
+            try
+            {
+                if (McpIsRunning)
+                {
+                    _mcpService.SetMode(McpMode.Off, out _);
+                    _toastService.ShowSuccess("Agent 接入已关闭");
+                }
+                else if (!_mcpService.SetMode(McpMode.ReadOnly, out var error))
+                {
+                    McpLastError = error;
+                    _toastService.ShowError("Agent 接入启动失败：" + error);
+                }
+                else
+                {
+                    _toastService.ShowSuccess("Agent 接入已启动（只读）");
+                }
+            }
+            finally
+            {
+                McpIsBusy = false;
+                RefreshMcpStatus();
+            }
+
+            await Task.CompletedTask;
+        }
+
+        /// <summary>写入档开关：开启前必须二次确认，取消则回退开关视觉（设计 08§4）。</summary>
+        [RelayCommand]
+        private async Task ToggleMcpWriteAsync()
+        {
+            if (!McpIsRunning || McpIsBusy) return;
+
+            if (McpWriteEnabled)
+            {
+                _mcpService.SetMode(McpMode.ReadOnly, out _);
+                _toastService.ShowSuccess("已切回只读档");
+                RefreshMcpStatus();
+                return;
+            }
+
+            var confirmed = ConfirmEnableMcpWrite != null && await ConfirmEnableMcpWrite();
+            if (!confirmed)
+            {
+                McpWriteEnabled = false;
+                OnPropertyChanged(nameof(McpWriteEnabled));
+                RefreshMcpStatus();
+                return;
+            }
+
+            McpIsBusy = true;
+            try
+            {
+                if (!_mcpService.SetMode(McpMode.ReadWrite, out var error))
+                {
+                    McpLastError = error;
+                    _toastService.ShowError("开启写入档失败：" + error);
+                }
+                else
+                {
+                    _toastService.ShowWarning("写入档已开启：Agent 可修改 wiki/ 下的文件");
+                }
+            }
+            finally
+            {
+                McpIsBusy = false;
+                RefreshMcpStatus();
+            }
+        }
+
+        [RelayCommand]
+        private void ToggleMcpLan()
+        {
+            if (McpIsBusy) return;
+            var target = !McpAllowLan;
+            if (!_mcpService.SetAllowLan(target, out var error))
+            {
+                McpLastError = error;
+                _toastService.ShowError("局域网监听设置失败：" + error);
+            }
+            else
+            {
+                _toastService.ShowSuccess(target
+                    ? "已允许局域网访问 MCP（重启监听生效）"
+                    : "已恢复仅本机监听");
+            }
+            RefreshMcpStatus();
+        }
+
+        [RelayCommand]
+        private void RetryMcp()
+        {
+            if (McpIsRunning || McpIsBusy) return;
+            if (!CanStart)
+            {
+                McpLastError = "请先在首页选择或创建知识库";
+                return;
+            }
+
+            McpIsBusy = true;
+            try
+            {
+                if (!_mcpService.SetMode(McpMode.ReadOnly, out var error))
+                {
+                    McpLastError = error;
+                    _toastService.ShowError("Agent 接入启动失败：" + error);
+                }
+                else
+                {
+                    McpLastError = "";
+                    _toastService.ShowSuccess("Agent 接入已启动（只读）");
+                }
+            }
+            finally
+            {
+                McpIsBusy = false;
+                RefreshMcpStatus();
+            }
+        }
+
+        [RelayCommand]
+        private void ToggleMcpTokenVisibility() => McpTokenVisible = !McpTokenVisible;
+
+        [RelayCommand]
+        private void CopyMcpToken()
+        {
+            if (string.IsNullOrEmpty(_mcpService.Token)) return;
+            CopyToClipboard(_mcpService.Token, "已复制 MCP 令牌");
+        }
+
+        [RelayCommand]
+        private void RegenerateMcpToken()
+        {
+            _mcpService.RegenerateToken();
+            RefreshMcpStatus();
+            _toastService.ShowWarning("已生成新令牌，旧令牌立即失效，已连接的 Agent 需要更新配置");
+        }
+
+        [RelayCommand]
+        private void CopyMcpEndpoint()
+        {
+            if (string.IsNullOrEmpty(McpEndpoint)) return;
+            CopyToClipboard(McpEndpoint, "已复制 MCP 端点");
+        }
+
+        [RelayCommand]
+        private void CopyMcpClientConfig()
+        {
+            if (string.IsNullOrEmpty(McpClientConfigJson)) return;
+            CopyToClipboard(McpClientConfigJson, "已复制客户端配置");
         }
 
         #endregion

@@ -27,6 +27,13 @@ namespace LLM_Wiki.Views.Dialogs
         /// <returns>点击确定返回 true，取消返回 false</returns>
         public async Task<bool> ShowAsync(string content, string title = "提示", string primaryButtonText = "确认", CancellationToken cancellationToken = default)
         {
+            // 资源中声明的对话框不在可视树内，需显式挂到窗口的 ContentDialogHost（WPF-UI 4.3）。
+            if (DialogHostEx == null)
+            {
+                var window = Window.GetWindow(this) ?? Application.Current?.MainWindow;
+                if (window != null) DialogHostEx = ContentDialogHost.GetForWindow(window);
+            }
+
             Title = title;
             PrimaryButtonText = primaryButtonText;
             if (ContentText != null) ContentText.Text = content;

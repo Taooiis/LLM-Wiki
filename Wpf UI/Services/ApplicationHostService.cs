@@ -29,6 +29,24 @@ namespace LLM_Wiki.Services
         public async Task StartAsync(CancellationToken cancellationToken)
         {
             await HandleActivationAsync();
+            SyncMcpCurrentKb();
+        }
+
+        /// <summary>把当前知识库同步给 MCP 服务（Prompts 无 kb 参数，只能跟随当前库）。</summary>
+        private void SyncMcpCurrentKb()
+        {
+            var mainVm = _serviceProvider.GetService<ViewModels.Windows.MainWindowViewModel>();
+            var context = _serviceProvider.GetService<McpServerContext>();
+            if (mainVm == null || context == null) return;
+
+            context.CurrentKb = mainVm.CurrentKb;
+            mainVm.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(ViewModels.Windows.MainWindowViewModel.CurrentKb))
+                {
+                    context.CurrentKb = mainVm.CurrentKb;
+                }
+            };
         }
 
         /// <summary>

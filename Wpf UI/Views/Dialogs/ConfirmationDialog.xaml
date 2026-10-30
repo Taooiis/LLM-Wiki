@@ -9,33 +9,17 @@
   PrimaryButtonText="确认"
   SecondaryButtonText="取消"
   IsSecondaryButtonEnabled="True"
+  Style="{StaticResource {x:Type ui:ContentDialog}}"
   mc:Ignorable="d"
   d:DesignHeight="200"
   d:DesignWidth="400"
   >
-  <Grid Margin="20">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto" />
-      <RowDefinition Height="Auto" />
-    </Grid.RowDefinitions>
-
-    <!-- 标题 -->
-    <TextBlock
-      Grid.Row="0"
-      Text="提示"
-      Style="{StaticResource SectionTitleText}"
-      TextAlignment="Center"
-      Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-      x:Name="TitleText" />
-
-    <!-- 内容 -->
-    <TextBlock
-      Grid.Row="1"
-      Text="操作不可恢复，确定执行吗？"
-      TextWrapping="Wrap"
-      TextAlignment="Center"
-      FontSize="{StaticResource FontSizeBody}"
-      Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-      x:Name="ContentText" />
-  </Grid>
+  <TextBlock
+    x:Name="ContentText"
+    MinWidth="320"
+    Margin="0,4,0,8"
+    Text="操作不可恢复，确定执行吗？"
+    TextWrapping="Wrap"
+    FontSize="{StaticResource FontSizeBody}"
+    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 </ui:ContentDialog>

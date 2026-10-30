@@ -15,6 +15,21 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\LlmWiki.Core\LlmWiki.Core.csproj" />
+    <ProjectReference Include="..\LlmWiki.McpStdio\LlmWiki.McpStdio.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <!-- stdio MCP 可执行文件随桌面端输出，客户端配置片段里的路径才能直接使用 -->
+  <Target Name="CopyMcpStdio" AfterTargets="Build">
+    <ItemGroup>
+      <McpStdioFiles Include="..\LlmWiki.McpStdio\bin\$(Configuration)\net10.0\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(McpStdioFiles)" DestinationFolder="$(OutDir)%(RecursiveDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
     <PackageReference Include="WPF-UI" Version="4.3.0" />
     <PackageReference Include="WPF-UI.DependencyInjection" Version="4.3.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.14" />
