@@ -21,6 +21,7 @@
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
 
       <!-- 标题 -->
@@ -100,7 +101,8 @@
       <Border Grid.Row="2"
               Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
               CornerRadius="8"
-              Padding="20">
+              Padding="20"
+              Margin="0,0,0,16">
         <StackPanel>
           <TextBlock Style="{StaticResource SectionTitleText}" Text="purpose.md" />
           <TextBlock Text="知识库目标 / 关键问题 / 研究范围"
@@ -117,6 +119,32 @@
           <ui:Button Content="保存"
                      Command="{Binding ViewModel.SavePurposeCommand}"
                      CommandParameter="{Binding ElementName=PurposeEditor, Path=Text}"
+                     Margin="0,8,0,0"
+                     Icon="Save24" />
+        </StackPanel>
+      </Border>
+
+      <!-- schema.md 编辑（结构规则） -->
+      <Border Grid.Row="3"
+              Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+              CornerRadius="8"
+              Padding="20">
+        <StackPanel>
+          <TextBlock Style="{StaticResource SectionTitleText}" Text="schema.md" />
+          <TextBlock Text="结构规则（默认即可，一般不动）"
+                     Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                     Margin="0,0,0,12" />
+          <ui:TextBox x:Name="SchemaEditor"
+                      MinHeight="120"
+                      Text="{Binding ViewModel.SchemaContent, Mode=TwoWay}"
+                      AcceptsReturn="True"
+                      TextWrapping="Wrap"
+                      VerticalScrollBarVisibility="Auto"
+                      Background="{DynamicResource ApplicationBackgroundBrush}"
+                      Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+          <ui:Button Content="保存"
+                     Command="{Binding ViewModel.SaveSchemaCommand}"
+                     CommandParameter="{Binding ElementName=SchemaEditor, Path=Text}"
                      Margin="0,8,0,0"
                      Icon="Save24" />
         </StackPanel>
