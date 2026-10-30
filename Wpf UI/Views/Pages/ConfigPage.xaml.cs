@@ -48,5 +48,11 @@ namespace LLM_Wiki.Views.Pages
                 ViewModel.ValidateWikisDir();
             }
         }
+
+        /// <summary>手输路径时即时验证，保存按钮状态跟随输入。</summary>
+        private void OnWikisDirInputChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        {
+            ViewModel.ValidateWikisDir();
+        }
     }
 }

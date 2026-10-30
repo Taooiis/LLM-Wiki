@@ -36,7 +36,8 @@ namespace LLM_Wiki.Views.Pages
             }
 
             ViewModel.SelectedFile = file;
-            ViewModel.LoadFileContent(ViewModel.SelectedKb, file);
+            // 列表存的是裸文件名，源文档实际位于 raw/sources/ 下
+            ViewModel.LoadFileContent(ViewModel.SelectedKb, "raw/sources/" + file);
             PreviewText.Text = ViewModel.DocumentContent;
             EditButton.IsEnabled = true;
         }

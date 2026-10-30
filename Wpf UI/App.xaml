@@ -11,8 +11,62 @@
   <Application.Resources>
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
-        <ui:ThemesDictionary Theme="Light" />
+        <ui:ThemesDictionary Theme="Dark" />
         <ui:ControlsDictionary />
+
+        <!--
+          Windows 蓝主调（Fluent 深色）：覆盖 WPF-UI accent 体系。
+          设计文档 00§5：AccentStrong #0078D4 主按钮、Accent #60CDFF 轻强调；
+          硬性禁用紫色主色与紫色渐变。
+        -->
+        <ResourceDictionary>
+          <Color x:Key="SystemAccentColor">#0078D4</Color>
+          <Color x:Key="SystemAccentColorPrimary">#0078D4</Color>
+          <Color x:Key="SystemAccentColorSecondary">#0063B1</Color>
+          <Color x:Key="SystemAccentColorTertiary">#2899F5</Color>
+
+          <SolidColorBrush x:Key="SystemAccentColorPrimaryBrush" Color="{StaticResource SystemAccentColorPrimary}" />
+          <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="{StaticResource SystemAccentColorPrimary}" />
+          <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#B30078D4" />
+          <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#800078D4" />
+          <SolidColorBrush x:Key="AccentFillColorSelectedTextBackgroundBrush" Color="{StaticResource SystemAccentColorPrimary}" />
+          <SolidColorBrush x:Key="SystemControlHighlightAccentBrush" Color="{StaticResource SystemAccentColorPrimary}" />
+          <SolidColorBrush x:Key="SystemControlHighlightAccent2Brush" Color="#CC0078D4" />
+          <!-- 导航选中底：低饱和蓝（设计文档 00§3 建议 #163A55 一类） -->
+          <SolidColorBrush x:Key="SystemControlHighlightAccent3Brush" Color="#AA163A55" />
+
+          <!-- 轻强调（焦点/链接）：#60CDFF -->
+          <SolidColorBrush x:Key="AccentLightBrush" Color="#60CDFF" />
+
+          <!-- 状态色：设计文档 00§5 -->
+          <SolidColorBrush x:Key="SuccessBrush" Color="#6CCB5F" />
+          <SolidColorBrush x:Key="WarningBrush" Color="#FCE100" />
+          <SolidColorBrush x:Key="DangerBrush" Color="#FF6B6B" />
+          <SolidColorBrush x:Key="InfoBrush" Color="#60A5FA" />
+
+          <!-- 趋势色（统计卡涨跌）：绿涨红跌 -->
+          <SolidColorBrush x:Key="TrendUpBrush" Color="#6CCB5F" />
+          <SolidColorBrush x:Key="TrendDownBrush" Color="#FF6B6B" />
+
+          <!--
+            深色背景 Token（设计文档 00§5）：
+            主背景 #202020、导航 #1C1C1C、卡片 #2B2B2B、控件 #1F1F1F、描边 #454545。
+            覆盖 WPF-UI 对应画刷，让全站用同一套底色。
+          -->
+          <SolidColorBrush x:Key="AppBackgroundBrush" Color="#202020" />
+          <SolidColorBrush x:Key="ApplicationBackgroundBrush" Color="#202020" />
+          <SolidColorBrush x:Key="NavigationBackgroundBrush" Color="#1C1C1C" />
+          <SolidColorBrush x:Key="NavigationViewExpandedPaneBackground" Color="#1C1C1C" />
+          <SolidColorBrush x:Key="LayerBackgroundBrush" Color="#242424" />
+          <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#2B2B2B" />
+          <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="#323232" />
+          <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="#1F1F1F" />
+          <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="#3A3A3A" />
+          <SolidColorBrush x:Key="StrokeFillColorDefaultBrush" Color="#454545" />
+          <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#F5F5F5" />
+          <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#C5C5C5" />
+          <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#9A9A9A" />
+        </ResourceDictionary>
       </ResourceDictionary.MergedDictionaries>
 
       <!-- 全局字号档位：所有页面统一引用，禁止页面内魔数字号 -->
@@ -37,6 +91,25 @@
 
       <!-- 页面内容统一留白节奏 -->
       <Thickness x:Key="PageContentMargin">24,16,24,24</Thickness>
+
+      <!-- 卡片容器：细边框 + 圆角 10（设计文档 00§5.1） -->
+      <Style x:Key="CardBorder" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource StrokeFillColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="16" />
+      </Style>
+
+      <!-- 统计卡：大数字 + 标签 -->
+      <Style x:Key="StatCardValue" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="28" />
+        <Setter Property="FontWeight" Value="Bold" />
+      </Style>
+      <Style x:Key="StatCardLabel" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+      </Style>
     </ResourceDictionary>
   </Application.Resources>
 </Application>

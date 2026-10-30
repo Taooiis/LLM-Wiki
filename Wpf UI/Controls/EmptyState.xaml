@@ -1,0 +1,35 @@
+<UserControl
+  x:Class="LLM_Wiki.Controls.EmptyState"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  mc:Ignorable="d">
+  <!-- 统一空状态：图标 + 标题 + 说明 + 可选操作（指南 §3.4） -->
+  <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24">
+    <TextBlock
+      x:Name="IconText"
+      FontSize="40"
+      HorizontalAlignment="Center"
+      Opacity="0.45"
+      Text="{Binding Icon, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+    <TextBlock
+      FontSize="16"
+      FontWeight="SemiBold"
+      HorizontalAlignment="Center"
+      Margin="0,12,0,4"
+      Text="{Binding Title, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+    <TextBlock
+      FontSize="13"
+      Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+      HorizontalAlignment="Center"
+      TextAlignment="Center"
+      TextWrapping="Wrap"
+      MaxWidth="360"
+      Text="{Binding Description, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+    <ContentControl
+      HorizontalAlignment="Center"
+      Margin="0,14,0,0"
+      Content="{Binding ActionContent, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+  </StackPanel>
+</UserControl>

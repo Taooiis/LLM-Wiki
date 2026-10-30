@@ -65,7 +65,8 @@
             <ui:TextBox Grid.Row="1" Grid.Column="0"
                         x:Name="WikisDirInput"
                         Margin="0,0,8,0"
-                        Text="{Binding ViewModel.WikisDirInput, Mode=TwoWay}"
+                        Text="{Binding ViewModel.WikisDirInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        TextChanged="OnWikisDirInputChanged"
                         Background="{DynamicResource ApplicationBackgroundBrush}"
                         Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                         BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />

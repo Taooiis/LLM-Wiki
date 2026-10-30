@@ -89,6 +89,16 @@ namespace LLM_Wiki.ViewModels.Pages
         [ObservableProperty]
         private string _currentKbPath = "";
 
+        // 统计卡数据（Admin Panel 风格顶栏）
+        [ObservableProperty]
+        private int _kbCount;
+
+        [ObservableProperty]
+        private int _fileCount;
+
+        [ObservableProperty]
+        private int _pendingChangeCount;
+
         /// <summary>选中库变化：写入全局 CurrentKb（其他页面据此刷新）并更新路径显示。</summary>
         partial void OnSelectedKbChanged(string value)
         {
@@ -113,6 +123,7 @@ namespace LLM_Wiki.ViewModels.Pages
                 ? prev
                 : Kbs.Count > 0 ? Kbs[0] : "";
             SelectedKb = target;
+            KbCount = Kbs.Count;
         }
 
         public void LoadFiles(string kb)

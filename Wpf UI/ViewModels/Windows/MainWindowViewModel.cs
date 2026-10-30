@@ -16,7 +16,7 @@ namespace LLM_Wiki.ViewModels.Windows
         {
             new NavigationViewItem()
             {
-                Content = "Home",
+                Content = "首页",
                 Icon = new SymbolIcon { Symbol = SymbolRegular.Home24 },
                 TargetPageType = typeof(Views.Pages.DashboardPage)
             },
@@ -46,14 +46,15 @@ namespace LLM_Wiki.ViewModels.Windows
             }
         };
 
+        // 底部导航固定顺序：小白指南、配置、设置（设计文档 00§3）
         [ObservableProperty]
         private ObservableCollection<object> _footerMenuItems = new()
         {
             new NavigationViewItem()
             {
-                Content = "Settings",
-                Icon = new SymbolIcon { Symbol = SymbolRegular.Settings24 },
-                TargetPageType = typeof(Views.Pages.SettingsPage)
+                Content = "小白指南",
+                Icon = new SymbolIcon { Symbol = SymbolRegular.Info24 },
+                TargetPageType = typeof(Views.Pages.GuidePage)
             },
             new NavigationViewItem()
             {
@@ -63,9 +64,9 @@ namespace LLM_Wiki.ViewModels.Windows
             },
             new NavigationViewItem()
             {
-                Content = "小白指南",
-                Icon = new SymbolIcon { Symbol = SymbolRegular.Info24 },
-                TargetPageType = typeof(Views.Pages.GuidePage)
+                Content = "设置",
+                Icon = new SymbolIcon { Symbol = SymbolRegular.Settings24 },
+                TargetPageType = typeof(Views.Pages.SettingsPage)
             }
         };
 
