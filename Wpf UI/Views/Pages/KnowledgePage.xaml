@@ -16,121 +16,280 @@
   ui:Design.Background="{DynamicResource ApplicationBackgroundBrush}"
   ui:Design.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+  PreviewKeyDown="OnPagePreviewKeyDown"
   mc:Ignorable="d">
   <Page.Resources>
     <dialogs:UnsavedChangesDialog x:Key="UnsavedDlg" />
+    <dialogs:ConfirmationDialog x:Key="ConfirmDlg" />
     <HierarchicalDataTemplate DataType="{x:Type vm:KnowledgeTreeNode}" ItemsSource="{Binding VisibleChildren}">
       <StackPanel Orientation="Horizontal">
-        <ui:SymbolIcon Symbol="{Binding IconKey, Converter={StaticResource FileNodeIcon}}" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" />
-        <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <ui:SymbolIcon
+          Margin="0,0,8,0"
+          VerticalAlignment="Center"
+          FontSize="16"
+          Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TreeViewItem}}">
+          <ui:SymbolIcon.Style>
+            <Style TargetType="ui:SymbolIcon">
+              <Setter Property="Symbol" Value="{Binding IconKey, Converter={StaticResource FileNodeIcon}}" />
+              <Style.Triggers>
+                <!-- index.md 用 Home 图标（01§2）；FileNodeIconConverter 在禁止修改文件内，故在页面调用处处理 -->
+                <DataTrigger Binding="{Binding IsIndexPage}" Value="True">
+                  <Setter Property="Symbol" Value="Home24" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </ui:SymbolIcon.Style>
+        </ui:SymbolIcon>
+        <TextBlock
+          VerticalAlignment="Center"
+          Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TreeViewItem}}"
+          Text="{Binding DisplayName}"
+          TextTrimming="CharacterEllipsis" />
       </StackPanel>
     </HierarchicalDataTemplate>
   </Page.Resources>
 
-  <Grid Margin="{StaticResource PageContentMargin}">
+  <Grid x:Name="PageRoot" Margin="24,16,24,24">
     <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="248" MinWidth="220" MaxWidth="320" />
+      <ColumnDefinition Width="16" /><ColumnDefinition Width="*" MinWidth="380" />
+      <ColumnDefinition Width="12" /><ColumnDefinition Width="Auto" />
+    </Grid.ColumnDefinitions>
 
-    <Grid Grid.Row="0" Margin="0,0,0,12">
+    <!-- 阅读标题只出现一次：首页标题区即正文标题，不再额外放“知识”大标题 -->
+    <Grid Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="3" Margin="0,0,0,16">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
       <StackPanel Grid.Column="0">
-        <TextBlock Style="{StaticResource PageTitleText}" Margin="0" Text="知识" />
-        <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis">
-          <Run Text="{Binding ViewModel.SelectedKb, Mode=OneWay}" />
-          <Run Text=" · " />
-          <Run Text="{Binding ViewModel.PendingText, Mode=OneWay}" />
-          <Run Text=" · 默认只读；AI 维护的内容，手动修订需从“更多”进入" />
-        </TextBlock>
+        <StackPanel Orientation="Horizontal">
+          <TextBlock
+            VerticalAlignment="Center"
+            FontSize="{StaticResource FontSizePageTitle}"
+            FontWeight="SemiBold"
+            Text="{Binding ViewModel.HeaderTitle}"
+            TextTrimming="CharacterEllipsis" />
+          <Border
+            Margin="12,0,0,0"
+            Padding="8,2"
+            VerticalAlignment="Center"
+            Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+            BorderBrush="{DynamicResource StrokeBrush}"
+            BorderThickness="1"
+            CornerRadius="10"
+            Visibility="{Binding ViewModel.HasCurrentPage, Converter={StaticResource BoolToVis}}">
+            <TextBlock FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding ViewModel.ReadOnlyBadge}" />
+          </Border>
+          <TextBlock
+            Margin="12,0,0,0"
+            VerticalAlignment="Center"
+            FontSize="{StaticResource FontSizeCaption}"
+            Foreground="{DynamicResource WarningBrush}"
+            Text="{Binding ViewModel.Workspace.SaveStateText}"
+            Visibility="{Binding ViewModel.IsManualEditing, Converter={StaticResource BoolToVis}}" />
+        </StackPanel>
+        <TextBlock
+          Margin="0,4,0,0"
+          FontFamily="Consolas"
+          FontSize="{StaticResource FontSizeCaption}"
+          Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+          Text="{Binding ViewModel.CurrentRelPath}"
+          TextTrimming="CharacterEllipsis" />
       </StackPanel>
+
       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
-        <ui:Button Content="刷新" Icon="ArrowSync24" Command="{Binding ViewModel.RefreshCommand}" Margin="0,0,8,0" />
-        <ui:Button Content="打开文件夹" Icon="FolderOpen24" Command="{Binding ViewModel.OpenKbFolderCommand}" Margin="0,0,8,0" />
-        <ui:Button Content="复制路径" Icon="Copy24" Command="{Binding ViewModel.CopyPathCommand}" Margin="0,0,8,0" />
+        <StackPanel
+          Margin="0,0,8,0"
+          Orientation="Horizontal"
+          Visibility="{Binding ViewModel.IsManualEditing, Converter={StaticResource BoolToVis}}">
+          <ui:Button Content="取消" Command="{Binding ViewModel.Workspace.CancelEditCommand}" Margin="0,0,8,0" />
+          <ui:Button Content="保存 (Ctrl+S)" Appearance="Primary" Command="{Binding ViewModel.Workspace.SaveCommand}" Margin="0,0,8,0" />
+          <ui:Button Content="完成编辑" Command="{Binding ViewModel.Workspace.CompleteEditingCommand}" Margin="0,0,8,0" />
+        </StackPanel>
+        <ui:Button
+          Content="目录"
+          Icon="TextBulletListLtr24"
+          Click="OnTocClick"
+          Margin="0,0,8,0"
+          Visibility="{Binding ViewModel.HasHeadings, Converter={StaticResource BoolToVis}}"
+          ToolTip="本页目录" />
+        <ui:Button Content="刷新" Icon="ArrowSync24" Command="{Binding ViewModel.RefreshCommand}" Margin="0,0,8,0" ToolTip="刷新目录与当前页（F5）" />
         <ui:Button Content="更多 ▾" Click="OnMoreClick" />
       </StackPanel>
     </Grid>
 
-    <Grid Grid.Row="1">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="300" />
-        <ColumnDefinition Width="8" />
-        <ColumnDefinition Width="*" />
-      </Grid.ColumnDefinitions>
+    <!-- 加载失败持久提醒：读取失败展示原因与重试，不当空库（01§5.2/§8） -->
+    <Grid Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="3" Margin="0,0,0,12" Visibility="{Binding ViewModel.HasLoadError, Converter={StaticResource BoolToVis}}">
+      <ui:InfoBar
+        IsClosable="False"
+        IsOpen="True"
+        Message="{Binding ViewModel.LoadError}"
+        Severity="Error"
+        Title="知识加载失败" />
+      <ui:Button
+        Margin="0,0,16,0"
+        HorizontalAlignment="Right"
+        VerticalAlignment="Center"
+        Appearance="Secondary"
+        Command="{Binding ViewModel.RetryLoadCommand}"
+        Content="重试"
+        ToolTip="重新加载知识目录与当前页" />
+    </Grid>
 
-      <Grid Grid.Column="0">
+    <!-- 规则更新提醒：确认按新规则核对或稍后处理（01§8），关闭不认定规则已完成 -->
+    <Grid Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="3" Margin="0,0,0,12" Visibility="{Binding ViewModel.ShowRuleBar, Converter={StaticResource BoolToVis}}">
+      <ui:InfoBar
+        IsClosable="False"
+        IsOpen="True"
+        Message="{Binding ViewModel.RuleMessage}"
+        Severity="Warning"
+        Title="规则已更新" />
+      <StackPanel Margin="0,0,16,0" HorizontalAlignment="Right" VerticalAlignment="Center" Orientation="Horizontal">
+        <ui:Button Command="{Binding ViewModel.IgnoreRulesCommand}" Content="稍后处理" Margin="0,0,8,0" ToolTip="仅忽略当前规则版本，稍后再核对" />
+        <ui:Button Appearance="Primary" Command="{Binding ViewModel.AcknowledgeRulesCommand}" Content="确认已按新规则核对现有知识" />
+      </StackPanel>
+    </Grid>
+
+    <!-- 待整理提示：只显示数量与去整理，不在本页确认；“稍后处理”只折叠不清变更（01§8） -->
+    <Border
+      Grid.Row="3" Grid.Column="2" Grid.ColumnSpan="3"
+      Margin="0,0,0,12"
+      Padding="12,8"
+      Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+      BorderBrush="{DynamicResource AccentFillColorTertiaryBrush}"
+      BorderThickness="1"
+      CornerRadius="8"
+      Visibility="{Binding ViewModel.ShowPendingBar, Converter={StaticResource BoolToVis}}">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <ui:SymbolIcon Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center" FontSize="18" Foreground="{DynamicResource AccentLightBrush}" Symbol="Info24" />
+        <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{Binding ViewModel.PendingText}" TextWrapping="Wrap" />
+        <StackPanel Grid.Column="2" Margin="12,0,0,0" Orientation="Horizontal">
+          <ui:Button Command="{Binding ViewModel.DismissPendingBarCommand}" Content="稍后处理" Margin="0,0,8,0" ToolTip="只收起提醒，不清除待整理变更" />
+          <ui:Button Content="去整理" Command="{Binding ViewModel.GoOrganizeCommand}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+      <!-- 目录 -->
+      <Grid Grid.Column="0" Grid.Row="0" Grid.RowSpan="5">
         <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
           <RowDefinition Height="Auto" />
           <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <ui:TextBox
+        <TextBlock
           Grid.Row="0"
           Margin="0,0,0,8"
-          PlaceholderText="筛选知识目录…"
+          FontSize="{StaticResource FontSizeSectionTitle}"
+          FontWeight="SemiBold"
+          Foreground="{DynamicResource ItemTextBrush}"
+          Text="知识目录" />
+        <ui:TextBox
+          x:Name="TreeFilterBox"
+          Grid.Row="1"
+          Margin="0,0,0,8"
           Icon="Search24"
+          PlaceholderText="筛选知识文件名…"
           Text="{Binding ViewModel.SearchKeyword, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+        <!-- 大树异步/虚拟化，不外包 ScrollViewer 破坏虚拟化（01§5） -->
         <TreeView
           x:Name="KnowledgeTree"
-          Grid.Row="1"
-          ItemsSource="{Binding ViewModel.TreeItems}"
-          SelectedItemChanged="OnTreeSelected"
+          Grid.Row="2"
           Background="Transparent"
           BorderThickness="0"
-          ScrollViewer.VerticalScrollBarVisibility="Auto">
-          <TreeView.ItemContainerStyle>
-            <Style TargetType="TreeViewItem">
-              <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-              <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
-              <Setter Property="Padding" Value="2,3" />
-            </Style>
-          </TreeView.ItemContainerStyle>
+          ItemContainerStyle="{StaticResource ProjectTreeItem}"
+          ItemsSource="{Binding ViewModel.TreeItems}"
+          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+          ScrollViewer.VerticalScrollBarVisibility="Auto"
+          VirtualizingPanel.VirtualizationMode="Recycling"
+          VirtualizingStackPanel.IsVirtualizing="True"
+          SelectedItemChanged="OnTreeSelected">
+          <TreeView.ItemsPanel>
+            <ItemsPanelTemplate>
+              <VirtualizingStackPanel />
+            </ItemsPanelTemplate>
+          </TreeView.ItemsPanel>
         </TreeView>
+        <!-- 过滤无结果：提示 + 清空筛选入口（01§5） -->
+        <StackPanel
+          Grid.Row="2"
+          Margin="8,12,8,0"
+          HorizontalAlignment="Center"
+          Visibility="{Binding ViewModel.TreeItems.Count, Converter={StaticResource CountToEmptyVis}}">
+          <TextBlock
+            HorizontalAlignment="Center"
+            FontSize="{StaticResource FontSizeCaption}"
+            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+            Text="没有匹配的知识文件"
+            TextAlignment="Center"
+            TextWrapping="Wrap" />
+          <ui:Button
+            Margin="0,8,0,0"
+            HorizontalAlignment="Center"
+            Command="{Binding ViewModel.ClearTreeFilterCommand}"
+            Content="清空筛选"
+            Visibility="{Binding ViewModel.SearchKeyword, Converter={StaticResource StringToVisibility}}" />
+        </StackPanel>
       </Grid>
 
-      <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" Background="Transparent" />
+      <GridSplitter
+        Grid.Column="1" Grid.Row="0" Grid.RowSpan="5"
+        Width="8"
+        HorizontalAlignment="Stretch"
+        Background="Transparent"
+        ResizeBehavior="PreviousAndNext" />
 
-      <Grid Grid.Column="2">
+      <Border Grid.Column="2" Grid.ColumnSpan="3" Grid.Row="4" Background="{DynamicResource ReadingSurfaceBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1" CornerRadius="8" />
+      <!-- 正文 + 来源 -->
+      <Grid Grid.Column="2" Grid.Row="4">
         <Grid.RowDefinitions>
-          <RowDefinition Height="Auto" />
           <RowDefinition Height="Auto" />
           <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Border
-          Grid.Row="0"
-          Margin="0,0,0,8"
-          Padding="12,8"
-          CornerRadius="8"
-          Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-          BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
-          BorderThickness="1"
-          Visibility="{Binding ViewModel.HasCurrentPage, Converter={StaticResource BoolToVis}}">
-          <Grid>
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <StackPanel Grid.Column="0">
-              <TextBlock FontSize="18" FontWeight="SemiBold" Text="{Binding ViewModel.PageTitle}" />
-              <TextBlock FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="{Binding ViewModel.CurrentRelPath}" />
-            </StackPanel>
-            <TextBlock Grid.Column="1" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="只读阅读" />
-          </Grid>
-        </Border>
-
-        <StackPanel Grid.Row="1" Margin="0,0,0,8" Visibility="{Binding ViewModel.HasCurrentPage, Converter={StaticResource BoolToVis}}">
+        <WrapPanel Grid.Row="0" Margin="0,0,0,8" Visibility="{Binding ViewModel.HasCurrentPage, Converter={StaticResource BoolToVis}}">
           <ItemsControl ItemsSource="{Binding ViewModel.Links}" Visibility="{Binding ViewModel.HasLinks, Converter={StaticResource BoolToVis}}">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Button Margin="0,0,6,6" Padding="8,3" Background="Transparent" BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" BorderThickness="1" Click="OnLinkClick" Tag="{Binding}">
-                  <TextBlock Text="{Binding Name, StringFormat='↗ {0}'}" Foreground="{DynamicResource AccentLightBrush}" />
+                <Button
+                  Margin="0,0,6,6"
+                  Padding="8,3"
+                  Background="Transparent"
+                  BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
+                  BorderThickness="1"
+                  Click="OnLinkClick"
+                  IsEnabled="{Binding IsMissing, Converter={StaticResource InverseBool}}"
+                  Tag="{Binding}"
+                  ToolTip="{Binding ChipToolTip}">
+                  <TextBlock Text="{Binding DisplayName}">
+                    <TextBlock.Style>
+                      <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="{DynamicResource AccentLightBrush}" />
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                            <!-- 缺失目标不画可用蓝色链接：置灰 + 就地标注（01§3/§8） -->
+                            <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}" />
+                          </DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </TextBlock.Style>
+                  </TextBlock>
                 </Button>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
@@ -141,40 +300,143 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Button Margin="0,0,6,6" Padding="8,3" Background="Transparent" BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" BorderThickness="1" Click="OnSourceClick" Tag="{Binding}">
-                  <TextBlock Text="{Binding Name, StringFormat='来源：{0}'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <Button
+                  Margin="0,0,6,6"
+                  Padding="8,3"
+                  Background="Transparent"
+                  BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
+                  BorderThickness="1"
+                  Click="OnSourceClick"
+                  IsEnabled="{Binding IsMissing, Converter={StaticResource InverseBool}}"
+                  Tag="{Binding}"
+                  ToolTip="{Binding ChipToolTip}">
+                  <TextBlock Text="{Binding DisplayName}">
+                    <TextBlock.Style>
+                      <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                            <!-- 缺失来源置灰 + 就地标注“目标不存在”，不再弹全局 toast（01§3/§8） -->
+                            <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}" />
+                          </DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </TextBlock.Style>
+                  </TextBlock>
                 </Button>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-        </StackPanel>
+        </WrapPanel>
 
-        <controls:DocumentWorkspace Grid.Row="2" DataContext="{Binding ViewModel.Workspace}">
+        <controls:DocumentWorkspace
+          x:Name="WorkspaceView"
+          Grid.Row="1"
+          DataContext="{Binding ViewModel.Workspace}"
+          EmptyDescription="从左侧选择知识文件查看内容">
           <controls:DocumentWorkspace.EmptyAction>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-              <ui:Button Content="去资料页" Click="OnGoSourcesClick" Appearance="Primary" Margin="0,0,8,0" />
-              <ui:Button Content="去整理" Click="OnGoOrganizeClick" />
+            <StackPanel HorizontalAlignment="Center" Orientation="Horizontal">
+              <ui:Button
+                Click="OnGoSourcesClick"
+                Content="去资料页"
+                Margin="0,0,8,0"
+                Visibility="{Binding DataContext.ViewModel.ShowEmptyGoSources, RelativeSource={RelativeSource AncestorType=local:KnowledgePage}, Converter={StaticResource BoolToVis}}" />
+              <ui:Button
+                Appearance="Primary"
+                Click="OnGoOrganizeClick"
+                Content="去整理"
+                Visibility="{Binding DataContext.ViewModel.ShowEmptyGoOrganize, RelativeSource={RelativeSource AncestorType=local:KnowledgePage}, Converter={StaticResource BoolToVis}}" />
             </StackPanel>
           </controls:DocumentWorkspace.EmptyAction>
         </controls:DocumentWorkspace>
+
+        <!-- 读取中：区域 Busy 指示，不抢焦点（00§9.7） -->
+        <ui:ProgressRing
+          Grid.RowSpan="2"
+          Width="28"
+          Height="28"
+          HorizontalAlignment="Center"
+          VerticalAlignment="Center"
+          IsHitTestVisible="False"
+          IsIndeterminate="True"
+          Visibility="{Binding ViewModel.IsLoading, Converter={StaticResource BoolToVis}}" />
       </Grid>
 
-      <!-- 空知识 / 无库引导 -->
+      <!-- 页内目录：阅读区不足 900 时收起，用顶部“目录”菜单 -->
       <Border
-        Grid.Column="0"
+        Grid.Column="4" Grid.Row="4"
+        Width="150"
+        Padding="10,12"
+        Background="Transparent"
+        BorderBrush="{DynamicResource StrokeBrush}"
+        BorderThickness="0,0,0,0"
+        CornerRadius="8">
+        <Border.Style>
+          <Style TargetType="Border">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+              <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                  <Condition Binding="{Binding ViewModel.HasHeadings}" Value="True" />
+                  <Condition Binding="{Binding ActualWidth, ElementName=PageRoot, Converter={StaticResource WidthToVis}, ConverterParameter=1150}" Value="Visible" />
+                </MultiDataTrigger.Conditions>
+                <Setter Property="Visibility" Value="Visible" />
+              </MultiDataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Border.Style>
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+          <TextBlock Grid.Row="0" Margin="2,0,0,6" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="本页目录" />
+          <ListView
+            x:Name="HeadingList"
+            Grid.Row="1"
+            Background="Transparent"
+            BorderThickness="0"
+            ItemContainerStyle="{StaticResource ProjectListItem}"
+            ItemsSource="{Binding ViewModel.HeadingItems}"
+            SelectionChanged="OnHeadingSelected"
+            ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListView.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis">
+                  <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                      <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}" />
+                      <Setter Property="Margin" Value="0" />
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding Level}" Value="2"><Setter Property="Margin" Value="8,0,0,0" /></DataTrigger>
+                        <DataTrigger Binding="{Binding Level}" Value="3"><Setter Property="Margin" Value="16,0,0,0" /></DataTrigger>
+                        <DataTrigger Binding="{Binding Level}" Value="4"><Setter Property="Margin" Value="24,0,0,0" /></DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </TextBlock.Style>
+                </TextBlock>
+              </DataTemplate>
+            </ListView.ItemTemplate>
+          </ListView>
+        </Grid>
+      </Border>
+
+      <!-- 空知识 / 无库引导：有资料显示“去整理”，无资料只显示“去资料页”（01§5.1） -->
+      <Border
+        Grid.Row="4"
+        Grid.Column="2"
         Grid.ColumnSpan="3"
-        Background="{DynamicResource AppBackgroundBrush}"
+        Background="{DynamicResource ContentSurfaceBrush}"
         Visibility="{Binding ViewModel.ShowEmpty, Converter={StaticResource BoolToVis}}">
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="460">
-          <TextBlock FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" Text="{Binding ViewModel.EmptyTitle}" TextAlignment="Center" TextWrapping="Wrap" />
+          <TextBlock HorizontalAlignment="Center" FontSize="22" FontWeight="SemiBold" Text="{Binding ViewModel.EmptyTitle}" TextAlignment="Center" TextWrapping="Wrap" />
           <TextBlock Margin="0,8,0,0" TextAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding ViewModel.EmptyDescription}" />
-          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,16,0,0">
+          <StackPanel Margin="0,16,0,0" HorizontalAlignment="Center" Orientation="Horizontal">
             <ui:Button Content="新建知识库" Click="OnCreateKbClick" Appearance="Primary" Margin="0,0,8,0" Visibility="{Binding ViewModel.HasKb, Converter={StaticResource InvBoolToVis}}" />
-            <ui:Button Content="去资料页" Click="OnGoSourcesClick" Margin="0,0,8,0" Visibility="{Binding ViewModel.HasKb, Converter={StaticResource BoolToVis}}" />
-            <ui:Button Content="去整理" Click="OnGoOrganizeClick" Appearance="Primary" Visibility="{Binding ViewModel.HasKb, Converter={StaticResource BoolToVis}}" />
+            <ui:Button Content="去资料页" Click="OnGoSourcesClick" Margin="0,0,8,0" Visibility="{Binding ViewModel.ShowEmptyGoSources, Converter={StaticResource BoolToVis}}" />
+            <ui:Button Content="去整理" Click="OnGoOrganizeClick" Appearance="Primary" Visibility="{Binding ViewModel.ShowEmptyGoOrganize, Converter={StaticResource BoolToVis}}" />
           </StackPanel>
         </StackPanel>
       </Border>
-    </Grid>
   </Grid>
 </Page>

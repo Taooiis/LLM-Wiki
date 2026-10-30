@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 
 using LLM_Wiki.Services;
+using LLM_Wiki.ViewModels;
 using LLM_Wiki.ViewModels.Windows;
 using LLM_Wiki.Views.Dialogs;
 using LLM_Wiki.Views.Pages;
@@ -24,6 +25,7 @@ public partial class MainWindow : INavigationWindow
     private readonly System.Windows.Threading.DispatcherTimer _statusTimer;
     private bool _closeConfirmed;
     private bool _syncingSearch;
+    private bool _allowNavigation;
 
     public MainWindow(
         MainWindowViewModel viewModel,
@@ -43,6 +45,8 @@ public partial class MainWindow : INavigationWindow
         SetPageService(navigationViewPageProvider);
         navigationService.SetNavigationControl(RootNavigation);
         _snackbarService.SetSnackbarPresenter(SnackbarPresenter);
+        if (App.Services.GetService(typeof(ToastService)) is ToastService toast) toast.SetPresenter(SnackbarPresenter);
+        ViewModel.ConfirmExit = ConfirmExitAsync;
 
         Closing += OnWindowClosing;
 
@@ -84,15 +88,62 @@ public partial class MainWindow : INavigationWindow
 
     public async Task ShowCreateKbAsync()
     {
-        var dialog = new CreateKbDialog(ViewModel.Kbs) { Owner = this };
+        // D01（00§9.4）：失败留框保留输入；重名就地提示并提供“打开已有知识库”。
+        var dialog = new CreateKbDialog(
+            ViewModel.Kbs,
+            (name, scene, purpose) => ViewModel.CreateKbAsync(name, scene, purpose))
+        { Owner = this };
         if (dialog.ShowDialog() != true) return;
-        await ViewModel.CreateKbAsync(dialog.KbName, dialog.Scene, dialog.Purpose);
-        await ViewModel.SwitchKbAsync(dialog.KbName);
+        if (dialog.OpenExisting)
+        {
+            await ViewModel.SwitchKbAsync(dialog.KbName);
+        }
     }
 
-    private void OnHelpClick(object sender, RoutedEventArgs e) => ViewModel.NavigateTo("help");
+    /// <summary>D13 退出保护确认框（00§9.4）。</summary>
+    private async Task<ExitChoice> ConfirmExitAsync(bool hasDrafts)
+    {
+        var dlg = new UnsavedChangesDialog();
+        var detail = "库：" + (string.IsNullOrEmpty(ViewModel.CurrentKb) ? "（无）" : ViewModel.CurrentKb);
+        if (!hasDrafts)
+        {
+            dlg.ConfigureExit(
+                title: "任务仍在运行",
+                lead: "本机整理任务尚未结束；退出应用前请先处理。",
+                detail: detail,
+                secondary: "取消任务后退出",
+                primary: "",
+                close: "留在应用");
+            var choice = await dlg.ShowChoiceAsync(null);
+            return choice switch
+            {
+                UnsavedChoice.Discard => ExitChoice.CancelTaskAndExit,
+                UnsavedChoice.SaveAndLeave => ExitChoice.SaveAndCancelTaskAndExit,
+                _ => ExitChoice.Stay,
+            };
+        }
+
+        dlg.ConfigureExit(
+            title: "任务仍在运行，还有未保存的更改",
+            lead: "退出前，请处理运行中的本机任务和未保存的文件。",
+            detail: detail,
+            secondary: "放弃草稿并取消任务后退出",
+            primary: "保存并取消任务后退出",
+            close: "留在应用");
+        var combined = await dlg.ShowChoiceAsync(null);
+        return combined switch
+        {
+            UnsavedChoice.Discard => ExitChoice.DiscardAndCancelTaskAndExit,
+            UnsavedChoice.SaveAndLeave => ExitChoice.SaveAndCancelTaskAndExit,
+            _ => ExitChoice.Stay,
+        };
+    }
+
+    private async void OnHelpClick(object sender, RoutedEventArgs e) => await ViewModel.OpenHelpAsync("quick-start");
 
     private void OnFixStorageClick(object sender, RoutedEventArgs e) => ViewModel.NavigateTo("settings");
+
+    private void OnStatusTaskClick(object sender, RoutedEventArgs e) => ViewModel.NavigateTo("organize");
 
     private void OnTopSearchKeyDown(object sender, KeyEventArgs e)
     {
@@ -171,6 +222,25 @@ public partial class MainWindow : INavigationWindow
 
     private void OnCloseSearchClick(object sender, RoutedEventArgs e) => ViewModel.CloseSearchCommand.Execute(null);
 
+    /// <summary>导航保护：切页前统一处理所有未保存草稿，取消则不离开。</summary>
+    private async void OnRootNavigating(NavigationView sender, NavigatingCancelEventArgs e)
+    {
+        if (_allowNavigation) return;
+        e.Cancel = true;
+        var target = e.Page as Type;
+        if (target == null && e.Page is NavigationViewItem item) target = item.TargetPageType;
+        if (target == null && e.Page != null) target = e.Page.GetType();
+        if (target == null) return;
+        if (!await ViewModel.CanCloseAsync()) return;
+
+        _allowNavigation = true;
+        try { sender.Navigate(target); }
+        finally
+        {
+            _ = Dispatcher.BeginInvoke(new Action(() => _allowNavigation = false));
+        }
+    }
+
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {
         base.OnPreviewKeyDown(e);
@@ -199,7 +269,8 @@ public partial class MainWindow : INavigationWindow
     {
         if (_closeConfirmed) return;
         e.Cancel = true;
-        if (!await ViewModel.CanCloseAsync()) return;
+        // D13：草稿与本机任务合并退出保护（00§9.4）。
+        if (!await ViewModel.CanExitAsync()) return;
         _closeConfirmed = true;
         Close();
     }

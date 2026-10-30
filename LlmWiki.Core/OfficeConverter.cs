@@ -5,6 +5,8 @@ using System.Text.RegularExpressions;
 
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
+using A = DocumentFormat.OpenXml.Drawing;
+using P = DocumentFormat.OpenXml.Presentation;
 using S = DocumentFormat.OpenXml.Spreadsheet;
 using W = DocumentFormat.OpenXml.Wordprocessing;
 
@@ -192,6 +194,46 @@ public static class OfficeConverter
         catch (Exception e)
         {
             return (null, "Excel 转换失败：" + e.Message);
+        }
+    }
+
+
+    /// <summary>pptx/pptm → 临时文字预览；按真实幻灯片顺序提取文字与备注，不执行宏、不渲染图形。</summary>
+    public static (string? md, string error) ConvertPptx(string filename, byte[] content)
+    {
+        try
+        {
+            using var ms = new MemoryStream(content);
+            using var doc = PresentationDocument.Open(ms, false);
+            var presentationPart = doc.PresentationPart ?? throw new InvalidDataException("pptx 无演示文稿");
+            var slideIds = presentationPart.Presentation?.SlideIdList?.Elements<P.SlideId>().ToList() ?? [];
+            var sb = new StringBuilder();
+            sb.AppendLine("# PPT 内容预览（文字与备注，未覆盖图形/图表/图片）");
+            sb.AppendLine();
+            var index = 0;
+            foreach (var slideId in slideIds)
+            {
+                index++;
+                if (slideId.RelationshipId?.Value is not string relId
+                    || presentationPart.GetPartById(relId) is not SlidePart slidePart)
+                    continue;
+                sb.AppendLine($"## 幻灯片 {index}");
+                var texts = slidePart.Slide?.Descendants<A.Text>().Select(t => t.Text).Where(t => !string.IsNullOrWhiteSpace(t)).ToArray() ?? [];
+                sb.AppendLine(texts.Length == 0 ? "（本页没有可提取文字）" : string.Join("\n", texts.Select(t => "- " + t.Trim())));
+                var notes = slidePart.NotesSlidePart?.NotesSlide?.Descendants<A.Text>().Select(t => t.Text).Where(t => !string.IsNullOrWhiteSpace(t)).ToArray() ?? [];
+                if (notes.Length > 0)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("### 备注");
+                    sb.AppendLine(string.Join("\n", notes.Select(t => "- " + t.Trim())));
+                }
+                sb.AppendLine();
+            }
+            return (sb.ToString().TrimEnd() + "\n", "");
+        }
+        catch (Exception e)
+        {
+            return (null, "PPT 读取失败：" + e.Message);
         }
     }
 

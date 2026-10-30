@@ -90,28 +90,22 @@ public sealed class KbPaths(string kbRoot)
     }
 }
 
-/// <summary>源格式规则：本次仅 md/txt/docx/xlsx，单文件 20 MiB；原字节保存，不转 Markdown。</summary>
+/// <summary>源格式规则：统一委托给 SourceFormatRegistry；保留大小与展示工具。</summary>
 public static class SourceRules
 {
     public const long MaxFileBytes = 20L * 1024 * 1024;
 
-    public static readonly string[] SupportedExtensions = [".md", ".txt", ".docx", ".xlsx"];
+    public static readonly string[] SupportedExtensions =
+        [.. SourceFormatRegistry.All.Select(f => f.Extension)];
 
-    public static bool IsSupported(string name)
-        => SupportedExtensions.Contains(Path.GetExtension(name), StringComparer.OrdinalIgnoreCase);
+    public static bool IsSupported(string name) => SourceFormatRegistry.IsSupported(name);
 
-    public static bool IsText(string name)
-        => name.EndsWith(".md", StringComparison.OrdinalIgnoreCase)
-           || name.EndsWith(".txt", StringComparison.OrdinalIgnoreCase);
+    /// <summary>可作为文本读取/编辑的资料类型（文本、结构化数据、CSV/TSV）。</summary>
+    public static bool IsText(string name) => SourceFormatRegistry.IsTextReadable(name);
 
-    public static string TypeLabel(string name) => Path.GetExtension(name).ToLowerInvariant() switch
-    {
-        ".md" => "Markdown",
-        ".txt" => "文本",
-        ".docx" => "Word",
-        ".xlsx" => "Excel",
-        _ => "文件",
-    };
+    public static bool CanEditText(string name) => SourceFormatRegistry.IsTextEditable(name);
+
+    public static string TypeLabel(string name) => SourceFormatRegistry.TypeLabel(name);
 
     public static string SizeText(long size) => size < 1024 ? $"{size} B"
         : size < 1024 * 1024 ? $"{size / 1024.0:0.#} KB"
@@ -126,13 +120,5 @@ public static class SourceRules
             : time.ToString("yyyy-MM-dd HH:mm");
     }
 
-    /// <summary>Office 锁文件、应用临时文件、隐藏状态目录不进入扫描。</summary>
-    public static bool ShouldIgnore(string name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return true;
-        if (name.StartsWith('.') || name.StartsWith("~$")) return true;
-        if (name.Equals("node_modules", StringComparison.OrdinalIgnoreCase)) return true;
-        if (name.Contains(".tmp-", StringComparison.OrdinalIgnoreCase)) return true;
-        return !IsSupported(name);
-    }
+    public static bool ShouldIgnore(string name) => SourceFormatRegistry.ShouldIgnore(name);
 }

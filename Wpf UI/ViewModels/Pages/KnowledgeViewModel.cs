@@ -27,6 +27,11 @@ public partial class KnowledgeViewModel : ObservableObject
     private readonly List<KnowledgeTreeNode> _roots = [];
     private bool _suppressFilter;
 
+    /// <summary>阅读请求序号：库切换/快速点击后按序号丢弃过期读取结果（01§4 SelectKnowledge）。</summary>
+    private int _loadSequence;
+
+    private int _lastPendingCount;
+
     public KnowledgeViewModel(
         MainWindowViewModel main,
         KnowledgeService knowledge,
@@ -34,6 +39,7 @@ public partial class KnowledgeViewModel : ObservableObject
         ScanService scanner,
         ReviewService reviews,
         UnsavedChangesCoordinator unsaved,
+        SourcePreviewService preview,
         ToastService toast)
     {
         _main = main;
@@ -44,8 +50,10 @@ public partial class KnowledgeViewModel : ObservableObject
         _unsaved = unsaved;
         _toast = toast;
 
-        Workspace = new DocumentWorkspaceViewModel(sources, knowledge, toast);
+        Workspace = new DocumentWorkspaceViewModel(sources, knowledge, preview, toast);
         _unsaved.Register("knowledge-workspace", Workspace);
+        _unsaved.RegisterSaver("knowledge-workspace", Workspace.TrySaveAsync);
+        _unsaved.RegisterDiscarder("knowledge-workspace", Workspace.DiscardDraft);
         Workspace.PropertyChanged += OnWorkspacePropertyChanged;
         _main.PropertyChanged += OnMainPropertyChanged;
         _main.OpenRequested += OnOpenRequested;
@@ -56,6 +64,10 @@ public partial class KnowledgeViewModel : ObservableObject
     public ObservableCollection<KnowledgeTreeNode> TreeItems { get; } = [];
     public ObservableCollection<LinkChip> Links { get; } = [];
     public ObservableCollection<SourceChip> SourceRefs { get; } = [];
+    public ObservableCollection<HeadingChip> HeadingItems { get; } = [];
+
+    /// <summary>D15：解除人工保护前由页面确认。</summary>
+    public Func<string, Task<bool>>? ConfirmClearProtection { get; set; }
 
     [ObservableProperty] private string _selectedKb = "";
     [ObservableProperty] private string _searchKeyword = "";
@@ -67,11 +79,32 @@ public partial class KnowledgeViewModel : ObservableObject
     [ObservableProperty] private string _pageTitle = "";
     [ObservableProperty] private string _loadError = "";
     [ObservableProperty] private int _pendingCount;
+    [ObservableProperty] private bool _isLoading;
+
+    /// <summary>知识空态按钮：库有资料才显示“去整理”，无资料只显示“去资料页”（01§5.1）。</summary>
+    [ObservableProperty] private bool _emptyHasSources;
+
+    /// <summary>规则版本提醒（01§8：标题下持久 InfoBar，确认或稍后处理）。</summary>
+    [ObservableProperty] private bool _ruleNeedsReview;
+    [ObservableProperty] private string _ruleMessage = "";
+
+    /// <summary>待整理提醒条“稍后处理”：只折叠提醒，不清待整理变更。</summary>
+    [ObservableProperty] private bool _pendingBarDismissed;
 
     public bool HasKb => _main.HasKb;
     public bool HasCurrentPage => !string.IsNullOrWhiteSpace(CurrentRelPath);
     public bool HasLinks => Links.Count > 0;
     public bool HasSourceRefs => SourceRefs.Count > 0;
+    public bool HasHeadings => HeadingItems.Count > 0;
+    public string HeaderTitle => string.IsNullOrWhiteSpace(PageTitle) ? "知识" : PageTitle;
+    public bool ShowPendingBar => PendingCount > 0 && !PendingBarDismissed;
+    public bool HasLoadError => !string.IsNullOrWhiteSpace(LoadError);
+    public bool ShowRuleBar => RuleNeedsReview;
+    public bool ShowEmptyGoSources => HasKb && !EmptyHasSources;
+    public bool ShowEmptyGoOrganize => HasKb && EmptyHasSources;
+    public bool IsManualEditing => Workspace.IsKnowledgeRevision;
+    public bool HasManualProtection => HasCurrentPage && _reviews.IsManualProtected(SelectedKb, CurrentRelPath, Workspace.CurrentVersion);
+    public string ReadOnlyBadge => IsManualEditing ? "手动修订中" : "只读";
     public string PendingText => PendingCount > 0 ? $"有 {PendingCount} 项资料变更尚未整理" : "暂无待整理变更";
 
     private void OnMainPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -80,14 +113,26 @@ public partial class KnowledgeViewModel : ObservableObject
         if (e.PropertyName == nameof(MainWindowViewModel.PendingCount))
         {
             PendingCount = _main.PendingCount;
+            // 新变更到达时恢复提醒；数量未变的普通刷新不打扰已“稍后处理”的折叠
+            if (PendingCount > _lastPendingCount) PendingBarDismissed = false;
+            _lastPendingCount = PendingCount;
             OnPropertyChanged(nameof(PendingText));
         }
     }
 
     private void OnWorkspacePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(DocumentWorkspaceViewModel.PreviewContent)) return;
-        ParsePageReferences();
+        if (e.PropertyName == nameof(DocumentWorkspaceViewModel.PreviewContent))
+        {
+            ParsePageReferences();
+            return;
+        }
+        if (e.PropertyName is nameof(DocumentWorkspaceViewModel.Mode) or nameof(DocumentWorkspaceViewModel.Role))
+        {
+            OnPropertyChanged(nameof(IsManualEditing));
+            OnPropertyChanged(nameof(ReadOnlyBadge));
+            OnPropertyChanged(nameof(HasManualProtection));
+        }
     }
 
     private void OnOpenRequested(FileSearchResult result)
@@ -106,8 +151,14 @@ public partial class KnowledgeViewModel : ObservableObject
         PageTitle = "";
         Links.Clear();
         SourceRefs.Clear();
+        HeadingItems.Clear();
         TreeItems.Clear();
         _roots.Clear();
+        _loadSequence++;
+        IsLoading = false;
+        EmptyHasSources = false;
+        RuleNeedsReview = false;
+        RuleMessage = "";
         Workspace.ResetToEmpty();
         OnPropertyChanged(nameof(HasKb));
         PendingCount = string.IsNullOrWhiteSpace(kb) ? 0 : _main.PendingCount;
@@ -127,7 +178,23 @@ public partial class KnowledgeViewModel : ObservableObject
             return;
         }
 
+        // 规则更新提醒（01§8：标题下持久 InfoBar，确认或稍后处理，不自动认定规则已完成）
+        try
+        {
+            var rule = _reviews.GetRuleStatus(kb);
+            RuleNeedsReview = rule.NeedsReview;
+            RuleMessage = rule.NeedsReview
+                ? $"规则（purpose.md / schema.md）已更新到 {rule.CurrentVersion[..Math.Min(8, rule.CurrentVersion.Length)]}，请核对现有知识是否仍符合新规则。"
+                : "";
+        }
+        catch
+        {
+            RuleNeedsReview = false;
+            RuleMessage = "";
+        }
+
         var state = _knowledge.GetState(kb);
+        EmptyHasSources = state.HasSources;
         if (state.Kind != KnowledgeStateKind.Content)
         {
             ShowEmpty = true;
@@ -150,9 +217,20 @@ public partial class KnowledgeViewModel : ObservableObject
 
     private void LoadTree(string kb)
     {
-        foreach (var node in _knowledge.Tree(kb))
+        // 01§4 Load/RefreshTree：保留展开——重建前收集 IsExpanded 节点的 RelPath，重建后回填
+        var expanded = new HashSet<string>(
+            Flatten(_roots).Where(n => n.IsExpanded).Select(n => ChangeService.Normalize(n.RelPath)),
+            StringComparer.OrdinalIgnoreCase);
+        foreach (var node in _knowledge.Tree(kb).OrderBy(n => n.RelPath.Equals("wiki/index.md", StringComparison.OrdinalIgnoreCase) ? 0 : n.IsFolder ? 1 : 2).ThenBy(n => n.IsFolder ? n.Name switch { "concepts" => 0, "entities" => 1, "sources" => 2, "queries" => 3, "synthesis" => 4, "comparisons" => 5, _ => 6 } : 0))
         {
             _roots.Add(new KnowledgeTreeNode(node));
+        }
+        if (expanded.Count > 0)
+        {
+            foreach (var node in Flatten(_roots))
+            {
+                if (expanded.Contains(ChangeService.Normalize(node.RelPath))) node.IsExpanded = true;
+            }
         }
         RebuildTree();
     }
@@ -162,7 +240,19 @@ public partial class KnowledgeViewModel : ObservableObject
     partial void OnCurrentRelPathChanged(string value)
     {
         OnPropertyChanged(nameof(HasCurrentPage));
-        PageTitle = string.IsNullOrWhiteSpace(value) ? "" : Path.GetFileNameWithoutExtension(value);
+        OnPropertyChanged(nameof(HasManualProtection));
+    }
+
+    partial void OnPageTitleChanged(string value) => OnPropertyChanged(nameof(HeaderTitle));
+    partial void OnPendingCountChanged(int value) => OnPropertyChanged(nameof(ShowPendingBar));
+    partial void OnLoadErrorChanged(string value) => OnPropertyChanged(nameof(HasLoadError));
+    partial void OnRuleNeedsReviewChanged(bool value) => OnPropertyChanged(nameof(ShowRuleBar));
+    partial void OnPendingBarDismissedChanged(bool value) => OnPropertyChanged(nameof(ShowPendingBar));
+
+    partial void OnEmptyHasSourcesChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowEmptyGoSources));
+        OnPropertyChanged(nameof(ShowEmptyGoOrganize));
     }
 
     private void RebuildTree()
@@ -214,20 +304,58 @@ public partial class KnowledgeViewModel : ObservableObject
     {
         if (string.IsNullOrWhiteSpace(SelectedKb) || string.IsNullOrWhiteSpace(rel)) return;
         if (!await _unsaved.CanLeaveAsync()) return;
-        Workspace.OpenKnowledgePage(SelectedKb, rel);
-        CurrentRelPath = ChangeService.Normalize(rel);
-        PageTitle = Path.GetFileNameWithoutExtension(rel);
+        var kb = SelectedKb;
+        var seq = ++_loadSequence;
+        IsLoading = true;
         if (!keepError) LoadError = "";
+        // 01§4 SelectKnowledge：异步读明确路径；库切换/快速点击后按请求序号丢弃过期响应
+        var read = await Task.Run(() =>
+        {
+            var ok = _knowledge.TryRead(kb, rel, out var content, out var hash, out var error);
+            return (ok, content, hash, error);
+        });
+        if (seq != _loadSequence || kb != SelectedKb) return;
+        IsLoading = false;
+        if (read.ok)
+            Workspace.OpenKnowledgePage(kb, rel);
+        else
+            Workspace.OpenReadOnlyInfo(kb, rel, read.error);
+        CurrentRelPath = ChangeService.Normalize(rel);
         ParsePageReferences();
         MarkTreeNodeSelected(CurrentRelPath);
         OnPropertyChanged(nameof(HasCurrentPage));
+        OnPropertyChanged(nameof(HasManualProtection));
     }
+
+    private static readonly System.Text.RegularExpressions.Regex H1Regex =
+        new(@"^#\s+(.+?)\s*$", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static string CleanHeading(string text)
+        => System.Text.RegularExpressions.Regex.Replace(text, @"[*`\[\]]", "").Trim();
 
     private void ParsePageReferences()
     {
         Links.Clear();
         SourceRefs.Clear();
+        HeadingItems.Clear();
         var content = Workspace.PreviewContent ?? "";
+
+        var h1 = H1Regex.Match(content);
+        var hasH1 = h1.Success && CleanHeading(h1.Groups[1].Value).Length > 0;
+        PageTitle = hasH1 ? CleanHeading(h1.Groups[1].Value) : Path.GetFileNameWithoutExtension(CurrentRelPath);
+        Workspace.SuppressFirstH1 = hasH1;
+
+        var index = 0;
+        foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(
+                     content, @"^(#{1,4})\s+(.+?)\s*$",
+                     System.Text.RegularExpressions.RegexOptions.Multiline))
+        {
+            var text = CleanHeading(match.Groups[2].Value);
+            if (text.Length == 0) continue;
+            var level = match.Groups[1].Value.Length;
+            HeadingItems.Add(new HeadingChip(text, level, index++));
+        }
+
         foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(content, @"\[\[([^\]]+)\]\]"))
         {
             var name = match.Groups[1].Value.Trim();
@@ -242,20 +370,17 @@ public partial class KnowledgeViewModel : ObservableObject
         }
         OnPropertyChanged(nameof(HasLinks));
         OnPropertyChanged(nameof(HasSourceRefs));
+        OnPropertyChanged(nameof(HasHeadings));
+        OnPropertyChanged(nameof(HasManualProtection));
     }
 
     [RelayCommand]
     public async Task OpenLinkAsync(LinkChip? link)
     {
-        if (link == null) return;
-        if (link.Candidates.Count > 1)
+        if (link == null || link.IsMissing) return; // 目标缺失已就地置灰标注，不再弹全局 toast（01§8）
+        if (link.HasCandidates && string.IsNullOrWhiteSpace(link.Resolved))
         {
             _toast.ShowWarning("同名目标有多个：" + string.Join("、", link.Candidates));
-            return;
-        }
-        if (string.IsNullOrEmpty(link.Resolved))
-        {
-            _toast.ShowWarning("目标页面不存在：" + link.Name);
             return;
         }
         await OpenPageAsync(link.Resolved);
@@ -265,19 +390,16 @@ public partial class KnowledgeViewModel : ObservableObject
     public void OpenSource(SourceChip? chip)
     {
         if (chip == null) return;
-        if (string.IsNullOrWhiteSpace(chip.RelPath))
-        {
-            _toast.ShowWarning("来源已移除：" + chip.Name);
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(chip.RelPath)) return; // 缺失来源 chip 已就地置灰禁用，不再弹全局 toast（01§8）
         _main.OpenResult(new FileSearchResult(chip.Name, chip.RelPath, "资料", "资料"));
     }
 
     private void MarkTreeNodeSelected(string rel)
     {
+        var target = ChangeService.Normalize(rel);
         foreach (var node in Flatten(_roots))
         {
-            if (node.RelPath.Equals(rel, StringComparison.OrdinalIgnoreCase)) node.IsSelected = true;
+            if (ChangeService.Normalize(node.RelPath).Equals(target, StringComparison.OrdinalIgnoreCase)) node.IsSelected = true;
             else if (node.IsSelected) node.IsSelected = false;
         }
     }
@@ -292,11 +414,20 @@ public partial class KnowledgeViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ClearManualProtection()
+    private async Task ClearManualProtectionAsync()
     {
         if (!HasCurrentPage || string.IsNullOrWhiteSpace(SelectedKb)) return;
+        var version = Workspace.CurrentVersion;
+        if (ConfirmClearProtection != null && !await ConfirmClearProtection(CurrentRelPath)) return;
+        if (!_reviews.IsManualProtected(SelectedKb, CurrentRelPath, version))
+        {
+            _toast.ShowWarning("文件已有新变化，请重新核对后再解除保护。");
+            OnPropertyChanged(nameof(HasManualProtection));
+            return;
+        }
         _reviews.ClearManualProtection(SelectedKb, CurrentRelPath);
-        _toast.ShowSuccess("已解除当前文件的版本保护；后续覆盖仍需按版本核对。");
+        _toast.ShowSuccess("已解除当前版本保护；后续 AI 写入仍需满足路径与版本校验。");
+        OnPropertyChanged(nameof(HasManualProtection));
     }
 
     [RelayCommand]
@@ -334,19 +465,59 @@ public partial class KnowledgeViewModel : ObservableObject
             _toast.ShowWarning("此页面不允许手动修订");
             return;
         }
-        _toast.ShowWarning("此内容通常由 AI 维护。手动修改不会更新源资料，后续整理应先核对人工内容。");
+        OnPropertyChanged(nameof(IsManualEditing));
+        OnPropertyChanged(nameof(ReadOnlyBadge));
     }
 
     [RelayCommand]
-    private void Refresh()
+    private async Task RefreshAsync()
     {
         if (string.IsNullOrWhiteSpace(SelectedKb) || !_main.HasKb) return;
+        // 01§4 Load/RefreshTree 可执行条件：草稿保护已通过——先过 D02 保护再扫描刷新，保护手动修订草稿
+        if (!await _unsaved.CanLeaveAsync()) return;
         _scanner.Scan(SelectedKb, recordChanges: true);
         var current = CurrentRelPath;
         LoadKb(SelectedKb);
         if (!string.IsNullOrWhiteSpace(current)) _ = OpenPageAsync(current, keepError: true);
-        _toast.ShowSuccess("已刷新知识目录");
     }
+
+    /// <summary>加载失败 InfoBar 的“重试”：重新执行加载流程（01§5.2 读取失败展示错误+重试）。</summary>
+    [RelayCommand]
+    private async Task RetryLoadAsync()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedKb) || !_main.HasKb) return;
+        if (!await _unsaved.CanLeaveAsync()) return;
+        LoadKb(SelectedKb);
+    }
+
+    /// <summary>树过滤无结果空态：清空筛选关键字（01§5 无结果过滤显示清空入口）。</summary>
+    [RelayCommand]
+    private void ClearTreeFilter() => SearchKeyword = "";
+
+    /// <summary>规则更新 InfoBar：确认已按新规则核对现有知识（推进已确认版本）。</summary>
+    [RelayCommand]
+    private void AcknowledgeRules()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedKb)) return;
+        _reviews.AcknowledgeRules(SelectedKb);
+        RuleNeedsReview = false;
+        RuleMessage = "";
+        _toast.ShowSuccess("已确认按新规则核对现有知识。");
+    }
+
+    /// <summary>规则更新 InfoBar：稍后处理（只忽略当前规则版本，不推进确认，也不改知识）。</summary>
+    [RelayCommand]
+    private void IgnoreRules()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedKb)) return;
+        _reviews.IgnoreCurrentRules(SelectedKb);
+        RuleNeedsReview = false;
+        RuleMessage = "";
+    }
+
+    /// <summary>待整理提醒条“稍后处理”：只折叠提醒，不清除待整理变更（01§8）。</summary>
+    [RelayCommand]
+    private void DismissPendingBar() => PendingBarDismissed = true;
 
     public void MarkVisited() => _main.RememberPage("knowledge");
 
@@ -361,7 +532,7 @@ public partial class KnowledgeTreeNode : ObservableObject
     public KnowledgeTreeNode(KnowledgeNode node)
     {
         Name = node.Name;
-        DisplayName = node.DisplayName;
+        DisplayName = node.RelPath.Equals("wiki/index.md", StringComparison.OrdinalIgnoreCase) ? "知识首页" : node.DisplayName;
         RelPath = node.RelPath;
         IsFolder = node.IsFolder;
         Children = [.. node.Children.Select(c => new KnowledgeTreeNode(c))];
@@ -373,6 +544,9 @@ public partial class KnowledgeTreeNode : ObservableObject
     public string RelPath { get; }
     public bool IsFolder { get; }
     public string IconKey => IsFolder ? "dir" : Name;
+
+    /// <summary>index.md 树图标用 Home（01§2）；转换器在禁止修改文件内，故在页面模板按此标记处理。</summary>
+    public bool IsIndexPage => !IsFolder && RelPath.Equals("wiki/index.md", StringComparison.OrdinalIgnoreCase);
     public ObservableCollection<KnowledgeTreeNode> Children { get; }
     public ObservableCollection<KnowledgeTreeNode> VisibleChildren { get; } = [];
     [ObservableProperty] private bool _isExpanded;
@@ -385,5 +559,29 @@ public partial class KnowledgeTreeNode : ObservableObject
     }
 }
 
-public sealed record LinkChip(string Name, string Resolved, IReadOnlyList<string> Candidates);
-public sealed record SourceChip(string Name, string RelPath);
+public sealed record LinkChip(string Name, string Resolved, IReadOnlyList<string> Candidates)
+{
+    /// <summary>同名歧义走候选菜单；未解析且无候选即目标不存在——就地置灰标注，不再弹全局 toast（01§8）。</summary>
+    public bool HasCandidates => Candidates.Count > 0;
+
+    public bool IsMissing => string.IsNullOrWhiteSpace(Resolved) && !HasCandidates;
+
+    public string DisplayName => IsMissing ? $"{Name}（目标不存在）" : $"↗ {Name}";
+
+    public string ChipToolTip => HasCandidates
+        ? $"同名候选 {Candidates.Count} 个；点击查看"
+        : IsMissing ? "目标不存在：知识页尚未整理或已被移动" : $"打开 {Name}";
+}
+
+public sealed record SourceChip(string Name, string RelPath)
+{
+    public bool IsMissing => string.IsNullOrWhiteSpace(RelPath);
+
+    public string DisplayName => IsMissing ? $"{Name}（目标不存在）" : $"来源：{Name}";
+
+    public string ChipToolTip => IsMissing ? "来源已移除：无法定位此来源文件" : "打开来源文件";
+}
+public sealed record HeadingChip(string Text, int Level, int Index)
+{
+    public string Indent => new string(' ', Math.Max(0, Level - 1) * 2);
+}

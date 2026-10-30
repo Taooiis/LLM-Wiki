@@ -40,6 +40,12 @@ public class ShareService(ConfigService config)
     /// <summary>本次分享绑定的知识库；切换当前库不会改变它。</summary>
     public string BoundKb { get; private set; } = "";
 
+    /// <summary>
+    /// 最近一次启动失败的真实原因（设计 04§11.2）：启动成功或主动停止前保留，
+    /// 不被刷新清空——服务卡必须能持久显示失败状态而不是闪一下就变“已关闭”。
+    /// </summary>
+    public string LastError { get; private set; } = "";
+
     /// <summary>开始/停止/换 PIN 后通知 UI；状态以服务字段为准。</summary>
     public event Action? Changed;
 
@@ -74,8 +80,9 @@ public class ShareService(ConfigService config)
     /// </summary>
     public bool Start(string kb, int port, out string error)
     {
-        if (_host != null) { error = "服务已在运行"; return false; }
-        if (!Kbs.KbExists(kb)) { error = "请选择一个存在的知识库再启动分享"; return false; }
+        if (_host != null) { error = LastError = "服务已在运行"; return false; }
+        if (!Kbs.KbExists(kb)) { error = LastError = "请选择一个存在的知识库再启动分享"; return false; }
+        LastError = "";
         BoundKb = kb;
         _port = port;
         // 每次开启换新 PIN：关掉再开，旧链接立即失效
@@ -127,7 +134,7 @@ public class ShareService(ConfigService config)
             _host = null;
             Pin = "";
             BoundKb = "";
-            error = e.Message;
+            error = LastError = e.Message;
             return false;
         }
     }
@@ -138,6 +145,7 @@ public class ShareService(ConfigService config)
         _host = null;
         Pin = "";
         BoundKb = "";
+        LastError = "";
         if (host != null)
         {
             // Kestrel 的 Dispose 可能等待活动连接；放到后台完成，UI 最多等端口释放，不冻结窗口。

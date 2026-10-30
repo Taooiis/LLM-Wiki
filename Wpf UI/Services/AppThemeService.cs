@@ -13,7 +13,7 @@ public static class AppThemeService
     private static readonly Uri DarkUri = new("pack://application:,,,/Resources/Theme.Dark.xaml", UriKind.Absolute);
     private static readonly Uri LightUri = new("pack://application:,,,/Resources/Theme.Light.xaml", UriKind.Absolute);
 
-    private static string _current = "Dark";
+    private static string? _current;
 
     /// <summary>应用主题（非 Light 一律按深色处理）。幂等，可重复调用。</summary>
     public static void Apply(string theme)

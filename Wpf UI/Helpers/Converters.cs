@@ -105,6 +105,39 @@ namespace LLM_Wiki.Helpers
             => throw new NotSupportedException();
     }
 
+    /// <summary>整数 +1，用于步骤编号。</summary>
+    public class AddOneConverter : IValueConverter
+    {
+        public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+            => value is int i ? i + 1 : 1;
+
+        public object ConvertBack(object value, Type targetType, object? parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
+    /// <summary>数值 ≥ 参数 → Visible；用于窄窗收起页内目录。</summary>
+    public class DoubleAtLeastToVisibilityConverter : IValueConverter
+    {
+        public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        {
+            var threshold = parameter is string s && double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var t) ? t : 0;
+            return value is double d && d >= threshold ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        public object ConvertBack(object value, Type targetType, object? parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
+    /// <summary>值与参数相等 → Visible。</summary>
+    public class EqualsToVisibilityConverter : IValueConverter
+    {
+        public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+            => string.Equals(value?.ToString(), parameter?.ToString(), StringComparison.Ordinal) ? Visibility.Visible : Visibility.Collapsed;
+
+        public object ConvertBack(object value, Type targetType, object? parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
     /// <summary>非 null → Visible。</summary>
     public class NullToVisibilityConverter : IValueConverter
     {

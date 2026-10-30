@@ -39,6 +39,8 @@ public partial class App
             services.AddSingleton<ReviewService>();
             services.AddSingleton<ScanService>();
             services.AddSingleton<SourceService>();
+            services.AddSingleton<SourcePreviewService>();
+            services.AddSingleton<LocalAgentService>();
             services.AddSingleton<RuleService>();
             services.AddSingleton<KnowledgeService>();
             services.AddSingleton<KbService>();
@@ -70,6 +72,7 @@ public partial class App
             services.AddSingleton<AppSettingsPage>();
             services.AddSingleton<AppSettingsViewModel>();
             services.AddSingleton<HelpPage>();
+            services.AddSingleton<HelpViewModel>();
         }).Build();
 
     public static IServiceProvider Services => _host.Services;

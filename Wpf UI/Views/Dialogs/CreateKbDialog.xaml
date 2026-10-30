@@ -68,7 +68,13 @@
     </StackPanel>
 
     <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-      <ui:Button Content="取消" Click="OnCancel" Margin="0,0,8,0" />
+      <ui:Button x:Name="CancelButton" Content="取消" Click="OnCancel" Margin="0,0,8,0" />
+      <ui:Button
+        x:Name="OpenExistingButton"
+        Content="打开已有知识库"
+        Click="OnOpenExisting"
+        Margin="0,0,8,0"
+        Visibility="Collapsed" />
       <ui:Button x:Name="CreateButton" Content="创建知识库" Appearance="Primary" Click="OnCreate" IsEnabled="False" />
     </StackPanel>
   </Grid>

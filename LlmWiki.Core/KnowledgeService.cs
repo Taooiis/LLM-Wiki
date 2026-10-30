@@ -14,7 +14,7 @@ public sealed partial class KnowledgeService(ConfigService config, ReviewService
         ["sources"] = "资料摘要",
         ["queries"] = "问题分析",
         ["synthesis"] = "综合分析",
-        ["comparisons"] = "对比",
+        ["comparisons"] = "对比分析",
     };
 
     public IReadOnlyList<KnowledgeNode> Tree(string kb)

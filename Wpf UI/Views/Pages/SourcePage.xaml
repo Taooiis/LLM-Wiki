@@ -15,13 +15,15 @@
   ui:Design.Background="{DynamicResource ApplicationBackgroundBrush}"
   ui:Design.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+  PreviewKeyDown="OnPagePreviewKeyDown"
   mc:Ignorable="d">
   <Page.Resources>
     <dialogs:UnsavedChangesDialog x:Key="UnsavedDlg" />
   </Page.Resources>
 
-  <Grid Margin="{StaticResource PageContentMargin}">
+  <Grid Margin="24,24,24,24">
     <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
@@ -35,10 +37,7 @@
       </Grid.ColumnDefinitions>
       <StackPanel Grid.Column="0">
         <TextBlock Style="{StaticResource PageTitleText}" Margin="0" Text="资料" />
-        <TextBlock
-          Margin="0,4,0,0"
-          Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-          TextTrimming="CharacterEllipsis">
+        <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis">
           <Run Text="{Binding ViewModel.SelectedKb, Mode=OneWay}" />
           <Run Text=" · " />
           <Run Text="{Binding ViewModel.Rows.Count, Mode=OneWay, StringFormat='{}{0} 份资料'}" />
@@ -50,45 +49,106 @@
       </StackPanel>
       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
         <ui:Button Content="新建资料" Icon="Add24" Click="OnNewClick" Margin="0,0,8,0" />
-        <ui:Button Content="添加文件" Icon="ArrowUpload24" Click="OnAddFilesClick" Appearance="Primary" Margin="0,0,8,0" />
-        <ui:Button Content="回收站" Icon="Delete24" Click="OnTrashClick" Margin="0,0,8,0" />
-        <ui:Button Content="打开文件夹" Icon="FolderOpen24" Click="OnOpenFolderClick" Margin="0,0,8,0" />
-        <ui:Button Content="刷新" Icon="ArrowSync24" Click="OnRefreshClick" />
+        <ui:ProgressRing
+          Width="18"
+          Height="18"
+          Margin="0,0,8,0"
+          VerticalAlignment="Center"
+          IsIndeterminate="True"
+          Visibility="{Binding ViewModel.IsBusy, Converter={StaticResource BoolToVis}}" />
+        <ui:Button
+          Content="添加文件"
+          Icon="ArrowUpload24"
+          Click="OnAddFilesClick"
+          Appearance="Primary"
+          Margin="0,0,8,0"
+          IsEnabled="{Binding ViewModel.CanModify}" />
+        <ui:Button Content="更多 ▾" Click="OnMoreClick" />
       </StackPanel>
     </Grid>
 
-    <!-- 导入结果摘要 -->
+    <!-- 页头提醒：待整理入口（02§2/§9.2） + 扫描不完整持久提示与重试 -->
+    <StackPanel Grid.Row="1" Margin="0,0,0,10">
+      <Grid Visibility="{Binding ViewModel.HasPendingChanges, Converter={StaticResource BoolToVis}}">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <ui:InfoBar
+          Grid.Column="0"
+          IsOpen="{Binding ViewModel.HasPendingChanges, Mode=OneWay}"
+          IsClosable="False"
+          Title="{Binding ViewModel.PendingText, Mode=OneWay}"
+          Message="保存与扫描产生的变更，经整理后才会进入知识。"
+          Severity="Informational" />
+        <ui:Button
+          Grid.Column="1"
+          Margin="8,0,0,0"
+          VerticalAlignment="Center"
+          Content="去整理"
+          Appearance="Primary"
+          Command="{Binding ViewModel.GoOrganizeCommand}" />
+      </Grid>
+      <Grid Margin="0,8,0,0" Visibility="{Binding ViewModel.ScanIncomplete, Converter={StaticResource BoolToVis}}">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <ui:InfoBar
+          Grid.Column="0"
+          IsOpen="{Binding ViewModel.ScanIncomplete, Mode=OneWay}"
+          IsClosable="False"
+          Title="扫描未完成，文件可能不完整"
+          Message="{Binding ViewModel.ScanWarning, Mode=OneWay}"
+          Severity="Warning" />
+        <ui:Button
+          Grid.Column="1"
+          Margin="8,0,0,0"
+          VerticalAlignment="Center"
+          Content="重试扫描"
+          Command="{Binding ViewModel.RefreshCommand}" />
+      </Grid>
+    </StackPanel>
+
+    <!-- 导入结果摘要：持久显示，直到用户关闭；失败项保留原因 -->
     <Border
-      Grid.Row="1"
+      Grid.Row="2"
       Margin="0,0,0,10"
       Padding="12,8"
-      CornerRadius="8"
       Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-      BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
+      BorderBrush="{DynamicResource StrokeBrush}"
       BorderThickness="1"
+      CornerRadius="8"
       Visibility="{Binding ViewModel.ImportSummary, Converter={StaticResource StringToVisibility}}">
-      <StackPanel>
-        <TextBlock FontWeight="SemiBold" Text="{Binding ViewModel.ImportSummary}" />
-        <ItemsControl ItemsSource="{Binding ViewModel.ImportResults, Mode=OneWay}" Margin="0,6,0,0">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate>
-              <TextBlock FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                <Run Text="{Binding Name, Mode=OneWay}" />
-                <Run Text=" · " />
-                <Run Text="{Binding StatusText, Mode=OneWay}" />
-                <Run Text=" · " />
-                <Run Text="{Binding Detail, Mode=OneWay}" />
-              </TextBlock>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </StackPanel>
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <StackPanel Grid.Column="0">
+          <TextBlock FontWeight="SemiBold" Text="{Binding ViewModel.ImportSummary}" TextWrapping="Wrap" />
+          <ItemsControl Margin="0,6,0,0" ItemsSource="{Binding ViewModel.ImportResults, Mode=OneWay}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <TextBlock FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                  <Run Text="{Binding Name, Mode=OneWay}" />
+                  <Run Text=" · " />
+                  <Run Text="{Binding StatusText, Mode=OneWay}" />
+                  <Run Text=" · " />
+                  <Run Text="{Binding Detail, Mode=OneWay}" />
+                </TextBlock>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+        <ui:Button Grid.Column="1" Content="关闭" Click="OnDismissImportClick" VerticalAlignment="Top" Appearance="Secondary" />
+      </Grid>
     </Border>
 
     <!-- 主内容 -->
-    <Grid Grid.Row="2">
+    <Grid Grid.Row="3">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="330" />
+        <ColumnDefinition Width="340" MinWidth="300" MaxWidth="340" />
         <ColumnDefinition Width="8" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
@@ -102,31 +162,38 @@
           <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <Grid Grid.Row="0" Grid.RowSpan="2">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="96" /></Grid.ColumnDefinitions>
         <ui:TextBox
+          x:Name="FileFilterBox"
           Grid.Row="0"
-          Margin="0,0,0,8"
-          PlaceholderText="筛选资料文件名…"
+          Margin="0,0,8,12"
           Icon="Search24"
+          PlaceholderText="筛选资料文件名…"
           Text="{Binding ViewModel.SearchKeyword, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
         <ComboBox
-          Grid.Row="1"
+          Grid.Row="0" Grid.Column="1"
           MinHeight="32"
           Margin="0,0,0,8"
           ItemsSource="{Binding ViewModel.TypeFilters}"
           SelectedItem="{Binding ViewModel.TypeFilter, Mode=TwoWay}" />
 
+        </Grid>
+
         <Grid Grid.Row="2">
           <ui:ListView
             x:Name="FileList"
-            ItemsSource="{Binding ViewModel.FilteredRows, Mode=OneWay}"
-            SelectionChanged="OnFileSelectionChanged"
             Background="Transparent"
             BorderThickness="0"
+            ItemContainerStyle="{StaticResource ProjectListItem}"
+            ItemsSource="{Binding ViewModel.FilteredRows, Mode=OneWay}"
+            SelectionChanged="OnFileSelectionChanged"
+            ScrollViewer.HorizontalScrollBarVisibility="Disabled"
             ScrollViewer.VerticalScrollBarVisibility="Auto">
             <ui:ListView.ItemTemplate>
               <DataTemplate>
-                <Grid Margin="2,4">
+                <Grid MinHeight="44" Margin="2,4">
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -134,14 +201,31 @@
                   </Grid.ColumnDefinitions>
                   <CheckBox
                     Grid.Column="0"
-                    IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                    VerticalAlignment="Center"
                     Margin="0,0,8,0"
+                    VerticalAlignment="Center"
+                    IsChecked="{Binding IsSelected, Mode=TwoWay}"
                     ToolTip="勾选后可以批量整理或移入回收站" />
-                  <ui:SymbolIcon Grid.Column="1" Symbol="{Binding Name, Converter={StaticResource FileNodeIcon}}" FontSize="18" Margin="0,0,10,0" VerticalAlignment="Center" />
-                  <StackPanel Grid.Column="2">
-                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Text="{Binding MetaText}" FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" TextTrimming="CharacterEllipsis" />
+                  <Border
+                    Grid.Column="1"
+                    Width="28"
+                    Height="28"
+                    Margin="0,0,10,0"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="6">
+                    <TextBlock
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      FontSize="10"
+                      FontWeight="Bold"
+                      Foreground="{DynamicResource AccentLightBrush}"
+                      Text="{Binding TypeBadge}" />
+                  </Border>
+                  <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                    <TextBlock FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="{Binding MetaText}" TextTrimming="CharacterEllipsis" />
                   </StackPanel>
                 </Grid>
               </DataTemplate>
@@ -151,41 +235,73 @@
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             Visibility="{Binding ViewModel.Rows.Count, Converter={StaticResource CountToEmptyVis}}">
-            <TextBlock FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" Text="还没有资料" />
-            <TextBlock Margin="0,6,0,0" MaxWidth="260" TextAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="添加 md/txt/docx/xlsx 文件；应用保持原格式，不转 Markdown。" />
-            <ui:Button Margin="0,12,0,0" Content="添加文件" Appearance="Primary" Icon="ArrowUpload24" Click="OnAddFilesClick" />
+            <TextBlock HorizontalAlignment="Center" FontSize="16" FontWeight="SemiBold" Text="还没有资料" />
+            <TextBlock
+              Margin="0,6,0,0"
+              MaxWidth="270"
+              TextAlignment="Center"
+              TextWrapping="Wrap"
+              Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+              Text="支持文本、Word/PDF、表格、演示、JSON 与常见图片；文件按原格式保存，不转 Markdown。" />
+            <ui:Button Margin="0,12,0,0" Content="添加文件" Appearance="Primary" Icon="ArrowUpload24" Click="OnAddFilesClick" IsEnabled="{Binding ViewModel.CanModify}" />
           </StackPanel>
+          <TextBlock
+            Margin="8,12,8,0"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Top"
+            FontSize="{StaticResource FontSizeCaption}"
+            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+            Text="没有匹配的资料；可清空筛选。"
+            TextWrapping="Wrap"
+            Visibility="{Binding ViewModel.FilteredCount, Converter={StaticResource CountToEmptyVis}}" />
         </Grid>
 
-        <Border Grid.Row="3" Margin="0,10,0,0" Padding="12,8" CornerRadius="8" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" BorderThickness="1">
+        <Border
+          Grid.Row="3"
+          Margin="0,10,0,0"
+          Padding="12,10"
+          Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+          BorderBrush="{DynamicResource StrokeBrush}"
+          BorderThickness="1"
+          CornerRadius="8">
           <StackPanel>
             <TextBlock Text="{Binding ViewModel.SelectedCountText}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
-            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+            <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
               <ui:Button Content="整理所选" Command="{Binding ViewModel.OrganizeSelectedCommand}" IsEnabled="{Binding ViewModel.HasSelection}" Appearance="Primary" Margin="0,0,8,0" />
               <ui:Button Content="移入回收站" Command="{Binding ViewModel.MoveSelectedToTrashCommand}" IsEnabled="{Binding ViewModel.HasSelection}" />
-              <ui:Button Content="撤销上次移除" Command="{Binding ViewModel.UndoLastTrashCommand}" Margin="8,0,0,0" Visibility="{Binding ViewModel.UndoTrashId, Converter={StaticResource StringToVisibility}}" />
+              <ui:Button
+                Margin="8,0,0,0"
+                Command="{Binding ViewModel.UndoLastTrashCommand}"
+                Content="撤销上次移除"
+                Visibility="{Binding ViewModel.UndoTrashId, Converter={StaticResource StringToVisibility}}" />
             </StackPanel>
+            <TextBlock Margin="0,6,0,0" FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="单击行预览，复选框用于整理/回收；两者互不代替。" TextWrapping="Wrap" />
           </StackPanel>
         </Border>
       </Grid>
 
-      <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" Background="Transparent" />
+      <GridSplitter
+        Grid.Column="1"
+        Width="8"
+        HorizontalAlignment="Stretch"
+        Background="Transparent"
+        ResizeBehavior="PreviousAndNext" />
 
       <!-- 右栏：资料详情 / 工作区 -->
       <Grid Grid.Column="2">
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />
-          <RowDefinition Height="*" />
+          <RowDefinition Height="*" /><RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <Border
-          Grid.Row="0"
-          Margin="0,0,0,8"
-          Padding="12,8"
-          CornerRadius="8"
+          Grid.Row="2"
+          Margin="0,12,0,0"
+          Padding="12,10"
           Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-          BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
+          BorderBrush="{DynamicResource StrokeBrush}"
           BorderThickness="1"
+          CornerRadius="8"
           Visibility="{Binding ViewModel.CurrentInfo, Converter={StaticResource NullToVisibility}}">
           <Grid>
             <Grid.ColumnDefinitions>
@@ -193,19 +309,30 @@
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0">
-              <TextBlock FontWeight="SemiBold" Text="{Binding ViewModel.CurrentInfo.Name}" TextTrimming="CharacterEllipsis" />
+              
               <TextBlock FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="{Binding ViewModel.CurrentInfo.PreviewHint}" />
+              <StackPanel Margin="0,6,0,0" Orientation="Horizontal">
+                <Border Margin="0,0,6,0" Padding="6,1" Background="{DynamicResource PillSuccessBackgroundBrush}" BorderBrush="{DynamicResource PillSuccessBorderBrush}" BorderThickness="1" CornerRadius="8">
+                  <TextBlock FontSize="11" Foreground="{DynamicResource SuccessBrush}" Text="{Binding ViewModel.CurrentInfo.StorageState}" />
+                </Border>
+                <Border Margin="0,0,6,0" Padding="6,1" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1" CornerRadius="8">
+                  <TextBlock FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding ViewModel.CurrentInfo.PreviewState}" />
+                </Border>
+                <Border Padding="6,1" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1" CornerRadius="8">
+                  <TextBlock FontSize="11" Foreground="{DynamicResource WarningBrush}" Text="{Binding ViewModel.CurrentInfo.AiReadState}" />
+                </Border>
+              </StackPanel>
             </StackPanel>
-            <StackPanel Grid.Column="1" Orientation="Horizontal">
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
               <ui:Button Content="导出文件" Command="{Binding ViewModel.ExportCurrentCommand}" Margin="0,0,8,0" />
               <ui:Button Content="打开原件" Click="OnOpenOriginalClick" />
             </StackPanel>
           </Grid>
         </Border>
 
-        <controls:DocumentWorkspace Grid.Row="1" DataContext="{Binding ViewModel.Workspace}">
+        <controls:DocumentWorkspace Grid.Row="0" Grid.RowSpan="2" DataContext="{Binding ViewModel.Workspace}">
           <controls:DocumentWorkspace.EmptyAction>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+            <StackPanel HorizontalAlignment="Center" Orientation="Horizontal">
               <ui:Button Content="添加文件" Click="OnAddFilesClick" Appearance="Primary" Margin="0,0,8,0" Icon="ArrowUpload24" />
               <ui:Button Content="新建资料" Click="OnNewClick" Icon="Add24" />
             </StackPanel>
@@ -217,11 +344,11 @@
     <!-- 无库引导 -->
     <Border
       Grid.Row="0"
-      Grid.RowSpan="3"
-      Background="{DynamicResource AppBackgroundBrush}"
+      Grid.RowSpan="4"
+      Background="{DynamicResource ContentSurfaceBrush}"
       Visibility="{Binding ViewModel.HasKb, Converter={StaticResource InvBoolToVis}}">
       <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="420">
-        <TextBlock FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" Text="创建你的第一个知识库" />
+        <TextBlock HorizontalAlignment="Center" FontSize="22" FontWeight="SemiBold" Text="创建你的第一个知识库" />
         <TextBlock Margin="0,8,0,0" TextAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="把资料和整理结果放在同一个地方。创建后即可添加资料。" />
         <ui:Button Margin="0,16,0,0" Content="新建知识库" Appearance="Primary" Click="OnCreateKbClick" />
       </StackPanel>

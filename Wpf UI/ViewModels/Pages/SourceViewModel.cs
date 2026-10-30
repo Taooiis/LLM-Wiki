@@ -3,13 +3,14 @@ using System.ComponentModel;
 using System.IO;
 using System.Windows.Data;
 
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-
 using LLM_Wiki.Services;
 using LLM_Wiki.ViewModels.Windows;
 
+using Microsoft.Extensions.DependencyInjection;
+
 using Microsoft.Win32;
+
+using Wpf.Ui.Controls;
 
 namespace LLM_Wiki.ViewModels.Pages;
 
@@ -36,6 +37,7 @@ public partial class SourceViewModel : ObservableObject
         ScanService scanner,
         UnsavedChangesCoordinator unsaved,
         KnowledgeService knowledge,
+        SourcePreviewService preview,
         ToastService toast)
     {
         _main = main;
@@ -47,7 +49,7 @@ public partial class SourceViewModel : ObservableObject
         _knowledge = knowledge;
         _toast = toast;
 
-        Workspace = new DocumentWorkspaceViewModel(sources, knowledge, toast)
+        Workspace = new DocumentWorkspaceViewModel(sources, knowledge, preview, toast)
         {
             NewFileDirectory = "raw/sources",
         };
@@ -58,15 +60,21 @@ public partial class SourceViewModel : ObservableObject
             && row.MatchesType(TypeFilter);
 
         _unsaved.Register("source-workspace", Workspace);
+        _unsaved.RegisterSaver("source-workspace", Workspace.TrySaveAsync);
+        _unsaved.RegisterDiscarder("source-workspace", Workspace.DiscardDraft);
         _main.PropertyChanged += OnMainPropertyChanged;
         _main.OpenRequested += OnOpenRequested;
+        // 页内“去整理”计数联动：保存产生新变更即刷新（02§9.2）
+        Workspace.DocumentSaved += RefreshPendingFromChanges;
+        // 02§3/§5：进入编辑前校验 ≤1 MiB；超限回到只读预览，提供系统打开
+        Workspace.PropertyChanged += OnWorkspacePropertyChanged;
         LoadKb(_main.CurrentKb);
     }
 
     public DocumentWorkspaceViewModel Workspace { get; }
 
-    /// <summary>同名冲突时由页面询问：覆盖同名 / 跳过同名 / 返回。</summary>
-    public Func<IReadOnlyList<string>, Task<SourceConflictPolicy>>? ResolveConflict { get; set; }
+    /// <summary>同名冲突时由页面询问：覆盖同名 / 跳过同名 / 取消本批（D03，只含真正冲突的项）。</summary>
+    public Func<IReadOnlyList<ImportConflictItem>, Task<SourceConflictPolicy>>? ResolveConflict { get; set; }
 
     [ObservableProperty] private string _selectedKb = "";
     [ObservableProperty] private string _searchKeyword = "";
@@ -78,16 +86,33 @@ public partial class SourceViewModel : ObservableObject
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private string? _undoTrashId;
     [ObservableProperty] private ObservableCollection<ImportResultRow> _importResults = [];
+    [ObservableProperty] private string _scanWarning = "";
+    [ObservableProperty] private System.Collections.Generic.List<string> _undoTrashIds = [];
+
+    partial void OnPendingCountChanged(int value)
+    {
+        OnPropertyChanged(nameof(PendingText));
+        OnPropertyChanged(nameof(HasPendingChanges));
+    }
+
+    partial void OnIsBusyChanged(bool value) => OnPropertyChanged(nameof(CanModify));
+
+    partial void OnScanWarningChanged(string value) => OnPropertyChanged(nameof(ScanIncomplete));
 
     public ObservableCollection<SourceRow> Rows { get; }
     public ICollectionView FilteredRows { get; }
     public ObservableCollection<TrashEntry> TrashEntries { get; } = [];
 
-    public string[] TypeFilters { get; } = ["全部", "Markdown", "文本", "Word", "Excel"];
+    public string[] TypeFilters { get; } = SourceFormatRegistry.FilterOptions;
 
     public bool HasKb => _main.HasKb;
     public bool HasSelection => SelectedRows.Count > 0;
     public bool IsBinarySelected => CurrentInfo is { IsText: false };
+    public bool HasImportFailure => ImportResults.Any(r => r.Result.Status == SourceImportStatus.Failed);
+    public bool HasPendingChanges => PendingCount > 0;
+    public bool ScanIncomplete => !string.IsNullOrEmpty(ScanWarning);
+    public bool CanModify => !IsBusy;
+    public int FilteredCount => FilteredRows.Cast<object>().Count();
     public SourceInfo? CurrentInfo => string.IsNullOrWhiteSpace(SelectedRelPath)
         ? null
         : _sources.Get(SelectedKb, SelectedRelPath);
@@ -103,7 +128,7 @@ public partial class SourceViewModel : ObservableObject
         }
     }
 
-    public string PendingText => PendingCount > 0 ? $"有 {PendingCount} 项资料变更尚未整理" : "暂无待整理变更";
+    public string PendingText => PendingCount > 0 ? $"{PendingCount} 项资料变更尚未整理" : "暂无待整理变更";
 
     private IReadOnlyList<SourceRow> SelectedRows => Rows.Where(r => r.IsSelected).ToList();
 
@@ -119,6 +144,25 @@ public partial class SourceViewModel : ObservableObject
         if (row != null) _ = SelectRowAsync(row);
     }
 
+    private void RefreshPendingFromChanges()
+    {
+        PendingCount = string.IsNullOrWhiteSpace(SelectedKb) ? 0 : _changes.Load(SelectedKb).Count;
+    }
+
+    /// <summary>
+    /// 02§3/§5：进入编辑前校验 ≤1 MiB 与格式（SourceService 行模型 CanEditText）。
+    /// 超限时立即回到只读预览，编辑内容未被改动，不丢任何输入。
+    /// </summary>
+    private void OnWorkspacePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(DocumentWorkspaceViewModel.Mode)) return;
+        if (Workspace.Mode != WorkspaceMode.Editing || Workspace.IsNewDocument || Workspace.Role != DocumentRole.Source) return;
+        var info = _sources.Get(SelectedKb, Workspace.CurrentRelativePath);
+        if (info == null || info.CanEditText) return;
+        Workspace.OpenSourceText(SelectedKb, Workspace.CurrentRelativePath);
+        _toast.ShowWarning($"{info.Name} 超过 1 MiB 或格式限制，应用内保持只读；请用“打开原件”在系统程序中编辑。");
+    }
+
     public void LoadKb(string kb)
     {
         SelectedKb = kb;
@@ -131,11 +175,31 @@ public partial class SourceViewModel : ObservableObject
             : "创建知识库后，这里用来放要整理的资料。";
         if (!string.IsNullOrWhiteSpace(kb) && _main.HasKb)
         {
-            try { _scanner.Scan(kb, recordChanges: true); } catch { }
+            RunScan();
             Reload();
         }
-        OnPropertyChanged(nameof(PendingText));
         OnPropertyChanged(nameof(HasKb));
+    }
+
+    /// <summary>扫描结果完整性（02§9.2）：失败/不完整保留页头持久提示，不吞异常，可重试。</summary>
+    private void RunScan()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedKb) || !_main.HasKb)
+        {
+            ScanWarning = "";
+            return;
+        }
+        try
+        {
+            var result = _scanner.Scan(SelectedKb, recordChanges: true);
+            ScanWarning = result.Complete
+                ? ""
+                : "部分目录或文件无法读取，本次不判断删除。" + result.Warning;
+        }
+        catch (Exception e)
+        {
+            ScanWarning = "扫描失败：" + e.Message;
+        }
     }
 
     public void Reload()
@@ -160,11 +224,30 @@ public partial class SourceViewModel : ObservableObject
         PendingCount = _changes.Load(SelectedKb).Count;
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(SelectedCountText));
-        OnPropertyChanged(nameof(PendingText));
+        OnPropertyChanged(nameof(FilteredCount));
     }
 
-    partial void OnSearchKeywordChanged(string value) => FilteredRows.Refresh();
-    partial void OnTypeFilterChanged(string value) => FilteredRows.Refresh();
+    [RelayCommand]
+    private void DismissImportResults()
+    {
+        ImportResults = [];
+        ImportSummary = "";
+    }
+
+    partial void OnSearchKeywordChanged(string value)
+    {
+        FilteredRows.Refresh();
+        OnPropertyChanged(nameof(FilteredCount));
+    }
+
+    partial void OnTypeFilterChanged(string value)
+    {
+        FilteredRows.Refresh();
+        OnPropertyChanged(nameof(FilteredCount));
+    }
+
+    partial void OnImportResultsChanged(ObservableCollection<ImportResultRow> value)
+        => OnPropertyChanged(nameof(HasImportFailure));
     partial void OnSelectedRelPathChanged(string value)
     {
         OnPropertyChanged(nameof(CurrentInfo));
@@ -185,8 +268,12 @@ public partial class SourceViewModel : ObservableObject
         await Task.CompletedTask;
     }
 
+    /// <summary>
+    /// 新建资料：菜单选择 Markdown/纯文本（02§5，默认 md）。
+    /// 预填带后缀的默认名；用户改名后缺后缀仍按 .md 补（SourceService.CreateText）。
+    /// </summary>
     [RelayCommand]
-    private void NewSource()
+    private void NewSource(string? kind)
     {
         if (!_main.HasKb)
         {
@@ -194,6 +281,9 @@ public partial class SourceViewModel : ObservableObject
             return;
         }
         Workspace.EnterNewSource(SelectedKb);
+        Workspace.NewFileName = string.Equals(kind, "txt", StringComparison.OrdinalIgnoreCase)
+            ? "新建文本.txt"
+            : "新建文档.md";
     }
 
     [RelayCommand]
@@ -207,26 +297,44 @@ public partial class SourceViewModel : ObservableObject
         var dialog = new OpenFileDialog
         {
             Title = "添加资料",
-            Filter = "支持的资料 (*.md;*.txt;*.docx;*.xlsx)|*.md;*.txt;*.docx;*.xlsx|Markdown (*.md)|*.md|文本 (*.txt)|*.txt|Word (*.docx)|*.docx|Excel (*.xlsx)|*.xlsx",
+            Filter = SourceFormatRegistry.FileDialogFilter(),
             Multiselect = true,
         };
         if (dialog.ShowDialog(Application.Current.MainWindow) != true) return;
         await ImportPathsAsync(dialog.FileNames);
     }
 
-    public bool FindConflicts(IEnumerable<string> paths)
+    /// <summary>D03：只返回与现有资料真正同名的项，含现有/本次的大小与修改时间。</summary>
+    public IReadOnlyList<ImportConflictItem> FindConflicts(IEnumerable<string> paths)
     {
-        var existing = _sources.List(SelectedKb).Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return paths.Any(p => existing.Contains(Path.GetFileName(p)));
+        var existing = _sources.List(SelectedKb).ToDictionary(s => s.Name, StringComparer.OrdinalIgnoreCase);
+        var conflicts = new List<ImportConflictItem>();
+        foreach (var path in paths)
+        {
+            var name = Path.GetFileName(path);
+            if (!existing.TryGetValue(name, out var current)) continue;
+            var incoming = new FileInfo(path);
+            conflicts.Add(new ImportConflictItem(
+                name,
+                current.SizeText,
+                SourceRules.RelativeTime(current.Modified),
+                SourceRules.SizeText(incoming.Length),
+                SourceRules.RelativeTime(incoming.LastWriteTime)));
+        }
+        return conflicts;
     }
 
     public async Task ImportPathsAsync(IReadOnlyList<string> paths, SourceConflictPolicy policy = SourceConflictPolicy.Ask)
     {
         if (!_main.HasKb || paths.Count == 0) return;
-        if (policy == SourceConflictPolicy.Ask && FindConflicts(paths) && ResolveConflict != null)
+        if (policy == SourceConflictPolicy.Ask)
         {
-            policy = await ResolveConflict(paths);
-            if (policy == SourceConflictPolicy.Ask) return;
+            var conflicts = FindConflicts(paths);
+            if (conflicts.Count > 0 && ResolveConflict != null)
+            {
+                policy = await ResolveConflict(conflicts);
+                if (policy == SourceConflictPolicy.Ask) return;
+            }
         }
         IsBusy = true;
         ImportResults.Clear();
@@ -270,42 +378,118 @@ public partial class SourceViewModel : ObservableObject
         if (selected.Count == 0) return;
         if (!await _unsaved.CanLeaveAsync()) return;
 
-        var moved = new List<string>();
+        // 02§3：本机任务运行中且在读取范围内的源禁止修改，移入回收站前逐项拒绝
+        var agent = App.Services.GetService<LocalAgentService>();
+        var movedNames = new List<string>();
+        var movedIds = new List<string>();
         var failed = new List<string>();
-        TrashEntry? last = null;
         foreach (var row in selected)
         {
-            var result = _sources.MoveToTrash(SelectedKb, row.Source.RelPath);
-            if (result.Success)
+            if (agent is { IsRunning: true } && agent.CanReadSource(row.Source.RelPath))
             {
-                moved.Add(row.Name);
-                last = result.Entry;
+                failed.Add(row.Name + "：该文件正被本机任务使用，未移入回收站");
+                continue;
+            }
+            var result = _sources.MoveToTrash(SelectedKb, row.Source.RelPath);
+            if (result.Success && result.Entry != null)
+            {
+                movedNames.Add(row.Name);
+                movedIds.Add(result.Entry.Id);
             }
             else failed.Add(row.Name + "：" + result.Message);
         }
         Reload();
         Workspace.ResetToEmpty();
         SelectedRelPath = "";
-        UndoTrashId = last?.Id;
-        if (moved.Count > 0)
-            _toast.ShowSuccess($"已移入回收站 {moved.Count} 项，可恢复；已有知识不会立即删除。");
+        UndoTrashIds = movedIds;
+        UndoTrashId = movedIds.Count > 0 ? movedIds[^1] : null;
+        if (movedNames.Count > 0)
+        {
+            // N03（02§9.2）：可恢复移除不确认，8 秒通知 + 撤销；撤销逐条走恢复服务
+            var message = movedNames.Count == 1
+                ? $"{movedNames[0]} 可恢复"
+                : $"{movedNames[0]} 等 {movedNames.Count} 项 可恢复";
+            _toast.ShowWithAction(
+                "已移入回收站",
+                message,
+                ControlAppearance.Success,
+                "撤销",
+                UndoLastTrashCommand,
+                null,
+                TimeSpan.FromSeconds(8));
+        }
         if (failed.Count > 0)
             _toast.ShowError("部分资料未移除：" + string.Join("；", failed));
     }
 
+    /// <summary>撤销本批移入（N03）：逐条恢复；同名冲突按 D05 走另存，自动取首个可用名。</summary>
     [RelayCommand]
     private async Task UndoLastTrashAsync()
     {
-        if (string.IsNullOrWhiteSpace(UndoTrashId)) return;
-        var result = _trash.Restore(SelectedKb, UndoTrashId);
-        if (result.Success)
+        List<string> ids = UndoTrashIds.Count > 0
+            ? UndoTrashIds.ToList()
+            : string.IsNullOrWhiteSpace(UndoTrashId) ? [] : [UndoTrashId];
+        if (ids.Count == 0) return;
+        var restored = new List<string>();
+        var errors = new List<string>();
+        foreach (var id in ids)
         {
-            UndoTrashId = null;
-            Reload();
-            _toast.ShowSuccess("已恢复：" + result.RelPath);
+            var result = RestoreTrashWithFallback(id);
+            if (result.Success) restored.Add(result.RelPath);
+            else errors.Add(result.Message);
         }
-        else _toast.ShowError("恢复失败：" + result.Message);
+        UndoTrashIds = [];
+        UndoTrashId = null;
+        Reload();
+        if (restored.Count > 0 && errors.Count == 0)
+            _toast.ShowSuccess(restored.Count == 1 ? "已恢复：" + restored[0] : $"已恢复 {restored.Count} 项");
+        else if (restored.Count > 0)
+            _toast.ShowWarning($"已恢复 {restored.Count} 项，{errors.Count} 项失败：" + string.Join("；", errors));
+        else
+            _toast.ShowError("恢复失败：" + string.Join("；", errors));
         await Task.CompletedTask;
+    }
+
+    /// <summary>恢复并处理同名：冲突时预填“原名（恢复1）.扩展名”自动另存，不覆盖现有文件。</summary>
+    private TrashRestoreResult RestoreTrashWithFallback(string id)
+    {
+        var result = _trash.Restore(SelectedKb, id);
+        if (result.Success || !result.Message.Contains("同名", StringComparison.Ordinal)) return result;
+        var entry = _trash.List(SelectedKb).FirstOrDefault(e => e.Id == id);
+        if (entry == null) return result;
+        var renamed = _trash.Restore(SelectedKb, id, SuggestRestoreName(entry.OriginalRel, entry.OriginalName));
+        return renamed.Success ? renamed : result;
+    }
+
+    /// <summary>原位置目录下首个可用名：原名、原名（恢复1）… 直到不存在（02§9.1 D05）。</summary>
+    public string SuggestRestoreName(string originalRel, string originalName)
+    {
+        var dir = RestoreDirectory(originalRel, originalName);
+        if (dir == null) return originalName;
+        if (!File.Exists(Path.Combine(dir, originalName))) return originalName;
+        var stem = Path.GetFileNameWithoutExtension(originalName);
+        var ext = Path.GetExtension(originalName);
+        for (var i = 1; i <= 999; i++)
+        {
+            var candidate = $"{stem}（恢复{i}）{ext}";
+            if (!File.Exists(Path.Combine(dir, candidate))) return candidate;
+        }
+        return $"{stem}（恢复-{DateTime.Now:yyyyMMddHHmmss}）{ext}";
+    }
+
+    /// <summary>按原相对路径与文件名推算恢复目标全路径；供提交前 File.Exists 预检。</summary>
+    public string? RestoreTargetPath(string originalRel, string name)
+    {
+        var dir = RestoreDirectory(originalRel, name);
+        return dir == null ? null : Path.Combine(dir, name);
+    }
+
+    private string? RestoreDirectory(string originalRel, string name)
+    {
+        var root = _main.CurrentKbRoot;
+        if (string.IsNullOrWhiteSpace(root)) return null;
+        var rel = string.IsNullOrWhiteSpace(originalRel) ? "raw/sources/" + name : originalRel;
+        return Path.GetDirectoryName(Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar)));
     }
 
     public void OpenTrash()
@@ -370,16 +554,31 @@ public partial class SourceViewModel : ObservableObject
     private void Refresh()
     {
         if (!_main.HasKb) return;
-        _scanner.Scan(SelectedKb, recordChanges: true);
+        RunScan();
         Reload();
     }
 
     [RelayCommand]
     private void OrganizeSelected()
     {
-        var selected = SelectedRows.Select(r => r.Source.RelPath).ToList();
+        var selected = SelectedRows.ToList();
         if (selected.Count == 0) return;
-        _main.PendingOrganizeSelection = selected;
+        // 02§6：带入整理前核对文件真实存在，缺失项移除并提示，不把不存在的源带进整理
+        var available = new List<string>();
+        var missing = 0;
+        foreach (var row in selected)
+        {
+            if (_sources.Exists(SelectedKb, row.Source.RelPath)) available.Add(row.Source.RelPath);
+            else missing++;
+        }
+        if (available.Count == 0)
+        {
+            _toast.ShowWarning("所选资料文件均已缺失，请刷新后重选。");
+            return;
+        }
+        if (missing > 0)
+            _toast.ShowWarning($"已移除 {missing} 个缺失项，按 {available.Count} 项继续整理。");
+        _main.PendingOrganizeSelection = available;
         _main.RequestOrganizeSelection();
         _main.NavigateTo("organize");
     }
@@ -399,11 +598,12 @@ public partial class SourceRow : ObservableObject
     public string RelPath => Source.RelPath;
     public string TypeText => Source.TypeText;
     public string MetaText => $"{Source.TypeText} · {Source.SizeText} · {Source.ModifiedText}";
+    public string TypeBadge => Source.TypeBadge;
 
     [ObservableProperty] private bool _isSelected;
 
     public bool MatchesType(string filter)
-        => filter is null or "全部" || filter == TypeText;
+        => filter is null or "全部" || filter == Source.CategoryText;
 }
 
 public sealed record ImportResultRow(string Name, SourceImportItem Result)
@@ -417,3 +617,11 @@ public sealed record ImportResultRow(string Name, SourceImportItem Result)
     };
     public string Detail => Result.Message;
 }
+
+/// <summary>D03 同名冲突项：现有文件与本次文件的大小/修改时间展示信息。</summary>
+public sealed record ImportConflictItem(
+    string Name,
+    string ExistingSize,
+    string ExistingModified,
+    string IncomingSize,
+    string IncomingModified);

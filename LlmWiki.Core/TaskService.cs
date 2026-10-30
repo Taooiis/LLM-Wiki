@@ -220,6 +220,18 @@ public sealed class TaskService(
         }
         stale.AddRange(result.Stale);
 
+        // 零变化确认闭环（03§3 L33 / §8 L103）：读取有效（InvalidReason 为空）且没有待整理记录可匹配的项
+        // （所选资料/全部资料），勾选确认时只记录逐项回执（no-clear 语义），不调用 changes.Confirm、
+        // 不清除任何记录，使“所有项确认”可达、任务能正常结束。已确认/新变化/读取失败分支保持不变。
+        foreach (var item in chosen)
+        {
+            if (!string.IsNullOrEmpty(item.InvalidReason)) continue;
+            if (item.Action is not ("所选资料" or "全部资料")) continue;
+            item.Confirmed = true;
+            item.Note = "已核对确认；无待整理记录需清除";
+        }
+        var confirmedCount = result.Confirmed + noRecord.Count;
+
         task.ConfirmedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
         task.ConfirmNote = note;
         task.State = task.Items.All(i => i.Confirmed)
@@ -230,13 +242,13 @@ public sealed class TaskService(
 
         return new TaskConfirmResult(
             true,
-            result.Confirmed,
+            confirmedCount,
             stale.Count,
             stale,
             noRecord,
             stale.Count > 0
-                ? $"已确认 {result.Confirmed} 项；{stale.Count} 项有新变化，仍保留在待整理清单中"
-                : $"已确认 {result.Confirmed} 项");
+                ? $"已确认 {confirmedCount} 项；{stale.Count} 项有新变化，仍保留在待整理清单中"
+                : $"已确认 {confirmedCount} 项");
     }
 
     /// <summary>误确认后重新列为待整理：只登记当前版本，不回滚文件。</summary>
@@ -258,6 +270,27 @@ public sealed class TaskService(
         }
         task.State = TaskState.PartiallyConfirmed;
         task.ConfirmedAt = null;
+        Save(task);
+    }
+
+    /// <summary>本机进程结束/异常/取消后进入待核对；不自动确认任何变更。</summary>
+    public void MarkNeedsReview(string taskId, string attemptId, string? attemptStatus = null)
+    {
+        var task = Load(taskId);
+        if (task == null) return;
+        task.AttemptId = attemptId;
+        task.LastAttemptStatus = attemptStatus;
+        task.State = TaskState.NeedsReview;
+        Save(task);
+    }
+
+    /// <summary>结束本任务，未确认的源变更原样保留。</summary>
+    public void CloseWithRemaining(string taskId)
+    {
+        var task = Load(taskId);
+        if (task == null) return;
+        task.State = TaskState.ClosedWithRemaining;
+        task.ConfirmedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
         Save(task);
     }
 
@@ -304,7 +337,7 @@ public sealed class TaskService(
     }
 
     public IReadOnlyList<OrganizeTask> Active(string kb)
-        => [.. Recent(kb).Where(t => t.State is TaskState.Prepared or TaskState.Copied or TaskState.PartiallyConfirmed)];
+        => [.. Recent(kb).Where(t => t.State is TaskState.Prepared or TaskState.Copied or TaskState.NeedsReview or TaskState.PartiallyConfirmed)];
 
     /// <summary>本次变化：任务准备以来的 wiki 新增/修改/删除；日志单独列出。</summary>
     public IReadOnlyList<WikiChange> ReviewWikiChanges(string kb, IReadOnlyList<WikiStamp> baseline)
@@ -352,7 +385,7 @@ public sealed class TaskService(
         // 相同快照重复复制不重复创建任务
         foreach (var existing in Recent(kb))
         {
-            if (existing.State is TaskState.Confirmed or TaskState.Abandoned) continue;
+            if (existing.State is TaskState.Confirmed or TaskState.ClosedWithRemaining or TaskState.Abandoned) continue;
             if (existing.Kind != task.Kind || existing.Scope != task.Scope || existing.Protocol != task.Protocol
                 || existing.RuleVersion != task.RuleVersion || existing.Input != task.Input)
                 continue;
@@ -413,7 +446,7 @@ public sealed class TaskService(
             {
                 var task = StateJson.Load<OrganizeTask>(file);
                 if (task == null) continue;
-                if (task.State is TaskState.Confirmed or TaskState.Abandoned)
+                if (task.State is TaskState.Confirmed or TaskState.ClosedWithRemaining or TaskState.Abandoned)
                 {
                     var when = DateTime.TryParse(task.ConfirmedAt, out var d) ? d : File.GetLastWriteTime(file);
                     ended.Add((file, when));

@@ -20,12 +20,13 @@
           这里只放默认深色，保证设计器与首次渲染有可用 token。
         -->
         <ResourceDictionary Source="Resources/Theme.Dark.xaml" />
+        <ResourceDictionary Source="Resources/VisualStyles.xaml" />
       </ResourceDictionary.MergedDictionaries>
 
       <!-- 全局字号档位：所有页面统一引用，禁止页面内魔数字号 -->
-      <sys:Double x:Key="FontSizePageTitle">28</sys:Double>
+      <sys:Double x:Key="FontSizePageTitle">26</sys:Double>
       <sys:Double x:Key="FontSizeSectionTitle">18</sys:Double>
-      <sys:Double x:Key="FontSizeBody">14</sys:Double>
+      <sys:Double x:Key="FontSizeBody">15</sys:Double>
       <sys:Double x:Key="FontSizeCaption">12</sys:Double>
 
       <helpers:BoolToVisibilityConverter x:Key="BoolToVis" />
@@ -35,11 +36,15 @@
       <helpers:FileNodeIconConverter x:Key="FileNodeIcon" />
       <helpers:StringToVisibilityConverter x:Key="StringToVisibility" />
       <helpers:NullToVisibilityConverter x:Key="NullToVisibility" />
+      <helpers:InverseBoolConverter x:Key="InverseBool" />
+      <helpers:DoubleAtLeastToVisibilityConverter x:Key="WidthToVis" />
+      <helpers:AddOneConverter x:Key="AddOne" />
+      <helpers:EqualsToVisibilityConverter x:Key="EqualsToVis" />
 
-      <!-- 页面标题：每页顶部唯一大标题 -->
+      <!-- 页面标题：每页顶部唯一大标题（00§8 标题26 Semibold） -->
       <Style x:Key="PageTitleText" TargetType="TextBlock">
         <Setter Property="FontSize" Value="{StaticResource FontSizePageTitle}" />
-        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Margin" Value="0,0,0,16" />
       </Style>
 
@@ -53,23 +58,384 @@
       <!-- 页面内容统一留白节奏 -->
       <Thickness x:Key="PageContentMargin">24,16,24,24</Thickness>
 
-      <!-- 卡片容器：细边框 + 圆角 10（设计文档 00§5.1） -->
+      <!-- 卡片容器：细边框 + 圆角 8（设计文档 00§8） -->
       <Style x:Key="CardBorder" TargetType="Border">
-        <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource StrokeFillColorDefaultBrush}" />
+        <Setter Property="Background" Value="{DynamicResource CardSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource StrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="CornerRadius" Value="8" />
         <Setter Property="Padding" Value="16" />
+      </Style>
+
+      <!-- 知识树/资料列表统一行样式：选中、悬停、键盘焦点与禁用分开（00§8） -->
+      <Style x:Key="ProjectTreeItem" TargetType="{x:Type TreeViewItem}">
+        <Setter Property="Foreground" Value="{DynamicResource ItemTextBrush}" />
+        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="{x:Type TreeViewItem}">
+              <StackPanel>
+                <Border
+                  x:Name="RowBorder"
+                  Margin="0,1"
+                  Background="Transparent"
+                  BorderBrush="Transparent"
+                  BorderThickness="0"
+                  CornerRadius="6">
+                  <Grid MinHeight="36">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="20" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <!-- 焦点环叠加层：固定 2DIP 透明边框，聚焦时显色，不引起布局位移（00§8） -->
+                    <Border
+                      x:Name="FocusOverlay"
+                      Grid.ColumnSpan="2"
+                      Margin="-3"
+                      BorderBrush="Transparent"
+                      BorderThickness="2"
+                      CornerRadius="8" />
+                    <Border
+                      x:Name="SelectionBar"
+                      Width="3"
+                      Margin="0,7"
+                      HorizontalAlignment="Left"
+                      Background="{DynamicResource FocusRingBrush}"
+                      CornerRadius="2"
+                      Visibility="Collapsed" />
+                    <ToggleButton
+                      x:Name="Expander"
+                      Grid.Column="0"
+                      Width="20"
+                      Height="36"
+                      Focusable="False"
+                      IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}">
+                      <ToggleButton.Template>
+                        <ControlTemplate TargetType="ToggleButton">
+                          <Border Background="Transparent">
+                            <Path
+                              x:Name="Arrow"
+                              Width="8"
+                              Height="8"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Data="M 0 0 L 4 4 L 0 8 Z"
+                              Fill="{DynamicResource SecondaryTextBrush}"
+                              RenderTransformOrigin="0.5,0.5" />
+                          </Border>
+                          <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                              <Setter TargetName="Arrow" Property="RenderTransform">
+                                <Setter.Value>
+                                  <RotateTransform Angle="90" />
+                                </Setter.Value>
+                              </Setter>
+                            </Trigger>
+                          </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                      </ToggleButton.Template>
+                    </ToggleButton>
+                    <ContentPresenter
+                      x:Name="PART_Header"
+                      Grid.Column="1"
+                      Margin="4,0,8,0"
+                      VerticalAlignment="Center"
+                      ContentSource="Header"
+                      TextElement.Foreground="{TemplateBinding Foreground}" />
+                  </Grid>
+                </Border>
+                <ItemsPresenter x:Name="ItemsHost" Margin="20,0,0,0" />
+              </StackPanel>
+              <ControlTemplate.Triggers>
+                <Trigger Property="HasItems" Value="False">
+                  <Setter TargetName="Expander" Property="Visibility" Value="Hidden" />
+                </Trigger>
+                <Trigger Property="IsExpanded" Value="False">
+                  <Setter TargetName="ItemsHost" Property="Visibility" Value="Collapsed" />
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource ItemHoverBackgroundBrush}" />
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                  <Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource ItemSelectedBackgroundBrush}" />
+                  <Setter TargetName="SelectionBar" Property="Visibility" Value="Visible" />
+                  <Setter Property="Foreground" Value="{DynamicResource ItemSelectedForegroundBrush}" />
+                </Trigger>
+                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                  <Setter TargetName="FocusOverlay" Property="BorderBrush" Value="{DynamicResource FocusRingBrush}" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                  <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
+      <Style x:Key="ProjectListItem" TargetType="{x:Type ListViewItem}">
+        <Setter Property="Foreground" Value="{DynamicResource ItemTextBrush}" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Padding" Value="8,0" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="{x:Type ListViewItem}">
+                <Border
+                  x:Name="RowBorder"
+                  Margin="0,1"
+                  Padding="{TemplateBinding Padding}"
+                  Background="Transparent"
+                  BorderBrush="Transparent"
+                  BorderThickness="0"
+                  CornerRadius="6">
+                <Grid>
+                  <!-- 焦点环叠加层：固定 2DIP 透明边框，聚焦时显色，不引起布局位移（00§8） -->
+                  <Border
+                    x:Name="FocusOverlay"
+                    Margin="-3"
+                    BorderBrush="Transparent"
+                    BorderThickness="2"
+                    CornerRadius="8" />
+                  <Border
+                    x:Name="SelectionBar"
+                    Width="3"
+                    Margin="0,6"
+                    HorizontalAlignment="Left"
+                    Background="{DynamicResource FocusRingBrush}"
+                    CornerRadius="2"
+                    Visibility="Collapsed" />
+                  <ContentPresenter
+                    Margin="4,0,0,0"
+                    VerticalAlignment="Center"
+                    ContentSource="Content"
+                    TextElement.Foreground="{TemplateBinding Foreground}" />
+                </Grid>
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource ItemHoverBackgroundBrush}" />
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                  <Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource ItemSelectedBackgroundBrush}" />
+                  <Setter TargetName="SelectionBar" Property="Visibility" Value="Visible" />
+                  <Setter Property="Foreground" Value="{DynamicResource ItemSelectedForegroundBrush}" />
+                </Trigger>
+                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                  <Setter TargetName="FocusOverlay" Property="BorderBrush" Value="{DynamicResource FocusRingBrush}" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                  <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
       </Style>
 
       <!-- 统计卡：大数字 + 标签 -->
       <Style x:Key="StatCardValue" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="28" />
-        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontWeight" Value="SemiBold" />
       </Style>
       <Style x:Key="StatCardLabel" TargetType="TextBlock">
         <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+      </Style>
+
+      <!--
+        决策框按钮重排（00§9.2/§9.9）：视觉从左到右 = 次要（取消/放弃更改）→ 关闭（留在此处，Esc）→ 主操作。
+        保留库模板的 PrimaryButton/SecondaryButton/CloseButton 命名与 TemplateButtonCommand 绑定，仅重排列序。
+        WPF-UI 4.3.0 默认模板为 Primary|Secondary|Close，且 CloseButton IsCancel=True（Esc→Close），
+        故“留在此处”必须占用 Close 槽位，Esc 才等价于不丢内容。
+      -->
+      <Style BasedOn="{StaticResource {x:Type ui:ContentDialog}}" TargetType="{x:Type ui:ContentDialog}">
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="{x:Type ui:ContentDialog}">
+              <Grid
+                x:Name="DialogRootGrid"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center">
+                <Border
+                  MaxWidth="{TemplateBinding DialogWidth}"
+                  MaxHeight="{TemplateBinding DialogHeight}"
+                  Margin="{TemplateBinding DialogMargin}"
+                  VerticalAlignment="Center"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{TemplateBinding Border.CornerRadius}"
+                  Focusable="False"
+                  Opacity="1">
+                  <Border.Effect>
+                    <DropShadowEffect
+                      BlurRadius="30"
+                      Direction="0"
+                      Opacity="0.4"
+                      ShadowDepth="0"
+                      Color="#202020" />
+                  </Border.Effect>
+                  <Grid Focusable="False">
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="*" />
+                      <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Border Background="{DynamicResource ContentDialogTopOverlay}" CornerRadius="{StaticResource DialogOverlayCornerRadius}" />
+                    <Grid
+                      Grid.Row="0"
+                      Margin="24,10"
+                      Focusable="False">
+                      <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                      </Grid.RowDefinitions>
+                      <ContentPresenter
+                        Grid.Row="0"
+                        Margin="0,12,0,0"
+                        Content="{TemplateBinding Title}"
+                        ContentTemplate="{TemplateBinding TitleTemplate}"
+                        TextBlock.FontSize="20"
+                        TextBlock.FontWeight="SemiBold">
+                        <ContentPresenter.Resources>
+                          <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="{x:Type TextBlock}">
+                            <Setter Property="TextWrapping" Value="WrapWithOverflow" />
+                          </Style>
+                        </ContentPresenter.Resources>
+                      </ContentPresenter>
+                      <ui:PassiveScrollViewer
+                        x:Name="PART_ContentScroll"
+                        Grid.Row="1"
+                        Margin="0,20"
+                        Padding="0,0,12,0"
+                        CanContentScroll="{TemplateBinding ScrollViewer.CanContentScroll}"
+                        HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+                        IsDeferredScrollingEnabled="{TemplateBinding ScrollViewer.IsDeferredScrollingEnabled}"
+                        VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}">
+                        <ContentPresenter
+                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                          Content="{TemplateBinding Content}"
+                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                          ContentTemplateSelector="{TemplateBinding ContentTemplateSelector}">
+                          <ContentPresenter.Resources>
+                            <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="{x:Type TextBlock}">
+                              <Setter Property="TextWrapping" Value="WrapWithOverflow" />
+                              <Setter Property="TextAlignment" Value="Justify" />
+                              <Setter Property="FontSize" Value="14" />
+                            </Style>
+                          </ContentPresenter.Resources>
+                        </ContentPresenter>
+                      </ui:PassiveScrollViewer>
+                    </Grid>
+                    <Border
+                      Grid.Row="1"
+                      Padding="{TemplateBinding Padding}"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Bottom"
+                      BorderBrush="{DynamicResource ContentDialogSeparatorBorderBrush}"
+                      BorderThickness="0,1,0,0"
+                      CornerRadius="{DynamicResource DialogFooterCornerRadius}"
+                      Focusable="False"
+                      Visibility="{TemplateBinding IsFooterVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                      <Grid>
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition x:Name="SecondaryColumn" Width="*" />
+                          <ColumnDefinition x:Name="FirstSpacer" Width="8" />
+                          <ColumnDefinition x:Name="CloseColumn" Width="*" />
+                          <ColumnDefinition x:Name="SecondSpacer" Width="8" />
+                          <ColumnDefinition x:Name="PrimaryColumn" Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <ui:Button
+                          x:Name="SecondaryButton"
+                          Grid.Column="0"
+                          HorizontalAlignment="Stretch"
+                          Appearance="{TemplateBinding SecondaryButtonAppearance}"
+                          Command="{Binding RelativeSource={RelativeSource AncestorType={x:Type ui:ContentDialog}}, Mode=OneTime, Path=TemplateButtonCommand}"
+                          CommandParameter="{x:Static ui:ContentDialogButton.Secondary}"
+                          Content="{TemplateBinding SecondaryButtonText}"
+                          Icon="{TemplateBinding SecondaryButtonIcon}"
+                          IsDefault="{TemplateBinding DefaultButton, Converter={StaticResource ContentDialogButtonEnumToBoolConverter}, ConverterParameter={x:Static ui:ContentDialogButton.Secondary}}"
+                          IsEnabled="{TemplateBinding IsSecondaryButtonEnabled}"
+                          Visibility="{TemplateBinding IsSecondaryButtonEnabled, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        <ui:Button
+                          x:Name="CloseButton"
+                          Grid.Column="2"
+                          HorizontalAlignment="Stretch"
+                          Appearance="{TemplateBinding CloseButtonAppearance}"
+                          Command="{Binding RelativeSource={RelativeSource AncestorType={x:Type ui:ContentDialog}}, Mode=OneTime, Path=TemplateButtonCommand}"
+                          CommandParameter="{x:Static ui:ContentDialogButton.Close}"
+                          Content="{TemplateBinding CloseButtonText}"
+                          Icon="{TemplateBinding CloseButtonIcon}"
+                          IsCancel="True"
+                          IsDefault="{TemplateBinding DefaultButton, Converter={StaticResource ContentDialogButtonEnumToBoolConverter}, ConverterParameter={x:Static ui:ContentDialogButton.Close}}" />
+                        <ui:Button
+                          x:Name="PrimaryButton"
+                          Grid.Column="4"
+                          HorizontalAlignment="Stretch"
+                          Appearance="{TemplateBinding PrimaryButtonAppearance}"
+                          Command="{Binding RelativeSource={RelativeSource AncestorType={x:Type ui:ContentDialog}}, Mode=OneTime, Path=TemplateButtonCommand}"
+                          CommandParameter="{x:Static ui:ContentDialogButton.Primary}"
+                          Content="{TemplateBinding PrimaryButtonText}"
+                          Icon="{TemplateBinding PrimaryButtonIcon}"
+                          IsDefault="{TemplateBinding DefaultButton, Converter={StaticResource ContentDialogButtonEnumToBoolConverter}, ConverterParameter={x:Static ui:ContentDialogButton.Primary}}"
+                          IsEnabled="{TemplateBinding IsPrimaryButtonEnabled}"
+                          Visibility="Visible" />
+                      </Grid>
+                    </Border>
+                  </Grid>
+                </Border>
+              </Grid>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsSecondaryButtonEnabled" Value="False">
+                  <Setter TargetName="SecondaryColumn" Property="Width" Value="0" />
+                  <Setter TargetName="FirstSpacer" Property="Width" Value="0" />
+                </Trigger>
+                <Trigger Property="SecondaryButtonText" Value="">
+                  <Setter Property="IsSecondaryButtonEnabled" Value="False" />
+                </Trigger>
+                <Trigger Property="CloseButtonText" Value="">
+                  <Setter TargetName="CloseColumn" Property="Width" Value="0" />
+                  <Setter TargetName="SecondSpacer" Property="Width" Value="0" />
+                </Trigger>
+<Trigger Property="PrimaryButtonText" Value="">
+                  <Setter TargetName="PrimaryButton" Property="Visibility" Value="Collapsed" />
+                  <Setter TargetName="PrimaryColumn" Property="Width" Value="0" />
+                  <Setter TargetName="SecondSpacer" Property="Width" Value="0" />
+                  <Setter Property="IsPrimaryButtonEnabled" Value="False" />
+                </Trigger>
+                <!--
+                  If primary button is disabled and the dialog default is not Close,
+                  make the CloseButton the default button so Enter activates it.
+                -->
+                <MultiTrigger>
+                  <MultiTrigger.Conditions>
+                    <Condition Property="IsPrimaryButtonEnabled" Value="False" />
+                    <Condition Property="DefaultButton" Value="{x:Static ui:ContentDialogButton.Primary}" />
+                  </MultiTrigger.Conditions>
+                  <Setter TargetName="CloseButton" Property="IsDefault" Value="True" />
+                </MultiTrigger>
+                <MultiTrigger>
+                  <MultiTrigger.Conditions>
+                    <Condition Property="IsPrimaryButtonEnabled" Value="False" />
+                    <Condition Property="DefaultButton" Value="{x:Static ui:ContentDialogButton.Secondary}" />
+                  </MultiTrigger.Conditions>
+                  <Setter TargetName="CloseButton" Property="IsDefault" Value="True" />
+                </MultiTrigger>
+                <!--
+                  When displayed on legacy host, sets the root Grid to legacy style
+                  (Stretch alignment, Background: ContentDialogSmokeFill) to restore
+                  the legacy appearance and behavior.
+                -->
+                <Trigger Property="IsLegacyHost" Value="True">
+                  <Setter TargetName="DialogRootGrid" Property="Background" Value="{DynamicResource ContentDialogSmokeFill}" />
+                  <Setter TargetName="DialogRootGrid" Property="HorizontalAlignment" Value="Stretch" />
+                  <Setter TargetName="DialogRootGrid" Property="VerticalAlignment" Value="Stretch" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
       </Style>
     </ResourceDictionary>
   </Application.Resources>

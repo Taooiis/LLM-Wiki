@@ -4,6 +4,9 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 
 using LLM_Wiki.Services;
@@ -103,22 +106,29 @@ public sealed class McpService
         }
     }
 
-    /// <summary>切换档位；关闭即停止服务，开启失败时回退关闭（设计 08§4）。</summary>
+    /// <summary>切换档位；关闭即停止服务，开启失败时回退关闭（设计 08§4）。失败原因记入 <see cref="LastError"/>。</summary>
     public bool SetMode(string kb, McpMode mode, out string error)
     {
-        error = "";
+        var ok = SetModeAsync(kb, mode).GetAwaiter().GetResult();
+        error = ok ? "" : LastError;
+        return ok;
+    }
+
+    /// <summary><see cref="SetMode"/> 的异步版本：供 UI await，不在 UI 线程阻塞等待 Kestrel 启停。</summary>
+    public async Task<bool> SetModeAsync(string kb, McpMode mode)
+    {
         if (mode == McpMode.Off)
         {
-            Stop();
+            await StopAsync().ConfigureAwait(false);
             Policy.Mode = McpMode.Off;
             RaiseChanged();
             return true;
         }
 
-        if (Running && !BoundKb.Equals(kb, StringComparison.OrdinalIgnoreCase)) Stop();
+        if (Running && !BoundKb.Equals(kb, StringComparison.OrdinalIgnoreCase)) await StopAsync().ConfigureAwait(false);
         var previous = Policy.Mode;
         Policy.Mode = mode;
-        if (!Running && !Start(kb, out error))
+        if (!Running && !await StartAsync(kb).ConfigureAwait(false))
         {
             Policy.Mode = previous == McpMode.Off ? McpMode.Off : previous;
             return false;
@@ -131,16 +141,27 @@ public sealed class McpService
 
     public bool Start(string kb, out string error)
     {
-        error = "";
+        var ok = StartAsync(kb).GetAwaiter().GetResult();
+        error = ok ? "" : LastError;
+        return ok;
+    }
+
+    /// <summary>
+    /// 启动服务的异步核心（设计 04§11.2）：Kestrel StartAsync 直接 await，
+    /// 由 UI 层以区域 Busy 呈现等待，不再 GetAwaiter().GetResult() 阻塞界面。
+    /// 失败时 LastError 保留真实原因直到下一次成功启动或停止。
+    /// </summary>
+    public async Task<bool> StartAsync(string kb)
+    {
         if (_app != null) return true;
         if (Policy.Mode == McpMode.Off)
         {
-            error = "请先选择只读或写入档";
+            LastError = "请先选择只读或写入档";
             return false;
         }
         if (string.IsNullOrWhiteSpace(kb) || !Directory.Exists(Path.Combine(_config.WikisDir, kb)))
         {
-            error = "请选择一个存在的知识库再开启 MCP 连接";
+            LastError = "请选择一个存在的知识库再开启 MCP 连接";
             return false;
         }
         BoundKb = kb;
@@ -225,7 +246,7 @@ public sealed class McpService
                 await next();
             });
             app.MapMcp("/mcp");
-            app.StartAsync().GetAwaiter().GetResult();
+            await app.StartAsync().ConfigureAwait(false);
             _app = app;
             app.Lifetime.ApplicationStopping.Register(() =>
             {
@@ -245,12 +266,14 @@ public sealed class McpService
             BoundKb = "";
             Policy.AuthorizedKb = "";
             LastError = Summarize(e);
-            error = LastError;
             return false;
         }
     }
 
-    public void Stop()
+    public void Stop() => StopAsync().GetAwaiter().GetResult();
+
+    /// <summary><see cref="Stop"/> 的异步版本：等待后台清理完成，不阻塞调用方 UI 线程。</summary>
+    public async Task StopAsync()
     {
         var app = _app;
         _app = null;
@@ -269,23 +292,32 @@ public sealed class McpService
                 catch { }
                 try { app.DisposeAsync().AsTask().GetAwaiter().GetResult(); } catch { }
             });
-            try { cleanup.Wait(TimeSpan.FromSeconds(1.5)); } catch { }
+            try { await cleanup.ConfigureAwait(false); } catch { }
         }
         RaiseChanged();
     }
 
-    /// <summary>局域网开关变化后需要重建监听（设计 08§7.1）。</summary>
+    /// <summary>局域网开关变化后需要重建监听（设计 08§7.1）。失败回滚到原监听档位（设计 04§11.1 D16）。</summary>
     public bool SetAllowLan(bool allow, out string error)
     {
-        error = "";
+        var ok = SetAllowLanAsync(allow).GetAwaiter().GetResult();
+        error = ok ? "" : LastError;
+        return ok;
+    }
+
+    /// <summary><see cref="SetAllowLan"/> 的异步版本：重启监听不阻塞 UI；失败时 AllowLan 回滚为原值。</summary>
+    public async Task<bool> SetAllowLanAsync(bool allow)
+    {
         if (AllowLan == allow) return true;
         var wasRunning = Running;
         var kb = BoundKb;
-        if (wasRunning) Stop();
+        var previous = AllowLan;
+        if (wasRunning) await StopAsync().ConfigureAwait(false);
         AllowLan = allow;
-        if (wasRunning && !Start(string.IsNullOrWhiteSpace(kb) ? Context.CurrentKb : kb, out error))
+        if (wasRunning && !await StartAsync(string.IsNullOrWhiteSpace(kb) ? Context.CurrentKb : kb).ConfigureAwait(false))
         {
-            AllowLan = false;
+            // D16：切 LAN 失败回原监听档位；服务此时是停止态，LastError 已带真实原因，由 UI 显示。
+            AllowLan = previous;
             return false;
         }
         RaiseChanged();
@@ -333,34 +365,51 @@ public sealed class McpService
         return $"{t[..4]}••••••••{t[^4..]}";
     }
 
-    /// <summary>客户端配置片段（HTTP 与 stdio 两种）。写入档额外带独立写令牌头。</summary>
+    /// <summary>客户端配置：一个有效的 JSON，包含 remote HTTP 与 stdio 两个条目。写入档额外带独立写令牌头。</summary>
     public string ClientConfigJson()
     {
         var endpoint = Running ? LocalEndpoint : $"http://127.0.0.1:{DefaultPort}/mcp";
-        var headers = $"{{ \"Authorization\": \"Bearer {_token}\" }}";
+        var headers = new JsonObject
+        {
+            ["Authorization"] = $"Bearer {_token}",
+        };
         if (Policy.WriteEnabled)
         {
-            headers = $"{{ \"Authorization\": \"Bearer {_token}\", \"X-LLM-Wiki-Write-Token\": \"{_writeToken}\" }}";
+            headers["X-LLM-Wiki-Write-Token"] = _writeToken;
         }
-        var http = "{\n"
-                   + "  \"mcpServers\": {\n"
-                   + "    \"llm-wiki\": {\n"
-                   + "      \"type\": \"http\",\n"
-                   + "      \"url\": \"" + endpoint + "\",\n"
-                   + "      \"headers\": " + headers + "\n"
-                   + "    }\n"
-                   + "  }\n"
-                   + "}";
+
+        var http = new JsonObject
+        {
+            ["type"] = "remote",
+            ["url"] = endpoint,
+            ["oauth"] = false,
+            ["headers"] = headers,
+        };
+
         var exe = Path.Combine(AppContext.BaseDirectory, "LlmWiki.McpStdio.exe");
-        var stdio = "{\n"
-                    + "  \"mcpServers\": {\n"
-                    + "    \"llm-wiki-stdio\": {\n"
-                    + "      \"command\": \"" + exe.Replace("\\", "\\\\") + "\",\n"
-                    + "      \"args\": [\"--kb\", \"" + (string.IsNullOrWhiteSpace(BoundKb) ? Context.CurrentKb : BoundKb) + "\"]\n"
-                    + "    }\n"
-                    + "  }\n"
-                    + "}";
-        return http + "\n\n// stdio（只读）\n" + stdio;
+        var stdio = new JsonObject
+        {
+            ["command"] = exe,
+            ["args"] = new JsonArray
+            {
+                "--kb",
+                string.IsNullOrWhiteSpace(BoundKb) ? Context.CurrentKb : BoundKb,
+            },
+        };
+
+        var root = new JsonObject
+        {
+            ["mcpServers"] = new JsonObject
+            {
+                ["llm-wiki"] = http,
+                ["llm-wiki-stdio"] = stdio,
+            },
+        };
+        return root.ToJsonString(new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        });
     }
 
     private void RecordCall(string tool, bool isError)

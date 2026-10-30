@@ -129,7 +129,30 @@ public sealed class SourceService(ConfigService config, ChangeService changes, T
             return new SourceSaveResult(false, "", existingHash, "VERSION_CONFLICT：文件已被其他程序修改");
         }
 
-        var bytes = new UTF8Encoding(false).GetBytes(content);
+        if (!SourceFormatRegistry.IsTextEditable(normalized))
+            return new SourceSaveResult(false, "", existingHash, "此格式不支持应用内文本编辑");
+
+        // 保留原编码/BOM/换行（02§5）：按当前磁盘字节重新检测（expectedHash 已保证与读取时一致），
+        // GBK/GB18030 按原编码写、有 BOM 写 BOM、CRLF/LF 归一为原风格；编码无法判定回退无 BOM UTF-8。
+        // 变更记录的源版本哈希基于字节，按原格式写回后自然重新计算。
+        var encoding = TextFileEncoding.Utf8NoBom;
+        var newLine = "";
+        if (File.Exists(full))
+        {
+            try
+            {
+                var detected = FileHelper.DecodeTextWithInfo(File.ReadAllBytes(full));
+                encoding = detected.Encoding;
+                newLine = detected.NewLine;
+            }
+            catch
+            {
+                // 编码检测失败：回退无 BOM UTF-8，换行保持用户输入原样
+            }
+        }
+        var bytes = FileHelper.EncodeText(FileHelper.ApplyNewLine(content, newLine), encoding);
+        if (bytes.LongLength > 1024 * 1024)
+            return new SourceSaveResult(false, "", existingHash, "超过 1 MiB，不能应用内编辑；请用系统程序保存");
         if (bytes.LongLength > SourceRules.MaxFileBytes)
             return new SourceSaveResult(false, "", existingHash, "超过单文件 20 MiB 上限");
 
@@ -320,10 +343,31 @@ public sealed record SourceSaveResult(bool Success, string NewHash, string DiskH
 
 public sealed record SourceInfo(string RelPath, string Name, string Extension, long Size, DateTime Modified)
 {
-    public string TypeText => SourceRules.TypeLabel(Name);
+    public string TypeText => SourceFormatRegistry.ExtensionLabel(Name);
+    public string CategoryText => SourceFormatRegistry.CategoryLabel(Name);
     public string SizeText => SourceRules.SizeText(Size);
     public string ModifiedText => SourceRules.RelativeTime(Modified);
-    public bool IsText => SourceRules.IsText(Name);
-    public bool CanPreviewInApp => IsText;
-    public string PreviewHint => IsText ? "可预览与编辑" : "原格式保存 · 用系统程序打开";
+    public bool IsText => SourceFormatRegistry.IsTextReadable(Name);
+    public bool CanEditText => SourceFormatRegistry.IsTextEditable(Name) && Size <= 1024 * 1024;
+    public bool CanPreviewInApp => SourceFormatRegistry.CanPreviewInApp(Name);
+    public string TypeBadge => SourceFormatRegistry.CategoryOf(Name) switch
+    {
+        SourceCategory.Text => "T",
+        SourceCategory.Document => "W",
+        SourceCategory.Spreadsheet => "X",
+        SourceCategory.Presentation => "P",
+        SourceCategory.Pdf => "PDF",
+        SourceCategory.Data => "{}",
+        SourceCategory.Image => "IMG",
+        _ => "?",
+    };
+    public string PreviewHint => CanEditText ? "可预览与编辑（1 MiB 内）"
+        : IsText ? "可只读预览；超过 1 MiB 需外部打开"
+        : "原格式保存 · 用系统程序打开/导出";
+    public string StorageState => "已入库";
+    public string PreviewState => CanEditText ? "可预览与编辑"
+        : IsText ? "可只读预览"
+        : CanPreviewInApp ? "可页内内容预览"
+        : "需打开原件";
+    public string AiReadState => "AI 读取未验证";
 }

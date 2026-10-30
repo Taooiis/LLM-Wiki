@@ -10,13 +10,16 @@
   d:DesignHeight="520"
   d:DesignWidth="640">
   <!-- 文档工作区（指南 §6）：Empty / Preview / Editing / ReadOnly 四态 -->
-  <Border Style="{StaticResource CardBorder}" Padding="0">
+  <Border Padding="0">
+    <Border.Style><Style TargetType="Border" BasedOn="{StaticResource CardBorder}">
+      <Style.Triggers><DataTrigger Binding="{Binding HideChrome}" Value="True"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /></DataTrigger></Style.Triggers>
+    </Style></Border.Style>
     <Grid>
       <!-- ============ Empty 态 ============ -->
       <controls:EmptyState
         Icon="📄"
         Title="选择一个文件查看内容"
-        Description="从左侧选择文件，或新建 / 上传文件"
+        Description="{Binding EmptyDescription, RelativeSource={RelativeSource AncestorType=UserControl}, FallbackValue=从左侧选择文件，或新建 / 上传文件}"
         ActionContent="{Binding EmptyAction, RelativeSource={RelativeSource AncestorType=UserControl}}">
         <controls:EmptyState.Style>
           <Style TargetType="controls:EmptyState">
@@ -39,23 +42,50 @@
           <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- 顶行：文件名 + 保存状态（常驻可见，指南 §1.4） -->
-        <Grid Grid.Row="0" Margin="16,14,16,0">
+        <!-- 顶行：文件名 + 保存状态（知识页由页面标题区承担，隐藏本行） -->
+        <Grid Grid.Row="0" Margin="16,14,16,0" Visibility="{Binding ChromeVisibility}">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
           </Grid.ColumnDefinitions>
           <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock FontSize="16" FontWeight="SemiBold" Text="{Binding CurrentFileName}" TextTrimming="CharacterEllipsis" />
+            <TextBlock FontSize="24" FontWeight="SemiBold" Text="{Binding CurrentFileName}" TextTrimming="CharacterEllipsis" />
+            <!-- 未保存：图标 + 文字，不能仅色点（02§2） -->
+            <ui:SymbolIcon
+              Margin="8,0,0,0"
+              VerticalAlignment="Center"
+              FontSize="14"
+              Symbol="Warning24"
+              Foreground="{DynamicResource WarningBrush}"
+              Visibility="{Binding IsDirty, Converter={StaticResource BoolToVis}}" />
             <TextBlock
-              Margin="10,0,0,0"
+              Margin="4,0,0,0"
               VerticalAlignment="Center"
               FontSize="{StaticResource FontSizeCaption}"
               FontWeight="SemiBold"
               Text="{Binding SaveStateText}"
-              Foreground="{Binding SaveStateBrush}" />
+              >
+              <TextBlock.Style><Style TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+                <Style.Triggers><DataTrigger Binding="{Binding IsDirty}" Value="True"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></DataTrigger></Style.Triggers>
+              </Style></TextBlock.Style>
+            </TextBlock>
           </StackPanel>
           <!-- 状态操作：预览态的编辑/打开；编辑态无 -->
+          <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding ShowSaveBar}">
+            <ui:Button
+              Content="取消"
+              Command="{Binding CancelEditCommand}"
+              Margin="0,0,8,0" />
+            <ui:Button
+              Content="保存  (Ctrl+S)"
+              Appearance="Primary"
+              Command="{Binding SaveCommand}"
+              Margin="0,0,8,0" />
+            <ui:Button
+              Content="完成编辑"
+              Command="{Binding CompleteEditingCommand}" />
+          </StackPanel>
           <StackPanel Grid.Column="1" Orientation="Horizontal">
             <ui:Button
               Content="编辑"
@@ -81,7 +111,8 @@
           FontFamily="Consolas"
           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
           TextTrimming="CharacterEllipsis"
-          Text="{Binding PathBreadcrumb}" />
+          Text="{Binding PathBreadcrumb}"
+          Visibility="{Binding ChromeVisibility}" />
 
         <!-- 新建：文件名输入（指南 §6.4） -->
         <StackPanel
@@ -97,8 +128,18 @@
             Text="{Binding NewFileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
         </StackPanel>
 
-        <!-- 内容区：预览（只读展示） / 编辑（可写） -->
-        <Grid Grid.Row="2" Margin="16,0,16,0">
+        <!-- 内容区：预览（只读展示） / 编辑（可写）；知识阅读优先阅读宽度 -->
+        <Grid Grid.Row="2">
+          <Grid.Style>
+            <Style TargetType="Grid">
+              <Setter Property="Margin" Value="16,0,16,0" />
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding HideChrome}" Value="True">
+                  <Setter Property="Margin" Value="32,20,32,20" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </Grid.Style>
           <Grid Visibility="{Binding IsPreviewContentVisible}">
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto" />
@@ -113,9 +154,20 @@
               TextWrapping="Wrap"
               Visibility="{Binding IsReadOnlyMode}" />
             <controls:MarkdownView
+              x:Name="MarkdownControl"
               Grid.Row="1"
               Markdown="{Binding PreviewContent, Mode=OneWay}"
+              SuppressFirstH1="{Binding SuppressFirstH1, Mode=OneWay}"
               Visibility="{Binding IsMarkdownPreviewVisible}" />
+            <Image
+              Grid.Row="1"
+              Source="{Binding PreviewImage}"
+              Stretch="Uniform"
+              StretchDirection="DownOnly"
+              Margin="0,8,0,8"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch"
+              Visibility="{Binding IsImagePreviewVisible}" />
             <TextBox
               Grid.Row="1"
               Background="Transparent"
@@ -134,6 +186,7 @@
             TextWrapping="Wrap"
             VerticalScrollBarVisibility="Auto"
             VerticalContentAlignment="Top"
+            FontWeight="Normal"
             FontFamily="Consolas"
             FontSize="{StaticResource FontSizeBody}"
             Background="{DynamicResource ControlFillColorDefaultBrush}"
@@ -152,9 +205,28 @@
             <ColumnDefinition Width="Auto" />
           </Grid.ColumnDefinitions>
           <StackPanel Grid.Column="0" VerticalAlignment="Center">
-            <TextBlock FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+            <TextBlock
+              FontSize="{StaticResource FontSizeCaption}"
+              Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+              Visibility="{Binding ChromeVisibility}">
               <Run Text="UTF-8" /><Run Text=" · " /><Run Text="{Binding FileTypeLabel, Mode=OneWay}" />
             </TextBlock>
+            <TextBlock
+              Margin="0,4,0,0"
+              FontSize="{StaticResource FontSizeCaption}"
+              Foreground="{DynamicResource WarningBrush}"
+              TextWrapping="Wrap"
+              Text="手动修改不会更新源资料；后续整理需核对人工内容，MCP 命中此版本会拒绝静默覆盖。"
+              Visibility="{Binding IsKnowledgeRevision, Converter={StaticResource BoolToVis}}" />
+            <!-- “文件已保存，变更记录未完成”：持久提醒，保留到补记解决（00§9.7） -->
+            <ui:InfoBar
+              Margin="0,6,0,0"
+              IsOpen="{Binding SavePendingInfoVisible, Converter={StaticResource BoolToVis}}"
+              IsClosable="False"
+              Title="变更记录未完成"
+              Message="{Binding SavePendingWarning}"
+              Severity="Warning"
+              HorizontalAlignment="Left" />
             <StackPanel Visibility="{Binding HasSaveError}">
               <TextBlock
                 FontSize="{StaticResource FontSizeCaption}"
@@ -162,28 +234,27 @@
                 TextWrapping="Wrap"
                 Margin="0,4,0,0"
                 Text="{Binding SaveErrorMessage}" />
-              <ui:Button
-                Content="载入磁盘版本"
-                Command="{Binding ReloadDiskVersionCommand}"
-                Margin="0,6,0,0"
-                HorizontalAlignment="Left"
-                Appearance="Secondary" />
+              <!-- D04 磁盘版本冲突：返回编辑 / 另存副本 / 载入磁盘版本（02§9.1），丢弃草稿需确认 -->
+              <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                <ui:Button
+                  Content="返回编辑"
+                  Command="{Binding ReturnToEditingCommand}"
+                  Margin="0,0,8,0"
+                  Appearance="Secondary" />
+                <ui:Button
+                  Content="另存副本"
+                  Command="{Binding SaveDraftCopyCommand}"
+                  Margin="0,0,8,0"
+                  Appearance="Secondary"
+                  Visibility="{Binding IsSourceDocument, Converter={StaticResource BoolToVis}}" />
+                <ui:Button
+                  Content="载入磁盘版本"
+                  Command="{Binding LoadDiskVersionCommand}"
+                  Appearance="Danger" />
+              </StackPanel>
             </StackPanel>
           </StackPanel>
-          <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding ShowSaveBar}">
-            <ui:Button
-              Content="取消"
-              Command="{Binding CancelEditCommand}"
-              Margin="0,0,8,0" />
-            <ui:Button
-              Content="保存  (Ctrl+S)"
-              Appearance="Primary"
-              Command="{Binding SaveCommand}"
-              Margin="0,0,8,0" />
-            <ui:Button
-              Content="完成编辑"
-              Command="{Binding CompleteEditingCommand}" />
-          </StackPanel>
+
         </Grid>
       </Grid>
     </Grid>

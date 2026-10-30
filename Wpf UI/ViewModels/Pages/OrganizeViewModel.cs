@@ -25,6 +25,7 @@ public partial class OrganizeViewModel : ObservableObject
     private readonly ReviewService _reviews;
     private readonly SourceService _sources;
     private readonly McpService _mcp;
+    private readonly LocalAgentService _agent;
     private readonly ToastService _toast;
 
     public OrganizeViewModel(
@@ -36,6 +37,7 @@ public partial class OrganizeViewModel : ObservableObject
         ReviewService reviews,
         SourceService sources,
         McpService mcp,
+        LocalAgentService agent,
         ToastService toast)
     {
         _main = main;
@@ -46,11 +48,15 @@ public partial class OrganizeViewModel : ObservableObject
         _reviews = reviews;
         _sources = sources;
         _mcp = mcp;
+        _agent = agent;
         _toast = toast;
 
         _main.PropertyChanged += OnMainPropertyChanged;
         _main.OrganizeSelectionRequested += OnOrganizeSelectionRequested;
+        _agent.Changed += OnAgentChanged;
+        _agent.Finished += OnAgentFinished;
         LoadKb(_main.CurrentKb);
+        SelectedAgentOption = _agent.Profile.Ready ? "本机工具：" + AgentTools.Name(_agent.Profile.AdapterId) : "手动复制";
     }
 
     public ObservableCollection<PendingChangeRow> PendingRows { get; } = [];
@@ -86,8 +92,35 @@ public partial class OrganizeViewModel : ObservableObject
     [ObservableProperty] private bool _ruleNeedsReview;
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private string _mcpHint = "";
+    [ObservableProperty] private bool _agentEndedNotice;
+    [ObservableProperty] private bool _confirmShowStale;
 
     public bool HasKb => _main.HasKb;
+    public bool IsReviewMode => CurrentTask != null && CurrentTask.State is TaskState.NeedsReview or TaskState.PartiallyConfirmed;
+    public bool IsPreparationMode => !IsReviewMode;
+    public bool ShowPendingList => IsPreparationMode && IsScopePending;
+    public bool ShowSelectedList => IsPreparationMode && IsScopeSelected;
+    public bool ShowAllScope => IsPreparationMode && IsScopeAll;
+    public string ScopePanelTitle => IsReviewMode ? "本次资料核对" : "选择处理范围";
+    public string ScopePanelHint => IsReviewMode ? "勾选表示已核对完成；只清除仍匹配的记录。" : "勾选与行预览分离";
+    public bool IsResultPanelVisible => ShowResult && !IsReviewMode;
+    public int TaskSourceCount => CurrentTask?.Items.Count ?? 0;
+    public int TaskPendingCount => TaskItemRows.Count(r => !r.Item.Confirmed && string.IsNullOrEmpty(r.Item.InvalidReason));
+    public int TaskChangedCount => TaskItemRows.Count(r => !string.IsNullOrEmpty(r.Item.InvalidReason));
+    public int SelectedTaskItemCount => TaskItemRows.Count(r => r.IsSelected);
+    public string ConfirmButtonText => $"确认完成这 {SelectedTaskItemCount} 项";
+    public bool CanConfirmSelection => SelectedTaskItemCount > 0 && CurrentTask?.CanConfirm == true && !IsAgentRunning;
+    public string TaskKindText => CurrentTask?.ProtocolText ?? "";
+    public string TaskScopeText => CurrentTask?.Scope switch
+    {
+        TaskScope.Selected => "所选资料",
+        TaskScope.All => "全部资料",
+        _ => "待整理变更",
+    };
+    public string TaskTransportText => CurrentTask?.Transport == "mcp" ? "MCP 连接" : "文件直接访问";
+    public string TaskCreatedText => CurrentTask?.CreatedAt ?? "";
+    public string TaskAttemptText => CurrentTask?.LastAttemptStatus ?? "尚无本机执行记录";
+    public string TaskAttemptStatus => CurrentTask?.LastAttemptStatus ?? _agent.StatusText;
     public bool IsUpdateTab => ActiveTab == 0;
     public bool IsAskTab => ActiveTab == 1;
     public bool IsCheckTab => ActiveTab == 2;
@@ -100,13 +133,43 @@ public partial class OrganizeViewModel : ObservableObject
     public bool HasTaskItems => TaskItemRows.Count > 0;
     public bool HasWikiChanges => WikiChanges.Count > 0;
     public bool TaskRuleChanged => CurrentTask?.RuleChanged == true;
+    public bool IsMcpTransport => Transport == "MCP 连接";
+
+    /// <summary>本任务存在本机执行记录（运行中或已有 attempt 回执）即显示运行输出面板（03§5）。</summary>
+    public bool HasAttemptOutput => IsAgentRunning
+        || (CurrentTask != null
+            && (!string.IsNullOrEmpty(CurrentTask.AttemptId) || !string.IsNullOrEmpty(CurrentTask.LastAttemptStatus)));
     public string TransportHint => Transport == "MCP 连接"
         ? (_mcp.Running
             ? (_mcp.Policy.WriteEnabled ? "MCP 连接已开启写入：本库知识可写。" : "此连接只能读取内容，不能写回知识。")
             : "MCP 连接未开启；复制的是任务说明，需在外部客户端发起。")
         : "文件直接访问：由外部 AI 使用本机文件权限读取和写回。";
 
-    public string CopyButtonText => CurrentTask == null ? "复制整理指令" : "再次复制";
+    public string CopyButtonText => CurrentTask == null
+        ? (IsMcpTransport ? "复制任务说明" : "复制整理指令")
+        : "再次复制";
+
+    public string PendingSelectionText
+    {
+        get
+        {
+            var selected = PendingRows.Where(r => r.IsSelected).ToList();
+            if (selected.Count == 0) return "未选择待整理项";
+            var add = selected.Count(r => r.Action == "新增");
+            var mod = selected.Count(r => r.Action == "修改");
+            var del = selected.Count(r => r.Action == "删除");
+            return $"已选 {selected.Count} 项：新增 {add}、修改 {mod}、删除 {del}";
+        }
+    }
+
+    public string SourceSelectionText
+    {
+        get
+        {
+            var count = SourceChoices.Count(r => r.IsSelected);
+            return count == 0 ? "未选择资料" : $"已选 {count} 份资料";
+        }
+    }
 
     public bool CanCopy => ActiveTab switch
     {
@@ -148,6 +211,8 @@ public partial class OrganizeViewModel : ObservableObject
         ShowResult = false;
         LastConfirmMessage = "";
         RuleNeedsReview = false;
+        AgentEndedNotice = false;
+        ConfirmShowStale = false;
         OnPropertyChanged(nameof(HasKb));
         if (string.IsNullOrWhiteSpace(kb) || !_main.HasKb) return;
         ReloadPending();
@@ -166,7 +231,11 @@ public partial class OrganizeViewModel : ObservableObject
             var row = new PendingChangeRow(change) { IsSelected = selected.Contains(change.File) };
             row.PropertyChanged += (_, e) =>
             {
-                if (e.PropertyName == nameof(PendingChangeRow.IsSelected)) NotifyCopyState();
+                if (e.PropertyName == nameof(PendingChangeRow.IsSelected))
+                {
+                    NotifyCopyState();
+                    OnPropertyChanged(nameof(PendingSelectionText));
+                }
             };
             PendingRows.Add(row);
         }
@@ -192,7 +261,11 @@ public partial class OrganizeViewModel : ObservableObject
             var row = new SourceChoiceRow(source) { IsSelected = wanted.Contains(source.RelPath) };
             row.PropertyChanged += (_, e) =>
             {
-                if (e.PropertyName == nameof(SourceChoiceRow.IsSelected)) NotifyCopyState();
+                if (e.PropertyName == nameof(SourceChoiceRow.IsSelected))
+                {
+                    NotifyCopyState();
+                    OnPropertyChanged(nameof(SourceSelectionText));
+                }
             };
             SourceChoices.Add(row);
         }
@@ -205,9 +278,9 @@ public partial class OrganizeViewModel : ObservableObject
         RecentTasks.Clear();
         if (string.IsNullOrWhiteSpace(SelectedKb)) return;
         var recent = _tasks.Recent(SelectedKb);
-        foreach (var task in recent.Where(t => t.State is TaskState.Prepared or TaskState.Copied or TaskState.PartiallyConfirmed))
+        foreach (var task in recent.Where(t => t.State is TaskState.Prepared or TaskState.Copied or TaskState.NeedsReview or TaskState.PartiallyConfirmed))
             ActiveTasks.Add(task);
-        foreach (var task in recent.Where(t => t.State is TaskState.Confirmed or TaskState.Abandoned).Take(10))
+        foreach (var task in recent.Where(t => t.State is TaskState.Confirmed or TaskState.ClosedWithRemaining or TaskState.Abandoned).Take(10))
             RecentTasks.Add(task);
         OnPropertyChanged(nameof(HasActiveTasks));
     }
@@ -218,11 +291,38 @@ public partial class OrganizeViewModel : ObservableObject
         RuleNeedsReview = _reviews.GetRuleStatus(SelectedKb).NeedsReview;
     }
 
+    partial void OnShowResultChanged(bool value) => OnPropertyChanged(nameof(IsResultPanelVisible));
+
+    private void NotifyReviewState()
+    {
+        OnPropertyChanged(nameof(IsReviewMode));
+        OnPropertyChanged(nameof(IsPreparationMode));
+        OnPropertyChanged(nameof(ShowPendingList));
+        OnPropertyChanged(nameof(ShowSelectedList));
+        OnPropertyChanged(nameof(ShowAllScope));
+        OnPropertyChanged(nameof(ScopePanelTitle));
+        OnPropertyChanged(nameof(ScopePanelHint));
+        OnPropertyChanged(nameof(IsResultPanelVisible));
+        OnPropertyChanged(nameof(TaskSourceCount));
+        OnPropertyChanged(nameof(TaskPendingCount));
+        OnPropertyChanged(nameof(TaskChangedCount));
+        OnPropertyChanged(nameof(TaskAttemptStatus));
+        OnPropertyChanged(nameof(SelectedTaskItemCount));
+        OnPropertyChanged(nameof(ConfirmButtonText));
+        OnPropertyChanged(nameof(CanConfirmSelection));
+        OnPropertyChanged(nameof(TaskKindText));
+        OnPropertyChanged(nameof(TaskScopeText));
+        OnPropertyChanged(nameof(TaskTransportText));
+        OnPropertyChanged(nameof(TaskCreatedText));
+        OnPropertyChanged(nameof(TaskAttemptText));
+    }
+
     partial void OnActiveTabChanged(int value)
     {
         OnPropertyChanged(nameof(IsUpdateTab));
         OnPropertyChanged(nameof(IsAskTab));
         OnPropertyChanged(nameof(IsCheckTab));
+        OnPropertyChanged(nameof(PrimaryActionText));
         NotifyCopyState();
     }
 
@@ -231,6 +331,9 @@ public partial class OrganizeViewModel : ObservableObject
         OnPropertyChanged(nameof(IsScopePending));
         OnPropertyChanged(nameof(IsScopeSelected));
         OnPropertyChanged(nameof(IsScopeAll));
+        OnPropertyChanged(nameof(ShowPendingList));
+        OnPropertyChanged(nameof(ShowSelectedList));
+        OnPropertyChanged(nameof(ShowAllScope));
         NotifyCopyState();
     }
 
@@ -238,10 +341,19 @@ public partial class OrganizeViewModel : ObservableObject
     partial void OnCheckTypeChanged(string value) => NotifyCopyState();
     partial void OnTransportChanged(string value)
     {
+        OnPropertyChanged(nameof(IsMcpTransport));
         OnPropertyChanged(nameof(TransportHint));
-        if (Transport == "MCP 连接" && _mcp.Running && !_mcp.Policy.WriteEnabled && ActiveTab == 0)
-            McpHint = "此连接只能读取内容，不能写回知识。可切换文件直读方式，或在连接页显式开启写入。";
-        else McpHint = "";
+        OnPropertyChanged(nameof(PrimaryActionText));
+        OnPropertyChanged(nameof(PrimaryActionEnabled));
+        OnPropertyChanged(nameof(CopyButtonText));
+        // MCP 模式只允许“复制任务说明”，本机开始不可用（03§5 L60）。
+        McpHint = Transport == "MCP 连接"
+            ? (_mcp.Running
+                ? (!_mcp.Policy.WriteEnabled
+                    ? "MCP 连接只能读取内容，不能写回知识；外部 MCP 客户端模式只允许复制任务说明，本机开始不可用。"
+                    : "外部 MCP 客户端模式只允许复制任务说明，由外部客户端发起执行；本机开始不可用。")
+                : "MCP 连接未开启：复制的是任务说明，需在外部 MCP 客户端发起；只允许复制，本机开始不可用。")
+            : "";
     }
 
     partial void OnCurrentTaskChanged(OrganizeTask? value)
@@ -249,12 +361,17 @@ public partial class OrganizeViewModel : ObservableObject
         OnPropertyChanged(nameof(HasTask));
         OnPropertyChanged(nameof(TaskRuleChanged));
         OnPropertyChanged(nameof(CopyButtonText));
+        OnPropertyChanged(nameof(HasAttemptOutput));
+        NotifyReviewState();
     }
 
     private void NotifyCopyState()
     {
         OnPropertyChanged(nameof(CanCopy));
         OnPropertyChanged(nameof(HasPending));
+        OnPropertyChanged(nameof(PrimaryActionEnabled));
+        OnPropertyChanged(nameof(PendingSelectionText));
+        OnPropertyChanged(nameof(SourceSelectionText));
     }
 
     [RelayCommand]
@@ -296,16 +413,21 @@ public partial class OrganizeViewModel : ObservableObject
             if (task == null) return;
             try
             {
-                System.Windows.Clipboard.SetText(task.Prompt);
-                _tasks.MarkCopied(task.Id);
-                task.State = TaskState.Copied;
-                TaskStatusText = "已复制整理指令。请到外部 AI 工具中粘贴执行。";
-                _toast.ShowSuccess("已复制整理指令。请到外部 AI 工具中粘贴执行。");
+                CopyPromptToClipboard(task);
+                TaskStatusText = "已复制整理指令，请到外部工具执行";
+                // N02：复制事实，信息 4 秒；Task 仍 Prepared/Copied，不代表已执行
+                _toast.Show("已复制整理指令", "请到外部工具执行");
             }
             catch
             {
+                // N04：剪贴板失败 8 秒错误 + 重试复制动作；任务已准备则保留，重试同一快照
                 TaskStatusText = "已准备任务，但复制剪贴板失败；可重试复制同一快照。";
-                _toast.ShowError("复制剪贴板失败，任务已保留");
+                _toast.ShowWithAction(
+                    "复制失败：剪贴板暂不可用",
+                    "任务已保留，可重试复制同一快照。",
+                    Wpf.Ui.Controls.ControlAppearance.Danger,
+                    "重试复制",
+                    RetryCopyCurrentTaskCommand);
             }
             SetCurrentTask(task);
             ShowPreview = false;
@@ -316,6 +438,43 @@ public partial class OrganizeViewModel : ObservableObject
             IsBusy = false;
         }
         await Task.CompletedTask;
+    }
+
+    /// <summary>复制当前已准备任务的同一快照，不重复创建任务（N04 重试动作）。</summary>
+    [RelayCommand]
+    private void RetryCopyCurrentTask()
+    {
+        var task = CurrentTask;
+        if (task == null || string.IsNullOrEmpty(task.Prompt))
+        {
+            _toast.ShowWarning("没有可重试复制的任务");
+            return;
+        }
+        try
+        {
+            CopyPromptToClipboard(task);
+            TaskStatusText = "已复制整理指令，请到外部工具执行";
+            _toast.Show("已复制整理指令", "请到外部工具执行");
+        }
+        catch
+        {
+            TaskStatusText = "已准备任务，但复制剪贴板失败；可重试复制同一快照。";
+            _toast.ShowError("复制失败：剪贴板暂不可用");
+            _toast.ShowWithAction(
+                "复制失败：剪贴板暂不可用",
+                "任务已保留，可重试复制同一快照。",
+                Wpf.Ui.Controls.ControlAppearance.Danger,
+                "重试复制",
+                RetryCopyCurrentTaskCommand);
+        }
+    }
+
+    private void CopyPromptToClipboard(OrganizeTask task)
+    {
+        System.Windows.Clipboard.SetText(task.Prompt);
+        _tasks.MarkCopied(task.Id);
+        task.CopiedAt = task.CopiedAt ?? DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        if (task.State == TaskState.Prepared) task.State = TaskState.Copied;
     }
 
     [RelayCommand]
@@ -400,6 +559,8 @@ public partial class OrganizeViewModel : ObservableObject
         TaskInstructionPreview = task.Prompt;
         ShowPreview = true;
         ShowResult = false;
+        AgentEndedNotice = false;
+        ConfirmShowStale = false;
         TaskItemRows.Clear();
         WikiChanges.Clear();
         foreach (var item in task.Items)
@@ -407,17 +568,25 @@ public partial class OrganizeViewModel : ObservableObject
             var row = new TaskItemRow(item);
             row.PropertyChanged += (_, e) =>
             {
-                if (e.PropertyName == nameof(TaskItemRow.IsSelected)) OnPropertyChanged(nameof(ResultSummary));
+                if (e.PropertyName != nameof(TaskItemRow.IsSelected)) return;
+                OnPropertyChanged(nameof(ResultSummary));
+                OnPropertyChanged(nameof(SelectedTaskItemCount));
+                OnPropertyChanged(nameof(ConfirmButtonText));
+                OnPropertyChanged(nameof(CanConfirmSelection));
             };
             TaskItemRows.Add(row);
         }
         OnPropertyChanged(nameof(HasTaskItems));
+        OnPropertyChanged(nameof(SelectedTaskItemCount));
+        OnPropertyChanged(nameof(ConfirmButtonText));
+        OnPropertyChanged(nameof(CanConfirmSelection));
         ResultSummary = TaskItemRows.Count == 0
             ? "本次任务没有需要清除的待整理记录，结束后请核对知识变化。"
             : "勾选你已核对完成的资料；默认不勾选。";
         TaskStatusText = task.State switch
         {
             TaskState.Copied => "已复制，等待你在外部 AI 中执行",
+            TaskState.NeedsReview => "外部程序已结束，请核对结果",
             TaskState.Prepared => "已准备，尚未复制",
             _ => task.StateText,
         };
@@ -447,9 +616,16 @@ public partial class OrganizeViewModel : ObservableObject
             _toast.ShowWarning("请先生成任务，再查看本次变化");
             return;
         }
+        if (CurrentTask.State is TaskState.Prepared or TaskState.Copied)
+        {
+            _tasks.MarkNeedsReview(CurrentTask.Id, "", "用户主动进入核对");
+            CurrentTask = _tasks.Load(CurrentTask.Id) ?? CurrentTask;
+        }
         CurrentTask = _tasks.RefreshAndSave(CurrentTask);
+        RebuildFromTask(CurrentTask);
         LoadWikiChanges(CurrentTask);
         ShowResult = true;
+        NotifyReviewState();
     }
 
     private void LoadWikiChanges(OrganizeTask task)
@@ -473,6 +649,9 @@ public partial class OrganizeViewModel : ObservableObject
         }
         OnPropertyChanged(nameof(HasTaskItems));
         OnPropertyChanged(nameof(TaskRuleChanged));
+        OnPropertyChanged(nameof(SelectedTaskItemCount));
+        OnPropertyChanged(nameof(ConfirmButtonText));
+        OnPropertyChanged(nameof(CanConfirmSelection));
         RuleNeedsReview = _reviews.GetRuleStatus(task.Kb).NeedsReview;
     }
 
@@ -481,6 +660,9 @@ public partial class OrganizeViewModel : ObservableObject
     {
         foreach (var row in TaskItemRows.Where(r => r.CanSelect)) row.IsSelected = true;
         OnPropertyChanged(nameof(ResultSummary));
+        OnPropertyChanged(nameof(SelectedTaskItemCount));
+        OnPropertyChanged(nameof(ConfirmButtonText));
+        OnPropertyChanged(nameof(CanConfirmSelection));
     }
 
     [RelayCommand]
@@ -498,20 +680,69 @@ public partial class OrganizeViewModel : ObservableObject
         {
             var result = _tasks.Confirm(CurrentTask.Id, selected, ConfirmNote);
             LastConfirmMessage = result.Message;
-            if (result.Success) _toast.ShowSuccess(result.Message);
-            else _toast.ShowError(result.Message);
-            CurrentTask = _tasks.Load(CurrentTask.Id) ?? CurrentTask;
-            RebuildFromTask(CurrentTask);
-            LoadWikiChanges(CurrentTask);
-            ReloadPending();
-            ReadTasks();
-            RefreshRuleStatus();
+            if (result.Success)
+            {
+                // N05：部分结果（有新变化仍待整理）用警告 8 秒；全部成功才用成功 3 秒（03§11 L146）
+                if (result.Stale > 0)
+                {
+                    _toast.ShowWarning($"已确认 {result.Confirmed} 项；{result.Stale} 项有新变化，仍待整理");
+                }
+                else
+                {
+                    _toast.ShowSuccess($"已确认 {result.Confirmed} 项");
+                }
+                AgentEndedNotice = false;
+            }
+            else
+            {
+                _toast.ShowError(result.Message);
+            }
+            try
+            {
+                RefreshAfterConfirm();
+                ConfirmShowStale = false;
+            }
+            catch
+            {
+                // 确认已持久保存，仅显示刷新失败：持久 InfoBar + 重试显示，不重复提交确认（03§11 L147）
+                ConfirmShowStale = true;
+            }
         }
         finally
         {
             IsBusy = false;
         }
         await Task.CompletedTask;
+    }
+
+    private void RefreshAfterConfirm()
+    {
+        if (CurrentTask != null)
+        {
+            CurrentTask = _tasks.Load(CurrentTask.Id) ?? CurrentTask;
+            RebuildFromTask(CurrentTask);
+            LoadWikiChanges(CurrentTask);
+        }
+        ReloadPending();
+        ReadTasks();
+        RefreshRuleStatus();
+    }
+
+    /// <summary>“确认已保存，显示待刷新”的重试：只重新加载显示，不重复提交确认（03§11 L147）。</summary>
+    [RelayCommand]
+    private void RetryShowAfterConfirm()
+    {
+        try
+        {
+            RefreshAfterConfirm();
+            ConfirmShowStale = false;
+            _toast.ShowSuccess("已刷新显示；确认结果保持不变");
+        }
+        catch
+        {
+            ConfirmShowStale = true;
+            _toast.ShowError("显示刷新仍失败；确认已保存，可稍后重试");
+        }
     }
 
     [RelayCommand]
@@ -538,6 +769,44 @@ public partial class OrganizeViewModel : ObservableObject
         _toast.ShowSuccess("已恢复任务，可继续核对");
     }
 
+    /// <summary>
+    /// “我已在外部执行，核对结果”（03§10 L125 / §6 L74）：Prepared/Copied 任务不再等本机事件，
+    /// 用户声明已在外部执行后进入核对（MarkNeedsReview → NeedsReview 态），复用既有核对流程。
+    /// </summary>
+    [RelayCommand]
+    private void MarkExecutedExternally(OrganizeTask? task)
+    {
+        var target = task ?? CurrentTask;
+        if (target == null) return;
+        var loaded = _tasks.Load(target.Id);
+        if (loaded == null)
+        {
+            _toast.ShowError("任务记录不存在或已损坏");
+            return;
+        }
+        CurrentTask = _tasks.RefreshAndSave(loaded);
+        if (CurrentTask.State is TaskState.Prepared or TaskState.Copied)
+        {
+            _tasks.MarkNeedsReview(CurrentTask.Id, "", "用户主动进入核对");
+            CurrentTask = _tasks.Load(CurrentTask.Id) ?? CurrentTask;
+        }
+        SetCurrentTask(CurrentTask);
+        ShowPreview = false;
+        TaskStatusText = "已记录“我已在外部执行”；请核对结果后勾选确认。";
+        RebuildFromTask(CurrentTask);
+        LoadWikiChanges(CurrentTask);
+        ShowResult = true;
+        ActiveTab = CurrentTask.Kind switch
+        {
+            TaskKind.Ask => 1,
+            TaskKind.Check => 2,
+            _ => 0,
+        };
+        NotifyReviewState();
+        ReadTasks();
+        _toast.ShowSuccess("已进入核对；请确认外部执行结果后勾选确认");
+    }
+
     [RelayCommand]
     private void AbandonTask(OrganizeTask? task)
     {
@@ -547,6 +816,8 @@ public partial class OrganizeViewModel : ObservableObject
         CurrentTask = null;
         ShowResult = false;
         ShowPreview = false;
+        AgentEndedNotice = false;
+        ConfirmShowStale = false;
         ReadTasks();
         _toast.ShowSuccess("已放弃任务，不会清除任何待整理记录");
     }
@@ -617,6 +888,18 @@ public partial class PendingChangeRow : ObservableObject
     public PendingChangeRow(Change change) => Change = change;
     public Change Change { get; }
     public string DisplayPath => Change.File;
+    public string DisplayName => System.IO.Path.GetFileName(Change.File);
+    public string TypeBadge => SourceFormatRegistry.CategoryOf(DisplayPath) switch
+    {
+        SourceCategory.Text => "T",
+        SourceCategory.Document => "W",
+        SourceCategory.Spreadsheet => "X",
+        SourceCategory.Presentation => "P",
+        SourceCategory.Pdf => "PDF",
+        SourceCategory.Data => "{}",
+        SourceCategory.Image => "IMG",
+        _ => "?",
+    };
     public string Action => Change.Action;
     public string Time => Change.Time;
     public string TypeText => Change.Action switch
@@ -635,6 +918,7 @@ public partial class SourceChoiceRow : ObservableObject
     public SourceInfo Source { get; }
     public string Name => Source.Name;
     public string RelPath => Source.RelPath;
+    public string TypeBadge => Source.TypeBadge;
     public string MetaText => Source.TypeText + " · " + Source.SizeText;
     [ObservableProperty] private bool _isSelected;
 }
@@ -644,10 +928,13 @@ public partial class TaskItemRow : ObservableObject
     public TaskItemRow(TaskItem item) => Item = item;
     public TaskItem Item { get; }
     public string DisplayPath => Item.RelPath;
+    public string DisplayName => System.IO.Path.GetFileName(Item.RelPath);
     public string Action => Item.Action;
     public string Status => Item.StatusText;
+    public string ReviewText => Item.ReviewText;
     public bool CanSelect => Item.CanSelect;
     public bool CanClearChange => Item.ConfirmClearsChange;
+    public bool IsChanged => !string.IsNullOrEmpty(Item.InvalidReason);
     [ObservableProperty] private bool _isSelected;
     public string NoteText => Item.Note ?? "";
 }

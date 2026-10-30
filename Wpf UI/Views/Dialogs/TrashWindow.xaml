@@ -66,6 +66,13 @@
     </ListView>
 
     <StackPanel Grid.Row="3" Margin="0,16,0,0">
+      <!-- 窗口内状态栏：错误红 / 信息次要色，不弹系统 MessageBox（00§9.8） -->
+      <TextBlock
+        x:Name="StatusText"
+        Margin="0,0,0,10"
+        TextWrapping="Wrap"
+        Visibility="Collapsed" />
+
       <!-- 内联危险确认，不叠加第二个对话框 -->
       <Border
         x:Name="ConfirmBar"
@@ -84,7 +91,7 @@
           <TextBlock x:Name="ConfirmText" Grid.Column="0" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0" Foreground="{DynamicResource DangerBrush}" />
           <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
             <ui:Button Content="取消" Click="OnCancelConfirm" Margin="0,0,8,0" />
-            <ui:Button Content="确认永久删除" Click="OnConfirmPurge" />
+            <ui:Button Content="确认永久删除" Click="OnConfirmPurge" Appearance="Danger" />
           </StackPanel>
         </Grid>
       </Border>

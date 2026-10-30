@@ -9,18 +9,34 @@
   PrimaryButtonText="确认"
   SecondaryButtonText="取消"
   CloseButtonText=""
+  DefaultButton="Secondary"
+  PrimaryButtonAppearance="Primary"
   IsSecondaryButtonEnabled="True"
   Style="{StaticResource {x:Type ui:ContentDialog}}"
   mc:Ignorable="d"
   d:DesignHeight="200"
-  d:DesignWidth="400"
+  d:DesignWidth="480"
   >
-  <TextBlock
-    x:Name="ContentText"
-    MinWidth="320"
-    Margin="0,4,0,8"
-    Text="操作不可恢复，确定执行吗？"
-    TextWrapping="Wrap"
-    FontSize="{StaticResource FontSizeBody}"
-    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+  <!--
+    两按钮决策框（00§9.2）：从左到右 取消/返回 → 明确动作，右侧主操作；默认焦点在取消。
+    槽位映射（App.xaml 项目模板重排视觉次序）：Secondary=取消（左），Primary=明确动作（右），Close 留空（Esc=取消）。
+  -->
+  <StackPanel MinWidth="320" Margin="0,4,0,8">
+    <TextBlock
+      x:Name="ContentText"
+      Text="操作不可恢复，确定执行吗？"
+      TextWrapping="Wrap"
+      TextAlignment="Left"
+      FontSize="{StaticResource FontSizeBody}"
+      Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+    <TextBlock
+      x:Name="DetailText"
+      Margin="0,10,0,0"
+      Text=""
+      TextWrapping="Wrap"
+      TextAlignment="Left"
+      FontSize="{StaticResource FontSizeCaption}"
+      Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+      Visibility="Collapsed" />
+  </StackPanel>
 </ui:ContentDialog>

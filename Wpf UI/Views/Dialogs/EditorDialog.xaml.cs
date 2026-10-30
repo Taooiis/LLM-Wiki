@@ -115,6 +115,8 @@ namespace LLM_Wiki.Views.Dialogs
             SecondaryButtonText = "关闭";
         }
 
+        private bool _closeArmed;
+
         protected override void OnButtonClick(ContentDialogButton button)
         {
             if (button == ContentDialogButton.Primary)
@@ -124,7 +126,7 @@ namespace LLM_Wiki.Views.Dialogs
                     if (string.IsNullOrWhiteSpace(FileNameInput.Text))
                     {
                         MsgText.Text = "文件名不能为空";
-                        MsgText.Foreground = System.Windows.Media.Brushes.Red;
+                        MsgText.Foreground = ThemeBrush("DangerBrush");
                         return;
                     }
                     var fn = FileNameInput.Text.Trim();
@@ -138,18 +140,27 @@ namespace LLM_Wiki.Views.Dialogs
 
                 Saved?.Invoke(EditorContent);
                 MsgText.Text = "";
+                _closeArmed = false;
                 Hide(ContentDialogResult.Primary);
             }
             else if (button == ContentDialogButton.Secondary || button == ContentDialogButton.Close)
             {
-                if (DirtyText.Visibility == Visibility.Visible &&
-                    System.Windows.MessageBox.Show("有未保存的修改，确定关闭？", "关闭编辑器", System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Warning) != System.Windows.MessageBoxResult.Yes)
+                // 未保存确认用同框子状态承接（00§9.8）：不弹独立 MessageBox，不再叠框。
+                if (DirtyText.Visibility == Visibility.Visible && !_closeArmed)
                 {
+                    _closeArmed = true;
+                    MsgText.Text = "有未保存的修改：再次点击“放弃更改并关闭”将丢弃本次未保存内容。";
+                    MsgText.Foreground = ThemeBrush("WarningBrush");
+                    SecondaryButtonText = "放弃更改并关闭";
                     return;
                 }
                 Hide(ContentDialogResult.Secondary);
             }
         }
+
+        private static System.Windows.Media.Brush ThemeBrush(string key)
+            => System.Windows.Application.Current?.TryFindResource(key) as System.Windows.Media.Brush
+               ?? System.Windows.Media.Brushes.Gray;
 
         private void OnKeyDown(object sender, KeyEventArgs e)
         {

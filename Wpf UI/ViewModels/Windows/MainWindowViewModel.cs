@@ -28,6 +28,7 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly UnsavedChangesCoordinator _unsaved;
     private readonly ShareService _share;
     private readonly McpService _mcp;
+    private readonly LocalAgentService _agent;
     private readonly ToastService _toast;
     private readonly INavigationService _navigation;
 
@@ -41,6 +42,7 @@ public partial class MainWindowViewModel : ObservableObject
         UnsavedChangesCoordinator unsaved,
         ShareService share,
         McpService mcp,
+        LocalAgentService agent,
         ToastService toast,
         INavigationService navigation)
     {
@@ -53,9 +55,11 @@ public partial class MainWindowViewModel : ObservableObject
         _unsaved = unsaved;
         _share = share;
         _mcp = mcp;
+        _agent = agent;
         _toast = toast;
         _navigation = navigation;
         _share.Changed += OnShareServiceChanged;
+        _agent.Changed += OnShareServiceChanged;
 
         var version = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version;
         AppVersion = version is null ? "" : $"v{version.Major}.{version.Minor}.{version.Build}";
@@ -87,6 +91,9 @@ public partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty] private ObservableCollection<object> _menuItems = [];
     [ObservableProperty] private ObservableCollection<object> _footerMenuItems = [];
+
+    [ObservableProperty] private string _helpTopicId = "";
+    [ObservableProperty] private string _helpReturnPageKey = "";
 
     /// <summary>页面请求打开某个相对路径（全局查找结果）。</summary>
     public event Action<FileSearchResult>? OpenRequested;
@@ -126,16 +133,18 @@ public partial class MainWindowViewModel : ObservableObject
                 Icon = new SymbolIcon { Symbol = SymbolRegular.ArrowSync24 },
                 TargetPageType = typeof(OrganizePage),
             },
-        ];
-
-        FooterMenuItems =
-        [
+            new NavigationViewItemSeparator(),
             new NavigationViewItem
             {
                 Content = "连接与分享",
                 Icon = new SymbolIcon { Symbol = SymbolRegular.Share24 },
                 TargetPageType = typeof(ConnectionsPage),
             },
+        ];
+
+        FooterMenuItems =
+        [
+
             new NavigationViewItem
             {
                 Content = "知识库设置",
@@ -180,10 +189,11 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    /// <summary>根目录切换成功后：重建库列表，不复用旧库同名身份。</summary>
+    /// <summary>根目录切换成功后：重建库列表，不复用旧库同名身份；清空跨页暂存选择（06§4）。</summary>
     public void ResetForNewRoot()
     {
         ReloadKbs();
+        PendingOrganizeSelection = null;
         var previous = CurrentKb;
         CurrentKb = "";
         SetCurrentKb(Kbs.FirstOrDefault() ?? "");
@@ -245,9 +255,7 @@ public partial class MainWindowViewModel : ObservableObject
             : HasKb ? "目录正常"
             : string.IsNullOrWhiteSpace(CurrentKb) ? "未选择知识库" : "目录不可访问";
         StatusShare = _share.Running ? $"浏览分享：{_share.BoundKb}" : "浏览分享：关闭";
-        StatusAi = _mcp.Running
-            ? $"AI：{(_mcp.Policy.WriteEnabled ? "写入" : "只读")} · {_mcp.BoundKb}"
-            : "AI：未连接";
+        StatusAi = _agent.IsRunning ? "本机任务：运行中" : "本机任务：空闲";
         UpdateNavBadge();
     }
 
@@ -297,6 +305,11 @@ public partial class MainWindowViewModel : ObservableObject
     public async Task<bool> DeleteCurrentKbAsync()
     {
         if (!HasKb) return false;
+        if (_agent.IsRunning)
+        {
+            _toast.ShowWarning("本机任务仍在运行；请先到整理页结束或取消任务，再删除知识库。");
+            return false;
+        }
         if (!await _unsaved.CanLeaveAsync()) return false;
         var name = CurrentKb;
         if (_share.Running && _share.BoundKb.Equals(name, StringComparison.OrdinalIgnoreCase))
@@ -305,7 +318,11 @@ public partial class MainWindowViewModel : ObservableObject
         }
         if (_mcp.Running && _mcp.BoundKb.Equals(name, StringComparison.OrdinalIgnoreCase))
         {
-            _mcp.SetMode(_mcp.BoundKb, McpMode.Off, out _);
+            if (!_mcp.SetMode(_mcp.BoundKb, McpMode.Off, out var mcpError))
+            {
+                _toast.ShowError("绑定服务停止失败，未删除知识库：" + mcpError);
+                return false;
+            }
         }
         try
         {
@@ -323,6 +340,33 @@ public partial class MainWindowViewModel : ObservableObject
             _toast.ShowError("删除知识库失败：" + e.Message);
             return false;
         }
+    }
+
+    /// <summary>帮助/页内链接跳转：先处理全局未保存草稿。</summary>
+    public async Task<bool> NavigateWithGuardAsync(string pageKey)
+    {
+        if (!await _unsaved.CanLeaveAsync()) return false;
+        NavigateTo(pageKey);
+        return true;
+    }
+
+    public async Task OpenHelpAsync(string topicId, string? returnPageKey = null)
+    {
+        if (!await _unsaved.CanLeaveAsync()) return;
+        HelpTopicId = topicId;
+        HelpReturnPageKey = returnPageKey ?? "";
+        _navigation.Navigate(typeof(HelpPage));
+    }
+
+    public void ClearHelpRequest()
+    {
+        HelpTopicId = "";
+    }
+
+    public void ClearHelpContext()
+    {
+        HelpTopicId = "";
+        HelpReturnPageKey = "";
     }
 
     public void NavigateTo(string pageKey)
@@ -433,6 +477,61 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>关闭窗口前的统一保护；返回 false 表示留在应用。</summary>
     public async Task<bool> CanCloseAsync() => await _unsaved.CanLeaveAsync();
+
+    /// <summary>D13 退出保护：主窗注入确认框；参数=是否存在未保存草稿。</summary>
+    public Func<bool, Task<ExitChoice>>? ConfirmExit { get; set; }
+
+    /// <summary>
+    /// D13 退出保护（00§9.4）：只有草稿走 D02；只有本机任务显示“任务仍在运行”；
+    /// 二者同时存在用一个 640 宽合并框。导航保护仍走 CanCloseAsync，不触发 D13。
+    /// </summary>
+    public async Task<bool> CanExitAsync()
+    {
+        var drafts = _unsaved.HasAny;
+        var running = _agent.IsRunning;
+        if (!running && !drafts) return true;
+        if (!running) return await _unsaved.CanLeaveAsync();
+
+        var choice = ConfirmExit == null ? ExitChoice.Stay : await ConfirmExit(drafts);
+        switch (choice)
+        {
+            case ExitChoice.CancelTaskAndExit:
+            case ExitChoice.DiscardAndCancelTaskAndExit:
+                if (drafts && choice == ExitChoice.DiscardAndCancelTaskAndExit) _unsaved.DiscardAll();
+                return await StopAgentForExitAsync();
+            case ExitChoice.SaveAndCancelTaskAndExit:
+                // 保存失败不继续取消任务，留在应用。
+                if (drafts && !await _unsaved.SaveAllAsync()) return false;
+                return await StopAgentForExitAsync();
+            case ExitChoice.Stay:
+            default:
+                return false;
+        }
+    }
+
+    private async Task<bool> StopAgentForExitAsync()
+    {
+        _agent.RequestCancel();
+        if (_agent.IsRunning)
+        {
+            await Task.Delay(300);
+            if (_agent.IsRunning && !_agent.ForceKill(out var killError))
+            {
+                _toast.ShowError("无法结束本机任务：" + killError + "；已保留草稿，请手动结束后再退出。");
+                return false;
+            }
+        }
+        return true;
+    }
+}
+
+/// <summary>D13 合并退出框的决策（00§9.4）。</summary>
+public enum ExitChoice
+{
+    Stay,
+    CancelTaskAndExit,
+    SaveAndCancelTaskAndExit,
+    DiscardAndCancelTaskAndExit,
 }
 
 public sealed record FileSearchResult(string Name, string RelPath, string Kind, string GroupText)

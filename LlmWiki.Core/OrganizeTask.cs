@@ -27,7 +27,7 @@ public enum TaskKind { Update, Ask, Check }
 
 public enum TaskScope { Pending, Selected, All }
 
-public enum TaskState { Prepared, Copied, PartiallyConfirmed, Confirmed, Abandoned }
+public enum TaskState { Prepared, Copied, NeedsReview, PartiallyConfirmed, Confirmed, ClosedWithRemaining, Abandoned }
 
 public sealed class OrganizeTask
 {
@@ -51,6 +51,8 @@ public sealed class OrganizeTask
     [JsonPropertyName("confirmNote")] public string? ConfirmNote { get; set; }
     [JsonPropertyName("items")] public List<TaskItem> Items { get; set; } = [];
     [JsonPropertyName("wikiBaseline")] public List<WikiStamp> WikiBaseline { get; set; } = [];
+    [JsonPropertyName("attemptId")] public string? AttemptId { get; set; }
+    [JsonPropertyName("lastAttemptStatus")] public string? LastAttemptStatus { get; set; }
     [JsonPropertyName("ruleChanged")] public bool RuleChanged { get; set; }
 
     [JsonExtensionData] public Dictionary<string, System.Text.Json.JsonElement>? Extra { get; set; }
@@ -63,13 +65,19 @@ public sealed class OrganizeTask
     {
         TaskState.Prepared => "已准备",
         TaskState.Copied => "已复制，等待外部执行",
+        TaskState.NeedsReview => "待核对",
         TaskState.PartiallyConfirmed => "部分确认",
         TaskState.Confirmed => "本次已确认",
+        TaskState.ClosedWithRemaining => "已结束，仍有待整理",
         TaskState.Abandoned => "已放弃",
         _ => "",
     };
 
-    public bool CanConfirm => State is TaskState.Prepared or TaskState.Copied or TaskState.PartiallyConfirmed;
+    public bool CanConfirm => State is TaskState.Prepared or TaskState.Copied or TaskState.NeedsReview or TaskState.PartiallyConfirmed;
+
+    /// <summary>Prepared/Copied（已复制待执行）任务可由用户声明已在外部执行，主动进入核对（03§10 L125）。</summary>
+    [JsonIgnore]
+    public bool CanMarkExecutedExternally => State is TaskState.Prepared or TaskState.Copied;
 }
 
 public sealed class TaskItem
@@ -85,6 +93,7 @@ public sealed class TaskItem
 
     [JsonExtensionData] public Dictionary<string, System.Text.Json.JsonElement>? Extra { get; set; }
 
+    public string ReviewText => Confirmed ? "已核对" : !string.IsNullOrEmpty(InvalidReason) ? InvalidReason! : "待核对";
     public bool CanSelect => !Confirmed && string.IsNullOrEmpty(InvalidReason)
                              && Action is "新增" or "修改" or "删除" or "所选资料" or "全部资料";
     public bool ConfirmClearsChange => Action is "新增" or "修改" or "删除";

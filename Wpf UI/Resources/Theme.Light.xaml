@@ -22,9 +22,23 @@
   <!-- 导航选中底：浅底上用淡蓝，保证深色文字可读 -->
   <SolidColorBrush x:Key="SystemControlHighlightAccent3Brush" Color="#FFDCE9F7" />
 
+  <!-- 导航选中态：浅色用淡蓝底 + 深色文字 -->
+  <SolidColorBrush x:Key="NavigationViewItemBackgroundSelected" Color="#D9EDFF" />
+  <SolidColorBrush x:Key="NavigationViewItemBackgroundSelectedLeftFluent" Color="#D9EDFF" />
+  <SolidColorBrush x:Key="NavigationViewItemForegroundLeftFluent" Color="#102A43" />
+  <SolidColorBrush x:Key="NavigationViewSelectionIndicatorForeground" Color="#0063B1" />
+  <SolidColorBrush x:Key="NavigationViewItemBackgroundPointerOver" Color="#E8EDF3" />
+  <SolidColorBrush x:Key="NavigationViewItemBackgroundPressed" Color="#E2E8EF" />
+  <SolidColorBrush x:Key="NavigationViewItemForegroundPointerOver" Color="#17212F" />
   <!-- 轻强调（浅色下用更深的蓝，保证在浅底上的对比度） -->
   <SolidColorBrush x:Key="AccentLightBrush" Color="#0067C0" />
 
+  <SolidColorBrush x:Key="PillSuccessBackgroundBrush" Color="#E6F4EA" />
+  <SolidColorBrush x:Key="PillSuccessBorderBrush" Color="#A7D7B5" />
+  <SolidColorBrush x:Key="PillModifyBackgroundBrush" Color="#E8F0FE" />
+  <SolidColorBrush x:Key="PillModifyBorderBrush" Color="#B3CCF5" />
+  <SolidColorBrush x:Key="PillDangerBackgroundBrush" Color="#FDECEA" />
+  <SolidColorBrush x:Key="PillDangerBorderBrush" Color="#F3B8B5" />
   <!-- 状态色（浅色主题加深版本） -->
   <SolidColorBrush x:Key="SuccessBrush" Color="#0F7B0F" />
   <SolidColorBrush x:Key="WarningBrush" Color="#9A6700" />
@@ -35,20 +49,54 @@
   <SolidColorBrush x:Key="TrendDownBrush" Color="#C42B1C" />
 
   <!-- 浅色背景：主背景 #F3F3F3、导航 #EBEBEB、卡片 #FFFFFF、控件 #FFFFFF、描边 #D6D6D6 -->
-  <SolidColorBrush x:Key="AppBackgroundBrush" Color="#F3F3F3" />
-  <SolidColorBrush x:Key="ApplicationBackgroundBrush" Color="#F3F3F3" />
-  <SolidColorBrush x:Key="NavigationBackgroundBrush" Color="#EBEBEB" />
-  <SolidColorBrush x:Key="NavigationViewExpandedPaneBackground" Color="#EBEBEB" />
-  <SolidColorBrush x:Key="LayerBackgroundBrush" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="AppBackgroundBrush" Color="#F7F9FB" />
+  <SolidColorBrush x:Key="ApplicationBackgroundBrush" Color="#F7F9FB" />
+  <SolidColorBrush x:Key="NavigationBackgroundBrush" Color="#F0F3F6" />
+  <SolidColorBrush x:Key="NavigationViewExpandedPaneBackground" Color="#F0F3F6" />
+  <SolidColorBrush x:Key="LayerBackgroundBrush" Color="#F7F9FB" />
   <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#FFFFFF" />
-  <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="#F6F6F6" />
+  <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="#F2F5F8" />
   <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="#FFFFFF" />
-  <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="#E5E5E5" />
-  <SolidColorBrush x:Key="StrokeFillColorDefaultBrush" Color="#D6D6D6" />
-  <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#1A1A1A" />
-  <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#5C5C5C" />
-  <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#8A8A8A" />
+  <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="#E2E8EF" />
+  <SolidColorBrush x:Key="StrokeFillColorDefaultBrush" Color="#CCD5DF" />
+  <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#17212F" />
+  <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#526171" />
+  <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#6E7C8C" />
 
   <!-- Banner：浅色下用淡蓝灰，避免深底配深色文字的不可读组合 -->
   <SolidColorBrush x:Key="BannerBackgroundBrush" Color="#EAF2FB" />
+
+  <!-- 设计文档 00§8 项目语义键：页面样式只引用这些键 -->
+  <SolidColorBrush x:Key="NavSurfaceBrush" Color="#F0F3F6" />
+  <SolidColorBrush x:Key="ContentSurfaceBrush" Color="#F7F9FB" />
+  <SolidColorBrush x:Key="ReadingSurfaceBrush" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="CardSurfaceBrush" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="ControlSurfaceBrush" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="StrokeBrush" Color="#CCD5DF" />
+  <SolidColorBrush x:Key="ItemTextBrush" Color="#17212F" />
+  <SolidColorBrush x:Key="SecondaryTextBrush" Color="#526171" />
+  <SolidColorBrush x:Key="ItemHoverBackgroundBrush" Color="#E8EDF3" />
+  <SolidColorBrush x:Key="ItemSelectedBackgroundBrush" Color="#D9EDFF" />
+  <SolidColorBrush x:Key="ItemSelectedForegroundBrush" Color="#102A43" />
+  <SolidColorBrush x:Key="ItemSelectedBorderBrush" Color="#0063B1" />
+  <SolidColorBrush x:Key="FocusRingBrush" Color="#0063B1" />
+  <SolidColorBrush x:Key="PrimaryBackgroundBrush" Color="#0078D4" />
+  <SolidColorBrush x:Key="PrimaryHoverBackgroundBrush" Color="#006FC2" />
+  <SolidColorBrush x:Key="PrimaryPressedBackgroundBrush" Color="#005A9E" />
+  <SolidColorBrush x:Key="PrimaryForegroundBrush" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="DisabledTextBrush" Color="#536171" />
+  <SolidColorBrush x:Key="DisabledBackgroundBrush" Color="#E1E7EE" />
+
+  <!-- 决策框遮罩（00§9.2）：浅色黑色24% -->
+  <SolidColorBrush x:Key="OverlayBrush" Color="#3D000000" />
+
+  <SolidColorBrush x:Key="AccentButtonBackground" Color="#0078D4" />
+  <SolidColorBrush x:Key="AccentButtonBackgroundPointerOver" Color="#006FC2" />
+  <SolidColorBrush x:Key="AccentButtonBackgroundPressed" Color="#005A9E" />
+  <SolidColorBrush x:Key="AccentButtonForeground" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="AccentButtonForegroundPointerOver" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="AccentButtonForegroundPressed" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="#536171" />
+  <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="#E1E7EE" />
+  <SolidColorBrush x:Key="ButtonBorderBrushDisabled" Color="#E1E7EE" />
 </ResourceDictionary>

@@ -24,6 +24,19 @@ namespace LLM_Wiki.Controls
         public static readonly DependencyProperty EmptyActionProperty = DependencyProperty.Register(
             nameof(EmptyAction), typeof(object), typeof(DocumentWorkspace), new PropertyMetadata(null));
 
+        /// <summary>空态说明（宿主页注入：知识页/资料页文案不同，避免“上传”字样出现在知识页）。</summary>
+        public string EmptyDescription
+        {
+            get => (string)GetValue(EmptyDescriptionProperty);
+            set => SetValue(EmptyDescriptionProperty, value);
+        }
+
+        public static readonly DependencyProperty EmptyDescriptionProperty = DependencyProperty.Register(
+            nameof(EmptyDescription), typeof(string), typeof(DocumentWorkspace),
+            new PropertyMetadata("从左侧选择文件，或新建 / 上传文件"));
+
+        public void ScrollToHeading(string heading) => MarkdownControl.ScrollToHeading(heading);
+
         /// <summary>编辑区内 Ctrl+S → 保存（指南 §13）。</summary>
         private void EditorBox_KeyDown(object sender, KeyEventArgs e)
         {

@@ -193,12 +193,7 @@ public sealed class McpAccessPolicy(ConfigService config)
     }
 
     private static bool IsReadableExtension(string rel)
-    {
-        var ext = Path.GetExtension(rel);
-        return ext.Equals(".md", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".txt", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".json", StringComparison.OrdinalIgnoreCase);
-    }
+        => SourceFormatRegistry.IsTextReadable(Path.GetFileName(rel));
 
     private static bool IsWritableFile(string rel)
     {

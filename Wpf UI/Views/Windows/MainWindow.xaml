@@ -4,13 +4,16 @@
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
   xmlns:local="clr-namespace:LLM_Wiki.Views.Windows"
+  xmlns:controls="clr-namespace:LLM_Wiki.Controls"
   xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
   xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
   Title="{Binding ViewModel.ApplicationTitle, Mode=OneWay}"
+  FontFamily="Microsoft YaHei UI, Segoe UI"
+  FontSize="14"
   Width="1440"
   Height="900"
-  MinWidth="1180"
-  MinHeight="760"
+  MinWidth="1100"
+  MinHeight="650"
   d:DataContext="{d:DesignInstance local:MainWindow, IsDesignTimeCreatable=True}"
   ui:Design.Background="{DynamicResource ApplicationBackgroundBrush}"
   ui:Design.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
@@ -24,124 +27,96 @@
   <Grid Background="{DynamicResource ApplicationBackgroundBrush}">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
-      <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
 
+    <!-- 标题/搜索一行 52（00§6：不叠两条标题栏）：库切换器、查找并入 TitleBar.Header，帮助在右侧 -->
     <ui:TitleBar
       x:Name="TitleBar"
       Grid.Row="0"
-      Title="{Binding ViewModel.ApplicationTitle}"
-      CloseWindowByDoubleClickOnIcon="True" />
-
-    <!-- 顶栏：库切换器 + 当前库文件名查找 + 帮助 -->
-    <Border
-      Grid.Row="1"
-      Padding="20,8,20,8"
+      Height="52"
       Background="{DynamicResource NavigationBackgroundBrush}"
-      BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-      BorderThickness="0,0,0,1">
-      <Grid>
-        <Grid.RowDefinitions>
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="*" />
-          <ColumnDefinition Width="Auto" />
-        </Grid.ColumnDefinitions>
+      Title=""
+      CloseWindowByDoubleClickOnIcon="True">
+      <ui:TitleBar.Header>
+        <Grid VerticalAlignment="Center" Width="{Binding ActualWidth, ElementName=TitleBar}" MaxWidth="1100">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="168" /><ColumnDefinition Width="192" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+          <ui:SymbolIcon Symbol="BookOpen24" FontSize="28" Foreground="{DynamicResource AccentLightBrush}" HorizontalAlignment="Left" Margin="8,0,0,0" />
+          <TextBlock
+            Margin="48,0,0,0"
+            VerticalAlignment="Center"
+            FontSize="18"
+            FontWeight="SemiBold"
+            Text="{Binding ViewModel.ApplicationTitle}" />
+          <Button
+            x:Name="KbPickerButton" Grid.Column="1" HorizontalAlignment="Left"
+            Margin="16,0,0,0"
+            MinHeight="32"
+            Padding="12,4"
+            Background="Transparent"
+            BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
+            BorderThickness="1"
+            Click="OnKbPickerClick"
+            ToolTip="切换或新建知识库">
+            <StackPanel Orientation="Horizontal">
+              <ui:SymbolIcon Symbol="Library24" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" />
+              <TextBlock
+                VerticalAlignment="Center"
+                FontWeight="SemiBold"
+                MaxWidth="240"
+                TextTrimming="CharacterEllipsis"
+                Text="{Binding ViewModel.KbPickerText}" />
+              <TextBlock Text=" ▾" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+          </Button>
 
-        <Button
-          x:Name="KbPickerButton"
-          Grid.Column="0"
-          MinHeight="32"
-          Padding="12,4"
-          Background="Transparent"
-          BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
-          BorderThickness="1"
-          Click="OnKbPickerClick"
-          ToolTip="切换或新建知识库">
-          <StackPanel Orientation="Horizontal">
-            <ui:SymbolIcon Symbol="Library24" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" />
-            <TextBlock
-              VerticalAlignment="Center"
-              FontWeight="SemiBold"
-              MaxWidth="240"
-              TextTrimming="CharacterEllipsis"
-              Text="{Binding ViewModel.KbPickerText}" />
-            <TextBlock Text=" ▾" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-          </StackPanel>
-        </Button>
-
-        <TextBlock
-          Grid.Column="1"
-          Margin="16,0,12,0"
-          VerticalAlignment="Center"
-          FontSize="{StaticResource FontSizeCaption}"
-          Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-          Text="当前库" />
-
-        <ui:TextBox
-          x:Name="TopSearchBox"
-          Grid.Column="2"
-          Width="380"
-          HorizontalAlignment="Left"
-          PlaceholderText="查找当前库文件…（Ctrl+K）"
-          Icon="Search24"
-          KeyDown="OnTopSearchKeyDown"
-          TextChanged="OnTopSearchTextChanged" />
-
+          <ui:TextBox
+            x:Name="TopSearchBox" Grid.Column="2"
+            Margin="48,0,24,0" MinWidth="220"
+            VerticalAlignment="Center"
+            PlaceholderText="查找当前库文件…（Ctrl+K）"
+            Icon="Search24"
+            KeyDown="OnTopSearchKeyDown"
+            TextChanged="OnTopSearchTextChanged" />
+        </Grid>
+      </ui:TitleBar.Header>
+      <ui:TitleBar.TrailingContent>
         <ui:Button
-          Grid.Column="3"
+          Margin="0,0,8,0"
           Content="帮助"
           Icon="QuestionCircle24"
           Click="OnHelpClick"
           Appearance="Secondary"
           ToolTip="使用帮助" />
-
-        <Border
-          Grid.Row="1"
-          Grid.ColumnSpan="4"
-          Margin="0,8,0,0"
-          Padding="10,6"
-          CornerRadius="6"
-          Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-          BorderBrush="{DynamicResource DangerBrush}"
-          BorderThickness="1"
-          Visibility="{Binding ViewModel.HasStorageError, Converter={StaticResource BoolToVis}}">
-          <Grid>
-            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource DangerBrush}" Text="{Binding ViewModel.StorageError}" />
-            <ui:Button Grid.Column="1" Content="修复存储路径" Click="OnFixStorageClick" />
-          </Grid>
-        </Border>
-      </Grid>
-    </Border>
+      </ui:TitleBar.TrailingContent>
+    </ui:TitleBar>
 
     <ui:NavigationView
       x:Name="RootNavigation"
-      Grid.Row="2"
+      Grid.Row="1"
       FooterMenuItemsSource="{Binding ViewModel.FooterMenuItems, Mode=OneWay}"
       FrameMargin="0"
+      TransitionDuration="0"
       IsBackButtonVisible="Collapsed"
-      IsPaneToggleVisible="True"
+      IsPaneToggleVisible="False"
       MenuItemsSource="{Binding ViewModel.MenuItems, Mode=OneWay}"
       OpenPaneLength="208"
+      CompactPaneLength="64"
+      Navigating="OnRootNavigating"
       PaneDisplayMode="Left">
       <ui:NavigationView.ContentOverlay>
         <Grid>
-          <ui:SnackbarPresenter x:Name="SnackbarPresenter" />
+          <controls:CompactSnackbarPresenter x:Name="SnackbarPresenter" Width="420" MaxWidth="480" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16,0,16,16" />
         </Grid>
       </ui:NavigationView.ContentOverlay>
     </ui:NavigationView>
 
     <!-- 底部状态栏 -->
     <Border
-      Grid.Row="3"
-      Padding="20,4"
+      Grid.Row="2"
+      MinHeight="28"
+      Padding="20,2"
       Background="{DynamicResource NavigationBackgroundBrush}"
       BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
       BorderThickness="0,1,0,0">
@@ -153,7 +128,8 @@
           <ColumnDefinition Width="*" />
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
-        <TextBlock Grid.Column="0" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+        <ui:Button Grid.Column="0" Content="目录不可访问 · 修复存储路径" Click="OnFixStorageClick" Appearance="Transparent" ToolTip="{Binding ViewModel.StorageError}" Visibility="{Binding ViewModel.HasStorageError, Converter={StaticResource BoolToVis}}" />
+        <TextBlock Visibility="{Binding ViewModel.HasStorageError, Converter={StaticResource InvBoolToVis}}" Grid.Column="0" VerticalAlignment="Center" ToolTip="{Binding ViewModel.StorageError}" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
           <Run Text="{Binding ViewModel.CurrentKb, Mode=OneWay, FallbackValue='未选择'}" />
           <Run Text=" · " /><Run Text="{Binding ViewModel.StatusDirectory, Mode=OneWay}" />
         </TextBlock>
@@ -163,16 +139,24 @@
         <TextBlock Grid.Column="2" Margin="20,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
           <Run Text="{Binding ViewModel.StatusShare, Mode=OneWay}" />
         </TextBlock>
-        <TextBlock Grid.Column="3" Margin="20,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-          <Run Text="{Binding ViewModel.StatusAi, Mode=OneWay}" />
-        </TextBlock>
+        <!-- 本机任务入口：可点，跳转整理页任务（00§6 状态栏） -->
+        <ui:Button
+          Grid.Column="3"
+          Margin="20,0,0,0"
+          Padding="4,0"
+          HorizontalAlignment="Left"
+          VerticalAlignment="Center"
+          Appearance="Transparent"
+          Content="{Binding ViewModel.StatusAi, Mode=OneWay}"
+          Click="OnStatusTaskClick"
+          ToolTip="查看本机任务（整理页）" />
         <TextBlock Grid.Column="4" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="{Binding ViewModel.AppVersion, Mode=OneWay}" />
       </Grid>
     </Border>
 
     <!-- 全局查找覆盖层：只查当前库文件名 -->
-    <Grid Grid.Row="0" Grid.RowSpan="4"
-          Background="#99000000"
+    <Grid Grid.Row="0" Grid.RowSpan="3"
+          Background="{DynamicResource OverlayBrush}"
           Visibility="{Binding ViewModel.IsSearchOpen, Converter={StaticResource BoolToVis}}">
       <Border
         Width="680"

@@ -126,19 +126,25 @@ public sealed class McpKnowledgeService(
             {
                 content = FileHelper.DecodeText(File.ReadAllBytes(full));
             }
-            else if (format == "docx")
+            else if (format is "docx" or "docm")
             {
                 var (text, error) = OfficeConverter.ConvertDocx(name, File.ReadAllBytes(full));
                 content = text ?? throw new InvalidDataException(error);
                 if (content.Contains("转换损失", StringComparison.Ordinal))
                     warnings.Add("文档包含未完全提取的结构，请查看内容开头的转换损失说明。");
             }
-            else if (format == "xlsx")
+            else if (format is "xlsx" or "xlsm")
             {
                 var (text, error) = OfficeConverter.ConvertXlsx(name, File.ReadAllBytes(full));
                 content = text ?? throw new InvalidDataException(error);
                 if (content.Contains("已截断", StringComparison.Ordinal))
                     warnings.Add("工作表超过 200 行已截断；不能把当前结果当作完整资料内容。");
+            }
+            else if (format is "pptx" or "pptm")
+            {
+                var (text, error) = OfficeConverter.ConvertPptx(name, File.ReadAllBytes(full));
+                content = text ?? throw new InvalidDataException(error);
+                warnings.Add("只提取了幻灯片文字与备注；图形、图表、图片和动画未覆盖。");
             }
             else
             {

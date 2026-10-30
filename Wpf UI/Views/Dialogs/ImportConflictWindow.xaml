@@ -4,10 +4,12 @@
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
   Title="同名资料"
-  Width="560"
-  Height="420"
-  ResizeMode="NoResize"
+  Width="640"
+  Height="480"
+  MinWidth="640"
+  MinHeight="420"
   WindowStartupLocation="CenterOwner"
+  Loaded="OnWindowLoaded"
   Background="{DynamicResource AppBackgroundBrush}"
   Foreground="{DynamicResource TextFillColorPrimaryBrush}">
   <Grid Margin="24">
@@ -17,28 +19,71 @@
       <RowDefinition Height="*" />
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
-    <TextBlock FontSize="22" FontWeight="SemiBold" Text="这些资料已存在" />
+    <TextBlock x:Name="TitleText" Grid.Row="0" FontSize="20" FontWeight="SemiBold" Text="发现同名文件" />
     <TextBlock
       Grid.Row="1"
       Margin="0,8,0,12"
       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-      Text="覆盖会替换现有资料，替换后需要重新整理知识；旧版本会保留在回收站。"
+      Text="覆盖会替换现有资料，替换后需要重新整理知识；旧版本会保留在回收站。未列出的文件会继续添加。"
       TextWrapping="Wrap" />
-    <Border Grid.Row="2" Padding="12" CornerRadius="8" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" BorderThickness="1">
-      <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <ItemsControl x:Name="ConflictList">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate>
-              <TextBlock Margin="0,3" Text="{Binding}" />
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </ScrollViewer>
+    <Border
+      Grid.Row="2"
+      Padding="12"
+      CornerRadius="8"
+      Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+      BorderBrush="{DynamicResource StrokeBrush}"
+      BorderThickness="1">
+      <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <!-- 列头：文件名 / 现有文件 / 本次文件 -->
+        <Grid Grid.Row="0" Margin="0,0,0,6">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="170" />
+            <ColumnDefinition Width="170" />
+          </Grid.ColumnDefinitions>
+          <TextBlock FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="文件名" />
+          <TextBlock Grid.Column="1" FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="现有文件（大小 · 修改时间）" />
+          <TextBlock Grid.Column="2" FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="本次文件（大小 · 修改时间）" />
+        </Grid>
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+          <ItemsControl x:Name="ConflictList">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid Margin="0,4">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="170" />
+                    <ColumnDefinition Width="170" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock
+                    VerticalAlignment="Center"
+                    FontWeight="SemiBold"
+                    Text="{Binding Name, Mode=OneWay}"
+                    TextTrimming="CharacterEllipsis"
+                    ToolTip="{Binding Name, Mode=OneWay}" />
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding ExistingSize, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="{Binding ExistingModified, Mode=OneWay}" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding IncomingSize, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="{Binding IncomingModified, Mode=OneWay}" />
+                  </StackPanel>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Grid>
     </Border>
     <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-      <ui:Button Content="返回" Click="OnCancel" Margin="0,0,8,0" />
-      <ui:Button Content="跳过同名" Click="OnSkip" Margin="0,0,8,0" />
-      <ui:Button Content="覆盖同名" Click="OnOverwrite" Appearance="Primary" />
+      <ui:Button Content="取消本批" Click="OnCancel" Margin="0,0,8,0" />
+      <ui:Button x:Name="SkipButton" Content="跳过同名继续" Click="OnSkip" Margin="0,0,8,0" />
+      <ui:Button x:Name="OverwriteButton" Content="覆盖同名继续" Click="OnOverwrite" Appearance="Danger" />
     </StackPanel>
   </Grid>
 </Window>

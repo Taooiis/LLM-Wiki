@@ -5,28 +5,38 @@
   xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
   xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
   xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-  Title="保留本次修改？"
-  PrimaryButtonText="保存后离开"
+  Title="还有未保存的更改"
+  PrimaryButtonText="保存并继续"
   SecondaryButtonText="放弃更改"
-  CloseButtonText="继续编辑"
-  DefaultButton="Primary"
+  CloseButtonText="留在此处"
+  DefaultButton="Close"
+  PrimaryButtonAppearance="Primary"
   Style="{StaticResource {x:Type ui:ContentDialog}}"
   mc:Ignorable="d"
-  d:DesignHeight="220"
-  d:DesignWidth="460">
-  <!-- 三按钮语义（指南 §11.4）：保存后离开=Primary，放弃更改=Secondary（危险），继续编辑=Close（默认 Esc） -->
-  <StackPanel Margin="0,8,0,4" MaxWidth="440">
+  d:DesignHeight="240"
+  d:DesignWidth="520">
+  <!--
+    D02 未保存离开（00§9.4）：三按钮从左到右 放弃更改→留在此处→保存并继续，初焦“留在此处”。
+    槽位映射（App.xaml 项目模板已重排视觉次序）：Secondary=放弃更改，Close=留在此处（Esc 等价），Primary=保存并继续。
+  -->
+  <StackPanel Margin="0,8,0,4" MaxWidth="460">
     <TextBlock
-      Text="当前文档还有未保存的更改。"
+      x:Name="LeadTextBlock"
+      Text="离开前，请处理以下文件的修改。"
       FontSize="{StaticResource FontSizeBody}"
       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
       TextWrapping="Wrap" />
     <TextBlock
-      x:Name="DetailText"
+      x:Name="FilesText"
+      Margin="0,10,0,0"
+      FontSize="13"
+      Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+      TextWrapping="Wrap" />
+    <TextBlock
       Margin="0,8,0,0"
       FontSize="{StaticResource FontSizeCaption}"
       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
       TextWrapping="Wrap"
-      Text="离开后，这些修改将不会写入知识库。" />
+      Text="放弃更改只丢弃本次未保存的缓冲，不影响已写入磁盘的内容。" />
   </StackPanel>
 </ui:ContentDialog>
