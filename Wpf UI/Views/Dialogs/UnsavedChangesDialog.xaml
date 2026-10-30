@@ -10,6 +10,7 @@
   SecondaryButtonText="放弃更改"
   CloseButtonText="继续编辑"
   DefaultButton="Primary"
+  Style="{StaticResource {x:Type ui:ContentDialog}}"
   mc:Ignorable="d"
   d:DesignHeight="220"
   d:DesignWidth="460">

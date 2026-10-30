@@ -1,0 +1,75 @@
+<Window
+  x:Class="LLM_Wiki.Views.Dialogs.CreateKbDialog"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  Title="新建知识库"
+  Width="520"
+  Height="480"
+  ResizeMode="NoResize"
+  WindowStartupLocation="CenterOwner"
+  Background="{DynamicResource AppBackgroundBrush}"
+  Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+  <Grid Margin="24">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <TextBlock Grid.Row="0" FontSize="24" FontWeight="SemiBold" Text="新建知识库" />
+    <TextBlock
+      Grid.Row="1"
+      Margin="0,6,0,16"
+      Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+      Text="一个知识库对应一个文件夹；资料和整理结果都放在里面。"
+      TextWrapping="Wrap" />
+
+    <Grid Grid.Row="2" Margin="0,0,0,12">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="96" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="知识库名称" />
+      <ui:TextBox
+        x:Name="NameBox"
+        Grid.Column="1"
+        PlaceholderText="例如：产品研究"
+        TextChanged="OnInputChanged" />
+    </Grid>
+
+    <Grid Grid.Row="3" Margin="0,0,0,12">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="96" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="场景模板" />
+      <ComboBox x:Name="SceneBox" Grid.Column="1" MinHeight="32" SelectedIndex="0">
+        <ComboBoxItem Content="通用" />
+        <ComboBoxItem Content="研究" />
+        <ComboBoxItem Content="读书" />
+        <ComboBoxItem Content="业务" />
+      </ComboBox>
+    </Grid>
+
+    <StackPanel Grid.Row="4">
+      <TextBlock Margin="0,0,0,6" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="目标说明（可选）" />
+      <ui:TextBox
+        x:Name="PurposeBox"
+        Height="110"
+        AcceptsReturn="True"
+        TextWrapping="Wrap"
+        VerticalContentAlignment="Top"
+        PlaceholderText="这个知识库为谁服务、回答哪些问题、哪些内容不收录。" />
+      <TextBlock x:Name="ErrorText" Margin="0,10,0,0" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" />
+    </StackPanel>
+
+    <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+      <ui:Button Content="取消" Click="OnCancel" Margin="0,0,8,0" />
+      <ui:Button x:Name="CreateButton" Content="创建知识库" Appearance="Primary" Click="OnCreate" IsEnabled="False" />
+    </StackPanel>
+  </Grid>
+</Window>

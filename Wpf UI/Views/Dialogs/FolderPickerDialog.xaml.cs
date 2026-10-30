@@ -83,6 +83,12 @@ namespace LLM_Wiki.Views.Dialogs
             InitializeComponent();
             DataContext = this;
             Loaded += OnLoaded;
+
+            // 代码创建的对话框不在可视树内，必须显式挂到窗口的 ContentDialogHost（WPF-UI 4.3）。
+            if (Application.Current?.MainWindow is { } window)
+            {
+                DialogHostEx = ContentDialogHost.GetForWindow(window);
+            }
         }
 
         private static void OnInitialDirectoryChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

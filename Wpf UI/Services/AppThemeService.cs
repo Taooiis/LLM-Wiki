@@ -5,7 +5,9 @@ using Wpf.Ui.Appearance;
 namespace LLM_Wiki.Services;
 
 /// <summary>
-/// 主题应用：切�?WPF-UI 基础主题，并替换本应用深/浅两�?Token 字典�?/// 只有 WPF-UI 那一层切换是不够的——本应用的背�?文字/状态色都是自建 key�?/// 不换字典就会出现「深色侧�?+ 浅色内容区」的混搭（设计文�?06§5）�?/// </summary>
+/// 主题应用：切换 WPF-UI 基础主题，并替换本应用的深/浅 Token 字典。
+/// 只切 WPF-UI 主题不够：背景、文字和状态色是自建 key，不换字典会出现深浅混搭。
+/// </summary>
 public static class AppThemeService
 {
     private static readonly Uri DarkUri = new("pack://application:,,,/Resources/Theme.Dark.xaml", UriKind.Absolute);
@@ -13,17 +15,12 @@ public static class AppThemeService
 
     private static string _current = "Dark";
 
-    /// <summary>应用主题（非 "Light" 一律按深色处理）。幂等，可重复调用�?/summary>
+    /// <summary>应用主题（非 Light 一律按深色处理）。幂等，可重复调用。</summary>
     public static void Apply(string theme)
     {
         var isLight = theme == "Light";
         var key = isLight ? "Light" : "Dark";
-
-        // 同一主题重复应用直接返回，避免不必要的资源字典重建和界面闪烁
-        if (_current == key)
-        {
-            return;
-        }
+        if (_current == key) return;
 
         ApplicationThemeManager.Apply(isLight ? ApplicationTheme.Light : ApplicationTheme.Dark);
 
@@ -34,7 +31,7 @@ public static class AppThemeService
             return;
         }
 
-        // 先移除已有主题字典，再追加目标字典；追加在末尾才能覆�?WPF-UI 的同�?key
+        // 先移除已有主题字典，再追加目标字典；追加在末尾才能覆盖 WPF-UI 的同名 key
         var merged = app.Resources.MergedDictionaries;
         for (var i = merged.Count - 1; i >= 0; i--)
         {

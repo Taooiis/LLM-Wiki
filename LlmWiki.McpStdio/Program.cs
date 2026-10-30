@@ -1,6 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
-
 using LLM_Wiki.Services;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -15,9 +12,6 @@ namespace LlmWiki.McpStdio;
 /// </summary>
 internal static class Program
 {
-    private static string TokenPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LLM_Wiki", "mcp.token");
-
     private static async Task<int> Main(string[] args)
     {
         string? kb = null;
@@ -51,9 +45,14 @@ internal static class Program
 
         var config = new ConfigService(AppContext.BaseDirectory);
         var files = new FileBridge(config);
-        var kbs = new KbService(config);
-        var prompts = new WorkflowPromptService(files);
-        var policy = new McpAccessPolicy(config);
+        var changes = new ChangeService(config);
+        var operations = new OperationStore(config);
+        var trash = new TrashService(config, changes, operations);
+        var reviews = new ReviewService(config);
+        var sources = new SourceService(config, changes, trash, operations);
+        var kbs = new KbService(config, reviews);
+        var composer = new PromptComposer(config, sources, changes, reviews);
+        var policy = new McpAccessPolicy(config) { AuthorizedKb = kb };
         var context = new McpServerContext { CurrentKb = kb };
 
         if (!kbs.ListKbs().Contains(kb, StringComparer.Ordinal))
@@ -62,13 +61,17 @@ internal static class Program
             return 3;
         }
 
-        if (allowWrite && !AuthorizeWrite(tokenFile))
+        if (allowWrite)
         {
-            Log("写入档需要启动参数 --allow-write 且提供有效写令牌（环境变量 LLM_WIKI_MCP_TOKEN 或 --token-file）");
-            return 4;
+            // V2 首轮 stdio 固定只读；保留参数解析只用于给出明确迁移提示，不静默提升权限。
+            Log("stdio 首轮只读：已忽略 --allow-write。需要写入请使用 HTTP MCP 的写入档并配置独立写令牌。");
+        }
+        if (!string.IsNullOrWhiteSpace(tokenFile))
+        {
+            Log("stdio 首轮只读，不需要 --token-file；已忽略。");
         }
 
-        policy.Mode = allowWrite ? McpMode.ReadWrite : McpMode.ReadOnly;
+        policy.Mode = McpMode.ReadOnly;
 
         var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
         {
@@ -82,7 +85,9 @@ internal static class Program
         builder.Services.AddSingleton(config);
         builder.Services.AddSingleton(files);
         builder.Services.AddSingleton(kbs);
-        builder.Services.AddSingleton(prompts);
+        builder.Services.AddSingleton(composer);
+        builder.Services.AddSingleton(reviews);
+        builder.Services.AddSingleton(sources);
         builder.Services.AddSingleton(policy);
         builder.Services.AddSingleton(context);
         builder.Services.AddSingleton<McpKnowledgeService>();
@@ -93,38 +98,9 @@ internal static class Program
             .WithPrompts<McpKnowledgePrompts>()
             .WithResources<McpKnowledgeResources>();
 
-        Log(allowWrite ? "已启动（写入档）" : "已启动（只读）");
+        Log("已启动（只读）");
         await builder.Build().RunAsync();
         return 0;
-    }
-
-    /// <summary>写令牌必须与桌面端保存的令牌一致；只接受环境变量或本地密钥文件。</summary>
-    private static bool AuthorizeWrite(string? tokenFile)
-    {
-        var provided = Environment.GetEnvironmentVariable("LLM_WIKI_MCP_TOKEN")?.Trim();
-        if (!string.IsNullOrWhiteSpace(tokenFile))
-        {
-            try { provided = File.ReadAllText(tokenFile).Trim(); }
-            catch (Exception e)
-            {
-                Log("读取令牌文件失败：" + e.Message);
-                return false;
-            }
-        }
-
-        if (string.IsNullOrEmpty(provided)) return false;
-
-        try
-        {
-            var stored = ProtectedData.Unprotect(File.ReadAllBytes(TokenPath), null, DataProtectionScope.CurrentUser);
-            var expected = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(stored));
-            var actual = Encoding.UTF8.GetBytes(provided);
-            return actual.Length == expected.Length && CryptographicOperations.FixedTimeEquals(actual, expected);
-        }
-        catch
-        {
-            return false;
-        }
     }
 
     private static void Log(string message) => Console.Error.WriteLine($"[llm-wiki-stdio] {message}");

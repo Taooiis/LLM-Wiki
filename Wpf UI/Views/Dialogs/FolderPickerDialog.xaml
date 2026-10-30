@@ -8,8 +8,10 @@
   Title="选择文件夹"
   PrimaryButtonText="确定"
   SecondaryButtonText="取消"
+  CloseButtonText=""
   Width="600"
   Height="500"
+  Style="{StaticResource {x:Type ui:ContentDialog}}"
   mc:Ignorable="d">
   <Grid Margin="12">
     <Grid.RowDefinitions>
@@ -81,7 +83,7 @@
     </Grid>
 
     <!-- 文件夹列表 -->
-    <Grid Grid.Row="2">
+    <Grid Grid.Row="2" MinHeight="320">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="300" />
         <ColumnDefinition Width="*" />
@@ -92,7 +94,7 @@
         x:Name="DriveList"
         Grid.Column="0"
         Margin="0,0,8,0"
-        Height="100"
+        ItemsSource="{Binding Drives}"
         SelectionChanged="Drive_SelectionChanged">
         <ui:ListView.ItemTemplate>
           <DataTemplate>
@@ -105,11 +107,12 @@
       <ui:ListView
         x:Name="FolderList"
         Grid.Column="1"
+        ItemsSource="{Binding Folders}"
         SelectionChanged="Folder_SelectionChanged">
         <ui:ListView.ItemTemplate>
           <DataTemplate>
             <TextBlock>
-              <Run Text="{Binding Name}" />
+              <Run Text="{Binding Name, Mode=OneWay}" />
               <Run Text=" (目录)" />
             </TextBlock>
           </DataTemplate>

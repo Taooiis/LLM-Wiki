@@ -17,11 +17,21 @@ public sealed class McpKnowledgeTools(McpKnowledgeService service)
         [Description("相对目录路径，例如 wiki/concepts；省略为库根")] string? relative_dir = null)
         => service.ListTree(kb, relative_dir);
 
-    [McpServerTool(Name = "read_file", ReadOnly = true), Description("读取知识库内 md/txt/json 文本文件；返回内容、编码、大小与版本号。")]
+    [McpServerTool(Name = "read_file", ReadOnly = true), Description("分段读取知识库内 md/txt/json 文本文件；返回内容、原字节版本、总字节、nextCursor 与 complete。")]
     public string ReadFile(
         [Description("知识库标识")] string kb,
-        [Description("相对知识库根的文件路径，例如 wiki/index.md")] string relative_path)
-        => service.ReadFile(kb, relative_path);
+        [Description("相对知识库根的文件路径，例如 wiki/index.md")] string relative_path,
+        [Description("可选：首次读取返回的 version；续读时必须一致")] string? version = null,
+        [Description("可选：上一段返回的 nextCursor")] string? cursor = null)
+        => service.ReadFile(kb, relative_path, version, cursor);
+
+    [McpServerTool(Name = "read_source_content", ReadOnly = true), Description("读取原格式资料（md/txt/docx/xlsx）的临时内容；不落盘、不生成 Markdown 副本，失败或截断会明确返回。")]
+    public string ReadSourceContent(
+        [Description("知识库标识")] string kb,
+        [Description("raw/sources/ 下的相对路径，例如 raw/sources/需求.docx")] string relative_path,
+        [Description("可选：首次读取返回的 sourceVersion；续读时必须一致")] string? version = null,
+        [Description("可选：上一段返回的 nextCursor")] string? cursor = null)
+        => service.ReadSourceContent(kb, relative_path, version, cursor);
 
     [McpServerTool(Name = "search_content", ReadOnly = true), Description("在 wiki/ 与 raw/sources/ 的文本文件中搜索关键词；返回文件相对路径与不超过 200 字符的片段。")]
     public string SearchContent(
@@ -35,13 +45,14 @@ public sealed class McpKnowledgeTools(McpKnowledgeService service)
         [Description("知识库标识")] string kb)
         => service.GetPendingChanges(kb);
 
-    [McpServerTool(Name = "write_wiki_file"), Description("写入 wiki/ 下的 md/txt 文件。默认档位不可用，会返回 READ_ONLY_MODE。expected_version 用于乐观并发，冲突时返回 VERSION_CONFLICT。")]
+    [McpServerTool(Name = "write_wiki_file"), Description("写入 wiki/ 下的 md/txt 文件。默认档位不可用。覆盖必须带 expected_version；新建必须 expectedAbsent=true，二者互斥。人工修订保护返回 MANUAL_REVIEW_REQUIRED。")]
     public string WriteWikiFile(
         [Description("知识库标识")] string kb,
         [Description("以 wiki/ 开头的相对路径，例如 wiki/synthesis/总结.md")] string relative_path,
         [Description("完整文件内容")] string content,
-        [Description("可选：读取时返回的 version，用于防止覆盖用户修改")] string? expected_version = null)
-        => service.WriteWikiFile(kb, relative_path, content, expected_version);
+        [Description("覆盖已有文件时必填：读取返回的 version")] string? expected_version = null,
+        [Description("新建文件时必填：显式声明目标不存在")] bool expected_absent = false)
+        => service.WriteWikiFile(kb, relative_path, content, expected_version, expected_absent);
 }
 
 /// <summary>MCP Prompts（设计 08§5.2）：七张工作流卡共用 WorkflowPromptService。</summary>

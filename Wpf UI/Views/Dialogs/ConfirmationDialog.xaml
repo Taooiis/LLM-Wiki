@@ -8,6 +8,7 @@
   Title="确认"
   PrimaryButtonText="确认"
   SecondaryButtonText="取消"
+  CloseButtonText=""
   IsSecondaryButtonEnabled="True"
   Style="{StaticResource {x:Type ui:ContentDialog}}"
   mc:Ignorable="d"

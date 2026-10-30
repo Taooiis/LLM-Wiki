@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 namespace LLM_Wiki.Share;
@@ -27,8 +28,7 @@ public class ShareService(ConfigService config)
 {
     // 存储路径与服务实例每次请求现取：改路径后分享立刻跟随新目录（不再固化构造时的旧值）
     private string Wikis => config.WikisDir;
-    private FileBridge Files => new(config);
-    private KbService Kbs => new(config);
+    private KbService Kbs => new(config, new ReviewService(config));
     private IHost? _host;
     private IApplicationBuilder? _app;
     private int _port;
@@ -37,6 +37,11 @@ public class ShareService(ConfigService config)
 
     public bool Running => _host != null;
     public int Port => _port;
+    /// <summary>本次分享绑定的知识库；切换当前库不会改变它。</summary>
+    public string BoundKb { get; private set; } = "";
+
+    /// <summary>开始/停止/换 PIN 后通知 UI；状态以服务字段为准。</summary>
+    public event Action? Changed;
 
     /// <summary>
     /// 本次分享的访问 PIN（4 位数字，每次开启重新生成）。
@@ -60,21 +65,29 @@ public class ShareService(ConfigService config)
 
         Pin = Random.Shared.Next(1000, 10000).ToString();
         error = "";
+        try { Changed?.Invoke(); } catch { }
         return true;
     }
 
     /// <summary>
     /// 启动服务。port=0 时系统分配一个空闲端口。
     /// </summary>
-    public bool Start(int port, out string error)
+    public bool Start(string kb, int port, out string error)
     {
         if (_host != null) { error = "服务已在运行"; return false; }
+        if (!Kbs.KbExists(kb)) { error = "请选择一个存在的知识库再启动分享"; return false; }
+        BoundKb = kb;
         _port = port;
         // 每次开启换新 PIN：关掉再开，旧链接立即失效
         Pin = Random.Shared.Next(1000, 10000).ToString();
         try
         {
             _host = Host.CreateDefaultBuilder()
+                .ConfigureServices(services =>
+                {
+                    services.RemoveAll<IHostLifetime>();
+                    services.AddSingleton<IHostLifetime, NoopHostLifetime>();
+                })
                 .ConfigureWebHostDefaults(web =>
                 {
                     web.UseKestrel(opt =>
@@ -87,6 +100,15 @@ public class ShareService(ConfigService config)
                 })
                 .Build();
             _host.Start();
+            var hostRef = _host;
+            hostRef.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping.Register(() =>
+            {
+                if (!ReferenceEquals(_host, hostRef)) return;
+                _host = null;
+                Pin = "";
+                BoundKb = "";
+                try { Changed?.Invoke(); } catch { }
+            });
 
             // mDNS 应答器：让手机用 llmwiki.local:端口 访问分享页，免手输 IP。
             // 5353 被占（机器上另有 Bonjour 等）时静默跳过，不影响 IP/二维码路径。
@@ -97,12 +119,14 @@ public class ShareService(ConfigService config)
                 ?? [$"http://localhost:{_port}/"];
             ParseFirstAddress(_addresses.FirstOrDefault());
             error = "";
+            try { Changed?.Invoke(); } catch { }
             return true;
         }
         catch (Exception e)
         {
             _host = null;
             Pin = "";
+            BoundKb = "";
             error = e.Message;
             return false;
         }
@@ -110,14 +134,26 @@ public class ShareService(ConfigService config)
 
     public void Stop()
     {
-        if (_host != null)
+        var host = _host;
+        _host = null;
+        Pin = "";
+        BoundKb = "";
+        if (host != null)
         {
-            try { _host.StopAsync(TimeSpan.FromSeconds(2)).GetAwaiter().GetResult(); }
-            catch { /* 尽力而为：Dispose 兜底 */ }
-            _host.Dispose();
-            _host = null;
-            Pin = "";
+            // Kestrel 的 Dispose 可能等待活动连接；放到后台完成，UI 最多等端口释放，不冻结窗口。
+            var cleanup = Task.Run(() =>
+            {
+                try
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                    host.StopAsync(cts.Token).GetAwaiter().GetResult();
+                }
+                catch { }
+                try { host.Dispose(); } catch { }
+            });
+            try { cleanup.Wait(TimeSpan.FromSeconds(1.5)); } catch { }
         }
+        try { Changed?.Invoke(); } catch { }
         // mDNS 应答器一起收掉：不在分享就不该应答域名查询
         _mdns?.Dispose();
         _mdns = null;
@@ -217,25 +253,24 @@ public class ShareService(ConfigService config)
                 await ctx.Response.WriteAsync(html);
             });
 
-            // 列库（不带 root，不泄露绝对路径）
+            // 只返回本次绑定的库，不暴露根目录下的其他库
             endpoints.MapGet("/api/kbs", ctx =>
             {
                 var node = new JsonObject();
                 var arr = new JsonArray();
-                foreach (var k in Kbs.ListKbs()) arr.Add(k);
+                if (!string.IsNullOrEmpty(BoundKb)) arr.Add(BoundKb);
                 node["kbs"] = arr;
+                node["bound"] = BoundKb;
                 return WriteJson(ctx, node);
             });
 
-            // 目录树
+            // 目录树：只允许绑定库
             endpoints.MapGet("/api/tree", ctx =>
             {
-                var kb = ctx.Request.Query["kb"];
-                if (string.IsNullOrWhiteSpace(kb))
+                var kb = ctx.Request.Query["kb"].ToString();
+                if (string.IsNullOrWhiteSpace(kb) || !kb.Equals(BoundKb, StringComparison.OrdinalIgnoreCase))
                     return Forbidden404(ctx);
-                if (!Directory.Exists(Path.Combine(Wikis, kb!)))
-                    return Forbidden404(ctx);
-                var tree = Files.Tree(kb!);
+                var tree = BuildBoundTree(Path.Combine(Wikis, BoundKb));
                 var node = new JsonObject { ["tree"] = JsonSerializer.SerializeToNode(tree) };
                 return WriteJson(ctx, node);
             });
@@ -268,8 +303,10 @@ public class ShareService(ConfigService config)
         if (m.Success && int.TryParse(m.Groups[1].Value, out var p)) _port = p;
     }
 
-    /// <summary>带 PIN 的访问地址（二维码与分享链接用）。</summary>
-    public string AccessUrl(string address) =>
+    /// <summary>干净访问地址（不含 PIN）；二维码与复制地址默认用它，PIN 单独输入。</summary>
+    public string AccessUrl(string address) => address;
+
+    public string AccessUrlWithPin(string address) =>
         string.IsNullOrEmpty(Pin) ? address : address + (address.Contains('?') ? "&" : "?") + "pin=" + Pin;
 
     /// <summary>请求是否已带对 PIN（只认 cookie：URL 里的 ?pin= 在上面已换成 cookie 并重定向）。</summary>
@@ -287,7 +324,7 @@ public class ShareService(ConfigService config)
         <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width,initial-scale=1">
-        <title>输入 PIN · LLM Wiki 只读页</title>
+        <title>输入访问码 · LLM Wiki 只读页</title>
         <style>
           :root { color-scheme: light dark; }
           body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: #f6f7f9; }
@@ -302,9 +339,9 @@ public class ShareService(ConfigService config)
         </head>
         <body>
           <form method="get" action="/">
-            <h1>输入 PIN</h1>
-            <p>PIN 显示在电脑端「分享」页面，4 位数字</p>
-            <input name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" autofocus required aria-label="4 位 PIN">
+            <h1>输入访问码</h1>
+            <p>访问码显示在电脑端「连接与分享 → 浏览分享」，4 位数字</p>
+            <input name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" autofocus required aria-label="4 位访问码">
             <button type="submit">进入</button>
           </form>
         </body>
@@ -323,42 +360,83 @@ public class ShareService(ConfigService config)
         return Task.CompletedTask;
     }
 
-    /// <summary>白名单文件响应：SafeJoin 校验 → 只下发可文本文件。越权返回 400。</summary>
+    /// <summary>白名单文件响应：只允许绑定库，只允许资料/知识文件；非文本按原字节下载。</summary>
     private Task SendFile(HttpContext ctx, string? kb, string? path, bool inline)
     {
-        if (string.IsNullOrWhiteSpace(kb) || string.IsNullOrWhiteSpace(path))
+        if (string.IsNullOrWhiteSpace(kb) || string.IsNullOrWhiteSpace(path)
+            || !kb.Equals(BoundKb, StringComparison.OrdinalIgnoreCase))
             return Forbidden400(ctx);
 
-        // 路径校验（同 PathGuard，拒绝 .. 越界）
         var safe = PathGuard.SafeJoin(Wikis, kb, path);
-        if (safe == null)
-            return Forbidden400(ctx);
-
-        // 后缀白名单：只下发 md/txt 原件与 office 转换副本
-        if (!FileHelper.IsTextFile(Path.GetFileName(safe)))
-            return Forbidden400(ctx);
-
+        if (safe == null) return Forbidden400(ctx);
+        var name = Path.GetFileName(safe);
+        var rel = path.Replace('\\', '/');
+        if (!AllowedShareFile(rel, name)) return Forbidden400(ctx);
         if (!File.Exists(safe))
         {
             ctx.Response.StatusCode = 404;
             return Task.CompletedTask;
         }
 
-        var content = File.ReadAllText(safe);
         ctx.Response.ContentType = GuessType(safe);
-        if (!inline)
+        if (!inline || !SourceRules.IsText(name))
             ctx.Response.Headers["Content-Disposition"] =
-                new ContentDispositionHeaderValue("attachment") { FileName = Path.GetFileName(safe) }.ToString();
-        return ctx.Response.WriteAsync(content);
+                new ContentDispositionHeaderValue("attachment") { FileName = name }.ToString();
+        return ctx.Response.SendFileAsync(safe);
     }
 
     private static string GuessType(string path) =>
         Path.GetExtension(path)?.ToLowerInvariant() switch
         {
-            ".md" => "text/markdown",
-            ".txt" => "text/plain",
+            ".md" => "text/markdown; charset=utf-8",
+            ".txt" => "text/plain; charset=utf-8",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             _ => "application/octet-stream",
         };
+
+    /// <summary>浏览树只含资料、知识和规则文件；不包含隐藏状态与操作日志。</summary>
+    private static TreeItem[] BuildBoundTree(string root)
+    {
+        return BuildDir(root, root, 0);
+    }
+
+    private static TreeItem[] BuildDir(string dir, string root, int depth)
+    {
+        if (depth > 6) return [];
+        List<(string Name, bool IsDir, string Full)> entries;
+        try
+        {
+            entries = [.. Directory.EnumerateFileSystemEntries(dir)
+                .Select(p => (Path.GetFileName(p), Directory.Exists(p), p))
+                .Where(e => e.Item1.Length > 0 && !e.Item1.StartsWith('.'))
+                .Select(e => (e.Item1, e.Item2, e.p))];
+        }
+        catch { return []; }
+
+        var list = new List<TreeItem>();
+        foreach (var (name, isDir, full) in entries
+                     .OrderBy(e => e.IsDir ? 0 : 1)
+                     .ThenBy(e => e.Name, StringComparer.Ordinal))
+        {
+            var rel = Path.GetRelativePath(root, full).Replace('\\', '/');
+            if (isDir)
+            {
+                list.Add(new TreeItem(name, "dir", BuildDir(full, root, depth + 1), rel));
+                continue;
+            }
+            if (!AllowedShareFile(rel, name)) continue;
+            list.Add(new TreeItem(name, "file", null, rel));
+        }
+        return [.. list];
+    }
+
+    private static bool AllowedShareFile(string rel, string name)
+        => (rel.StartsWith("raw/sources/", StringComparison.OrdinalIgnoreCase) && SourceRules.IsSupported(name))
+           || (rel.StartsWith("wiki/", StringComparison.OrdinalIgnoreCase) && SourceRules.IsText(name)
+               && !name.Equals("log.md", StringComparison.OrdinalIgnoreCase))
+           || rel.Equals("purpose.md", StringComparison.OrdinalIgnoreCase)
+           || rel.Equals("schema.md", StringComparison.OrdinalIgnoreCase);
 
     private static async Task<string> ReadShareUiAsync()
     {

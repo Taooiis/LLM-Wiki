@@ -1,4 +1,5 @@
-﻿using LLM_Wiki.Views.Pages;
+using System.Windows;
+
 using LLM_Wiki.Views.Windows;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -6,81 +7,30 @@ using Microsoft.Extensions.Hosting;
 
 using Wpf.Ui;
 
-namespace LLM_Wiki.Services
+namespace LLM_Wiki.Services;
+
+/// <summary>应用宿主：创建主窗口；具体起始页面由主窗口按上次访问页恢复。</summary>
+public class ApplicationHostService : IHostedService
 {
-    /// <summary>
-    /// Managed host of the application.
-    /// </summary>
-    public class ApplicationHostService : IHostedService
+    private readonly IServiceProvider _serviceProvider;
+    private INavigationWindow? _navigationWindow;
+
+    public ApplicationHostService(IServiceProvider serviceProvider) => _serviceProvider = serviceProvider;
+
+    public Task StartAsync(CancellationToken cancellationToken)
     {
-        private readonly IServiceProvider _serviceProvider;
-
-        private INavigationWindow? _navigationWindow;
-
-        public ApplicationHostService(IServiceProvider serviceProvider)
+        if (!Application.Current.Windows.OfType<MainWindow>().Any())
         {
-            _serviceProvider = serviceProvider;
-        }
-
-        /// <summary>
-        /// Triggered when the application host is ready to start the service.
-        /// </summary>
-        /// <param name="cancellationToken">Indicates that the start process has been aborted.</param>
-        public async Task StartAsync(CancellationToken cancellationToken)
-        {
-            await HandleActivationAsync();
-            SyncMcpCurrentKb();
-        }
-
-        /// <summary>把当前知识库同步给 MCP 服务（Prompts 无 kb 参数，只能跟随当前库）。</summary>
-        private void SyncMcpCurrentKb()
-        {
-            var mainVm = _serviceProvider.GetService<ViewModels.Windows.MainWindowViewModel>();
-            var context = _serviceProvider.GetService<McpServerContext>();
-            if (mainVm == null || context == null) return;
-
-            context.CurrentKb = mainVm.CurrentKb;
-            mainVm.PropertyChanged += (_, e) =>
+            _navigationWindow = (_serviceProvider.GetService(typeof(INavigationWindow)) as INavigationWindow)!;
+            _navigationWindow.ShowWindow();
+            _ = Task.Run(() =>
             {
-                if (e.PropertyName == nameof(ViewModels.Windows.MainWindowViewModel.CurrentKb))
-                {
-                    context.CurrentKb = mainVm.CurrentKb;
-                }
-            };
+                try { _serviceProvider.GetService<UpdateService>()?.CheckAsync(); }
+                catch { }
+            });
         }
-
-        /// <summary>
-        /// Triggered when the application host is performing a graceful shutdown.
-        /// </summary>
-        /// <param name="cancellationToken">Indicates that the shutdown process should no longer be graceful.</param>
-        public async Task StopAsync(CancellationToken cancellationToken)
-        {
-            await Task.CompletedTask;
-        }
-
-        /// <summary>
-        /// Creates main window during activation.
-        /// </summary>
-        private async Task HandleActivationAsync()
-        {
-            if (!Application.Current.Windows.OfType<MainWindow>().Any())
-            {
-                _navigationWindow = (
-                    _serviceProvider.GetService(typeof(INavigationWindow)) as INavigationWindow
-                )!;
-                _navigationWindow!.ShowWindow();
-
-                _navigationWindow.Navigate(typeof(Views.Pages.DashboardPage));
-
-                // 启动后异步检查更新（不阻塞）
-                _ = Task.Run(() =>
-                {
-                    var updater = _serviceProvider.GetService<UpdateService>();
-                    updater?.CheckAsync();
-                });
-            }
-
-            await Task.CompletedTask;
-        }
+        return Task.CompletedTask;
     }
+
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

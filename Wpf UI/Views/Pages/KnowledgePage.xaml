@@ -1,0 +1,180 @@
+<Page
+  x:Class="LLM_Wiki.Views.Pages.KnowledgePage"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:controls="clr-namespace:LLM_Wiki.Controls"
+  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+  xmlns:dialogs="clr-namespace:LLM_Wiki.Views.Dialogs"
+  xmlns:local="clr-namespace:LLM_Wiki.Views.Pages"
+  xmlns:vm="clr-namespace:LLM_Wiki.ViewModels.Pages"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  Title="知识"
+  d:DataContext="{d:DesignInstance local:KnowledgePage, IsDesignTimeCreatable=False}"
+  d:DesignHeight="700"
+  d:DesignWidth="1100"
+  ui:Design.Background="{DynamicResource ApplicationBackgroundBrush}"
+  ui:Design.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+  Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+  mc:Ignorable="d">
+  <Page.Resources>
+    <dialogs:UnsavedChangesDialog x:Key="UnsavedDlg" />
+    <HierarchicalDataTemplate DataType="{x:Type vm:KnowledgeTreeNode}" ItemsSource="{Binding VisibleChildren}">
+      <StackPanel Orientation="Horizontal">
+        <ui:SymbolIcon Symbol="{Binding IconKey, Converter={StaticResource FileNodeIcon}}" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" />
+        <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+      </StackPanel>
+    </HierarchicalDataTemplate>
+  </Page.Resources>
+
+  <Grid Margin="{StaticResource PageContentMargin}">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+
+    <Grid Grid.Row="0" Margin="0,0,0,12">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <StackPanel Grid.Column="0">
+        <TextBlock Style="{StaticResource PageTitleText}" Margin="0" Text="知识" />
+        <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis">
+          <Run Text="{Binding ViewModel.SelectedKb, Mode=OneWay}" />
+          <Run Text=" · " />
+          <Run Text="{Binding ViewModel.PendingText, Mode=OneWay}" />
+          <Run Text=" · 默认只读；AI 维护的内容，手动修订需从“更多”进入" />
+        </TextBlock>
+      </StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+        <ui:Button Content="刷新" Icon="ArrowSync24" Command="{Binding ViewModel.RefreshCommand}" Margin="0,0,8,0" />
+        <ui:Button Content="打开文件夹" Icon="FolderOpen24" Command="{Binding ViewModel.OpenKbFolderCommand}" Margin="0,0,8,0" />
+        <ui:Button Content="复制路径" Icon="Copy24" Command="{Binding ViewModel.CopyPathCommand}" Margin="0,0,8,0" />
+        <ui:Button Content="更多 ▾" Click="OnMoreClick" />
+      </StackPanel>
+    </Grid>
+
+    <Grid Grid.Row="1">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="300" />
+        <ColumnDefinition Width="8" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+
+      <Grid Grid.Column="0">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <ui:TextBox
+          Grid.Row="0"
+          Margin="0,0,0,8"
+          PlaceholderText="筛选知识目录…"
+          Icon="Search24"
+          Text="{Binding ViewModel.SearchKeyword, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+        <TreeView
+          x:Name="KnowledgeTree"
+          Grid.Row="1"
+          ItemsSource="{Binding ViewModel.TreeItems}"
+          SelectedItemChanged="OnTreeSelected"
+          Background="Transparent"
+          BorderThickness="0"
+          ScrollViewer.VerticalScrollBarVisibility="Auto">
+          <TreeView.ItemContainerStyle>
+            <Style TargetType="TreeViewItem">
+              <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+              <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+              <Setter Property="Padding" Value="2,3" />
+            </Style>
+          </TreeView.ItemContainerStyle>
+        </TreeView>
+      </Grid>
+
+      <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" Background="Transparent" />
+
+      <Grid Grid.Column="2">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border
+          Grid.Row="0"
+          Margin="0,0,0,8"
+          Padding="12,8"
+          CornerRadius="8"
+          Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+          BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
+          BorderThickness="1"
+          Visibility="{Binding ViewModel.HasCurrentPage, Converter={StaticResource BoolToVis}}">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+              <TextBlock FontSize="18" FontWeight="SemiBold" Text="{Binding ViewModel.PageTitle}" />
+              <TextBlock FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="{Binding ViewModel.CurrentRelPath}" />
+            </StackPanel>
+            <TextBlock Grid.Column="1" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="只读阅读" />
+          </Grid>
+        </Border>
+
+        <StackPanel Grid.Row="1" Margin="0,0,0,8" Visibility="{Binding ViewModel.HasCurrentPage, Converter={StaticResource BoolToVis}}">
+          <ItemsControl ItemsSource="{Binding ViewModel.Links}" Visibility="{Binding ViewModel.HasLinks, Converter={StaticResource BoolToVis}}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Margin="0,0,6,6" Padding="8,3" Background="Transparent" BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" BorderThickness="1" Click="OnLinkClick" Tag="{Binding}">
+                  <TextBlock Text="{Binding Name, StringFormat='↗ {0}'}" Foreground="{DynamicResource AccentLightBrush}" />
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <ItemsControl ItemsSource="{Binding ViewModel.SourceRefs}" Visibility="{Binding ViewModel.HasSourceRefs, Converter={StaticResource BoolToVis}}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Margin="0,0,6,6" Padding="8,3" Background="Transparent" BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" BorderThickness="1" Click="OnSourceClick" Tag="{Binding}">
+                  <TextBlock Text="{Binding Name, StringFormat='来源：{0}'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <controls:DocumentWorkspace Grid.Row="2" DataContext="{Binding ViewModel.Workspace}">
+          <controls:DocumentWorkspace.EmptyAction>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+              <ui:Button Content="去资料页" Click="OnGoSourcesClick" Appearance="Primary" Margin="0,0,8,0" />
+              <ui:Button Content="去整理" Click="OnGoOrganizeClick" />
+            </StackPanel>
+          </controls:DocumentWorkspace.EmptyAction>
+        </controls:DocumentWorkspace>
+      </Grid>
+
+      <!-- 空知识 / 无库引导 -->
+      <Border
+        Grid.Column="0"
+        Grid.ColumnSpan="3"
+        Background="{DynamicResource AppBackgroundBrush}"
+        Visibility="{Binding ViewModel.ShowEmpty, Converter={StaticResource BoolToVis}}">
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="460">
+          <TextBlock FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" Text="{Binding ViewModel.EmptyTitle}" TextAlignment="Center" TextWrapping="Wrap" />
+          <TextBlock Margin="0,8,0,0" TextAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding ViewModel.EmptyDescription}" />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,16,0,0">
+            <ui:Button Content="新建知识库" Click="OnCreateKbClick" Appearance="Primary" Margin="0,0,8,0" Visibility="{Binding ViewModel.HasKb, Converter={StaticResource InvBoolToVis}}" />
+            <ui:Button Content="去资料页" Click="OnGoSourcesClick" Margin="0,0,8,0" Visibility="{Binding ViewModel.HasKb, Converter={StaticResource BoolToVis}}" />
+            <ui:Button Content="去整理" Click="OnGoOrganizeClick" Appearance="Primary" Visibility="{Binding ViewModel.HasKb, Converter={StaticResource BoolToVis}}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Grid>
+  </Grid>
+</Page>

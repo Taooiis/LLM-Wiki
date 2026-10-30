@@ -1,0 +1,109 @@
+<Window
+  x:Class="LLM_Wiki.Views.Dialogs.TrashWindow"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  Title="资料回收站"
+  Width="900"
+  Height="560"
+  MinWidth="760"
+  MinHeight="460"
+  WindowStartupLocation="CenterOwner"
+  Background="{DynamicResource AppBackgroundBrush}"
+  Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+  <Grid Margin="24">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <StackPanel Grid.Row="0">
+      <TextBlock FontSize="24" FontWeight="SemiBold" Text="资料回收站" />
+      <TextBlock
+        Margin="0,6,0,0"
+        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+        Text="回收站不是备份；整库删除或磁盘损坏会同时失去这里的内容。应用不会自动清理。"
+        TextWrapping="Wrap" />
+    </StackPanel>
+
+    <TextBlock
+      x:Name="SummaryText"
+      Grid.Row="1"
+      Margin="0,12,0,8"
+      Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+    <ListView
+      x:Name="EntryList"
+      Grid.Row="2"
+      ItemsSource="{Binding TrashEntries}"
+      SelectionChanged="OnSelectionChanged"
+      Background="Transparent"
+      BorderThickness="0">
+      <ListView.ItemTemplate>
+        <DataTemplate>
+          <Grid Margin="6,8" Width="780">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="200" />
+              <ColumnDefinition Width="120" />
+              <ColumnDefinition Width="90" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+              <TextBlock Text="{Binding OriginalName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+              <TextBlock Text="{Binding OriginalRel}" FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <TextBlock Grid.Column="1" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding DeletedAt}" />
+            <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding Reason}" TextTrimming="CharacterEllipsis" />
+            <StackPanel Grid.Column="3" VerticalAlignment="Center">
+              <TextBlock Text="{Binding SizeText}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+              <TextBlock Text="{Binding StatusText}" FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+            </StackPanel>
+          </Grid>
+        </DataTemplate>
+      </ListView.ItemTemplate>
+    </ListView>
+
+    <StackPanel Grid.Row="3" Margin="0,16,0,0">
+      <!-- 内联危险确认，不叠加第二个对话框 -->
+      <Border
+        x:Name="ConfirmBar"
+        Padding="12"
+        Margin="0,0,0,12"
+        CornerRadius="8"
+        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+        BorderBrush="{DynamicResource DangerBrush}"
+        BorderThickness="1"
+        Visibility="Collapsed">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock x:Name="ConfirmText" Grid.Column="0" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0" Foreground="{DynamicResource DangerBrush}" />
+          <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+            <ui:Button Content="取消" Click="OnCancelConfirm" Margin="0,0,8,0" />
+            <ui:Button Content="确认永久删除" Click="OnConfirmPurge" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <Grid>
+        <StackPanel Orientation="Horizontal">
+          <ui:Button x:Name="RestoreButton" Content="恢复" Click="OnRestore" Margin="0,0,8,0" IsEnabled="False" />
+          <ui:Button x:Name="ExportButton" Content="导出" Click="OnExport" Margin="0,0,8,0" IsEnabled="False" />
+          <ui:Button x:Name="PurgeButton" Content="永久删除" Click="OnPurge" IsEnabled="False" />
+          <ui:Button Content="清空回收站" Click="OnPurgeAll" Margin="8,0,0,0" />
+        </StackPanel>
+        <ui:Button HorizontalAlignment="Right" Content="关闭" Click="OnClose" />
+      </Grid>
+
+      <StackPanel x:Name="RenamePanel" Orientation="Horizontal" Margin="0,12,0,0" Visibility="Collapsed">
+        <TextBlock VerticalAlignment="Center" Text="同名文件已存在，另存名称：" />
+        <ui:TextBox x:Name="RenameBox" Width="320" Margin="8,0,8,0" />
+        <ui:Button Content="在此名称恢复" Click="OnRestoreWithName" />
+      </StackPanel>
+    </StackPanel>
+  </Grid>
+</Window>

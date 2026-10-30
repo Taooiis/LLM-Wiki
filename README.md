@@ -1,127 +1,58 @@
-# LLM Wiki 桌面客户端
+# LLM Wiki V2.0｜最终设计版
 
-<div align="center">
+LLM Wiki 是本地知识库维护工具：管理原始资料，把操作指令交给外部 AI 整理，再阅读和维护可追溯的知识。资料和知识保存在普通文件夹中，工具不内置模型或聊天。
 
-[![Release](https://img.shields.io/github/v/release/nashsu/llm_wiki?style=for-the-badge&color=brightgreen)](https://github.com/nashsu/llm_wiki/releases)
-[![License](https://img.shields.io/github/license/nashsu/llm_wiki?style=for-the-badge)](LICENSE)
-[![License](https://img.shields.io/github/languages/top/nashsu/llm_wiki?style=for-the-badge)]
+> 2026-10-30 定稿。最终设计规格，未把文档检查当成程序实施验收。现有能力由用户说明已实现，V2 改造仍需结合实际工程实施。
 
-</div>
+## 新版改造方向
 
-> **AI 链路不内置 LLM**：面板生成提示词 → 人复制给外部 Agent → Agent 改文件。
+主流程：**添加资料 → 整理知识 → 查看结果 → 确认处理**。
 
-![界面示意图](docs/screenshot-main.png)
+| 新入口 | 用途 | 原能力归属 |
+|---|---|---|
+| 知识 | 阅读、浏览分类、追溯来源 | 原目录浏览 |
+| 资料 | 添加、编辑、管理输入资料 | 原源文档 |
+| 整理 | 更新知识、提问分析、检查维护 | 原工作流与完整待处理清单 |
+| 连接与分享 | 浏览分享、外部 AI 工具 | 原分享与 MCP |
+| 知识库设置 | 当前库目标、结构规则、库管理 | 原部分配置与首页库操作 |
+| 应用设置 | 根目录、外观、版本 | 原配置与设置 |
+| 使用帮助 | 上手、流程、配置与排错 | 原小白指南 |
 
----
+取消独立统计首页和七卡并列工作流，相关底层能力保留并合并入口。待整理清单只在整理中心确认处理，复制操作指令不代表 AI 已执行完成。
 
-## 功能特性
+## 从这里开始
 
-| 功能 | 说明 |
-|------|------|
-| **知识库管理** | 多库切换、新建/删除知识库，支持 UNC 网络路径 |
-| **文件上传** | `.md`/`.txt`/`.docx`/`.xlsx` 四格式，Office 文件自动转 Markdown |
-| **文档编辑** | 内置编辑器，支持 Ctrl+S 保存，Esc 关闭，dirty 标记，toast 提示 |
-| **变更跟踪** | 自动记录 `raw/sources/` 变更，待处理变更列表勾选 |
-| **批量操作** | 选中变更 → 一键生成 Ingest 提示词 → 自动切到工作流页 |
-| **局域网共享** | 只读网页浏览，支持 mDNS (`llmwiki.local:端口`) |
-| **自动更新** | 启动检查 GitHub Releases，新版本 toast 提示 |
+- **整体方案**：[V2 改造设计包](设计文档/README.md)。
+- **功能取舍**：[改造总纲](设计文档/00_改造总纲与功能取舍.md)。
+- **页面交互**：[全局交互](设计文档/01_信息架构与全局交互.md)、[资料与知识](设计文档/02_资料与知识工作区.md)、[整理中心](设计文档/03_整理中心与AI协作闭环.md)。
+- **用户说明**：[使用与配置说明](设计文档/08_使用与配置说明.md)。
+- **开发实施**：[兼容迁移](设计文档/07_实现映射与兼容迁移.md)、[实施与验收](设计文档/09_分阶段实施与验收清单.md)。
 
----
+## 保留的能力与技术基线
 
-## 安装 & 运行
+支持多个知识库和 md/txt/docx/xlsx。上传文件按原格式、原字节保存在 raw/sources/，不生成 Markdown 副本；当前支持列表为 md/txt/docx/xlsx，PDF 暂不支持。外部 AI 通过可访问的文件路径或可选 MCP 执行任务，本应用不内置模型；可由用户主动启动已适配的外部 Agent，也可复制指令到外部工具执行。
 
-### 方式 1：直接运行发布版（推荐）
+浏览分享供可信局域网设备只读查看和下载。AI 工具与浏览分享权限独立；Windows 共享目录的读写由操作系统管理。更换根目录只切换读取位置，不自动搬迁数据。
 
-```powershell
-# 下载最新 Release 包后解压
-cd LlmWiki
-.\LlmWiki.exe
-```
+沿用 .NET 10、WPF、WPF-UI 4.3.0、MVVM 及全 WPF 桌面方案，保留现有文件结构。本次重整交互，不重选技术栈。
 
-✅ 已内附 .NET 10 Runtime，零依赖
+新增 [闭环补全规范](设计文档/11_闭环补全与状态恢复规范.md)：补齐外部修改检测、跨重启任务、结果变化核对、逐项确认、规则更新与记录失败恢复。
 
-### 方式 2：源码构建
+## 唯一设计基准
 
-```powershell
-git clone https://github.com/nashsu/llm_wiki.git
-cd llm_wiki/Wpf UI
-dotnet build -c Release
-dotnet publish -c Release -r win-x64 --self-contained
-```
+本目录仅保留新版设计。所有功能、交互、页面、配置和权限规则以 [新版设计包](设计文档/README.md) 为准，不需要阅读其他版本。
 
-> **WPF UI**：界面控件全部由 [WPF UI Library 4.2.0](https://github.com/lepo-co/wpf-ui) 提供；如启动异常请检查版本兼容性。
+- [完整设计文档](设计文档/完整版.md)：00—15 全部章节。
+- [数据与服务契约](设计文档/10_数据与服务契约.md)：文件结构、原格式存储、变更、日志、权限、MCP 与配置规则。
+- [整体概念图](设计文档/新版整体概念图.png)：布局示意，文字规范优先于图中示例。
 
----
+本版为最终定稿、待实施的设计规范。程序已有页面、存量知识库与现有客户端需要兼容，但不再依赖历史设计文档。开始开发前核实源码，实现后用构建、测试和实际操作更新验收状态。
 
-## 四格式说明
+无本机工具时的快捷交互见 [快捷整理与可恢复删除](设计文档/12_快捷整理与可恢复删除.md)：一次复制完整任务、结果勾选后一次确认、源资料先入回收站；整库永久删除另行确认。
 
-| 格式 | 上传方式 | 存储位置 | AI 引用格式 |
-|------|---------|---------|-------------|
-| `.md` / `.txt` | 直接入库 | `raw/sources/<name>` | `[来源: 文件名]` |
-| `.docx` | 成对转换 | `raw/original/<name>` + `raw/sources/<name>.md` | `[来源: 原文件名.docx]` |
-| `.xlsx` | 成对转换 | `raw/original/<name>` + `raw/sources/<name>.md` | `[来源: 原文件名.xlsx]` |
+最终新增：
 
-- **引用约定**：`[来源:]` 中的"文件名"永远是原件名
-- **大小上限**：20MB，转换失败不落盘
-
----
-
-## 提示词链路
-
-1. 进入**工作流页** → 生成**边界说明** → 复制 → 粘贴进 Agent 配置
-2. 生成**Ingest / Query / Lint / Compare** 提示词 → 复制 → 粘贴给 Agent 执行
-3. **Clean** 卡片：生成级联清理提示词（删摘要页、清 index、清失效链接）
-
-> 提示词含知识库**绝对路径**，在哪台机器生成就用哪台机器的路径。
-
----
-
-## 局域网共享 & 只读浏览
-
-### 主方案：多设备共享目录
-- 把知识库目录设为 Windows 共享；其它电脑配置存储路径为 `\\主机IP\wikis` 即可
-
-### 辅助方案：只读网页
-- 在**分享页**打开服务 → 扫描二维码或访问 `http://主机IP:8765/`
-- 支持目录树浏览、md/txt 预览、docx/xlsx 下载
-- 仅 GET：上传、编辑、删除、改配置、生成提示词均禁止
-
-> **安全**：仅在可信局域网使用，不得暴露公网。
-
----
-
-## FAQ
-
-| 问题 | 解决 |
-|------|------|
-| 端口 8765 占用 | 修改分享页端口后重启分享服务 |
-| GBK txt 显示乱码 | 自动检测编码，统一转存为 UTF-8 |
-| 删除知识库 | 输入库名二次确认；含 `raw/original/` 原件一并删除 |
-| 分享页二维码没生成 | 手动访问 `http://主机IP:端口/` |
-| WPF 界面网络/上传失败 | 右键 exe 以管理员身份运行 |
-
----
-
-## 项目结构
-
-```
-Wpf UI/
-├── Views/Pages/        # 6 个 Tab 页面
-├── ViewModels/Pages/   # CommunityToolkit.Mvvm ViewModels
-├── Services/           # 服务层：KbService, FileBridge, Share, Upload, ...
-├── Views/Dialogs/      # 弹窗：EditorDialog, FolderPickerDialog, ConfirmationDialog
-├── install/            # Inno Setup 安装脚本
-├── publish.ps1          # 一键发布脚本
-└── LLM Wiki.csproj      # WPF-UI 4.2.0 + .NET 10
-
-code/
-├── src/LlmWiki.App/    # 旧宿主内核层
-├── tests/LlmWiki.Tests/ # xUnit 单元测试
-└── publish.ps1         # 旧版发布脚本
-```
-
----
-
-## License
-
-MIT License - 详见 [LICENSE](LICENSE)
+- [本机 Agent 执行与任务导出](设计文档/13_本机Agent执行与任务导出.md)：本机启动优先、复制兜底、MCP 可组合。
+- [WPF-UI 4.3.0 控件映射](设计文档/14_WPFUI4.3组件与页面实现规范.md)：明确页面控件与公共组件。
+- [定稿与检查记录](设计文档/15_最终定稿与检查记录.md)：统一决策、终检和工程实施边界。
+- [最终压缩包](改造设计V2.7z)：根 README、16 个分章、完整版、使用说明与概念图。

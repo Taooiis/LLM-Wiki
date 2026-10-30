@@ -99,16 +99,35 @@
 
         <!-- 内容区：预览（只读展示） / 编辑（可写） -->
         <Grid Grid.Row="2" Margin="16,0,16,0">
-          <TextBox
-            Background="Transparent"
-            BorderThickness="0"
-            IsReadOnly="True"
-            TextWrapping="Wrap"
-            VerticalScrollBarVisibility="Auto"
-            FontSize="{StaticResource FontSizeBody}"
-            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-            Text="{Binding PreviewContent, Mode=OneWay}"
-            Visibility="{Binding IsPreviewContentVisible}" />
+          <Grid Visibility="{Binding IsPreviewContentVisible}">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock
+              Grid.Row="0"
+              Margin="0,0,0,8"
+              FontSize="{StaticResource FontSizeCaption}"
+              Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+              Text="{Binding ReadOnlyMessage}"
+              TextWrapping="Wrap"
+              Visibility="{Binding IsReadOnlyMode}" />
+            <controls:MarkdownView
+              Grid.Row="1"
+              Markdown="{Binding PreviewContent, Mode=OneWay}"
+              Visibility="{Binding IsMarkdownPreviewVisible}" />
+            <TextBox
+              Grid.Row="1"
+              Background="Transparent"
+              BorderThickness="0"
+              IsReadOnly="True"
+              TextWrapping="Wrap"
+              VerticalScrollBarVisibility="Auto"
+              FontSize="{StaticResource FontSizeBody}"
+              Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+              Text="{Binding PreviewContent, Mode=OneWay}"
+              Visibility="{Binding IsPlainPreviewVisible}" />
+          </Grid>
           <TextBox
             x:Name="EditorBox"
             AcceptsReturn="True"
@@ -136,25 +155,34 @@
             <TextBlock FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}">
               <Run Text="UTF-8" /><Run Text=" · " /><Run Text="{Binding FileTypeLabel, Mode=OneWay}" />
             </TextBlock>
-            <TextBlock
-              FontSize="{StaticResource FontSizeCaption}"
-              Foreground="{DynamicResource SystemFillColorDangerBrush}"
-              TextWrapping="Wrap"
-              Margin="0,4,0,0"
-              Text="{Binding SaveErrorMessage}"
-              Visibility="{Binding HasSaveError}" />
+            <StackPanel Visibility="{Binding HasSaveError}">
+              <TextBlock
+                FontSize="{StaticResource FontSizeCaption}"
+                Foreground="{DynamicResource DangerBrush}"
+                TextWrapping="Wrap"
+                Margin="0,4,0,0"
+                Text="{Binding SaveErrorMessage}" />
+              <ui:Button
+                Content="载入磁盘版本"
+                Command="{Binding ReloadDiskVersionCommand}"
+                Margin="0,6,0,0"
+                HorizontalAlignment="Left"
+                Appearance="Secondary" />
+            </StackPanel>
           </StackPanel>
-          <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+          <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding ShowSaveBar}">
             <ui:Button
               Content="取消"
               Command="{Binding CancelEditCommand}"
-              Margin="0,0,8,0"
-              Visibility="{Binding IsEditingContentVisible}" />
+              Margin="0,0,8,0" />
             <ui:Button
               Content="保存  (Ctrl+S)"
               Appearance="Primary"
               Command="{Binding SaveCommand}"
-              Visibility="{Binding IsEditingContentVisible}" />
+              Margin="0,0,8,0" />
+            <ui:Button
+              Content="完成编辑"
+              Command="{Binding CompleteEditingCommand}" />
           </StackPanel>
         </Grid>
       </Grid>

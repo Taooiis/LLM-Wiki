@@ -1,121 +1,225 @@
+using System.ComponentModel;
+using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 
 using LLM_Wiki.Services;
 using LLM_Wiki.ViewModels.Windows;
+using LLM_Wiki.Views.Dialogs;
+using LLM_Wiki.Views.Pages;
 
 using Wpf.Ui;
 using Wpf.Ui.Abstractions;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 
-namespace LLM_Wiki.Views.Windows
+namespace LLM_Wiki.Views.Windows;
+
+public partial class MainWindow : INavigationWindow
 {
-    public partial class MainWindow : INavigationWindow
+    public MainWindowViewModel ViewModel { get; }
+
+    private readonly ISnackbarService _snackbarService;
+    private readonly INavigationService _navigationService;
+    private readonly System.Windows.Threading.DispatcherTimer _statusTimer;
+    private bool _closeConfirmed;
+    private bool _syncingSearch;
+
+    public MainWindow(
+        MainWindowViewModel viewModel,
+        INavigationViewPageProvider navigationViewPageProvider,
+        INavigationService navigationService,
+        ISnackbarService snackbarService,
+        ConfigService configService)
     {
-        public MainWindowViewModel ViewModel { get; }
-        private readonly ISnackbarService _snackbarService;
-        private readonly INavigationService _navigationService;
+        ViewModel = viewModel;
+        _snackbarService = snackbarService;
+        _navigationService = navigationService;
+        DataContext = this;
 
-        /// <summary>״̬������ˢ�£�����ʵ�������ԣ���α��״̬������ĵ� 00��2����</summary>
-        private readonly System.Windows.Threading.DispatcherTimer _statusTimer;
+        AppThemeService.Apply(configService.Theme);
 
-        public MainWindow(
-            MainWindowViewModel viewModel,
-            INavigationViewPageProvider navigationViewPageProvider,
-            INavigationService navigationService,
-            ISnackbarService snackbarService,
-            LLM_Wiki.Services.ConfigService configService
-        )
+        InitializeComponent();
+        SetPageService(navigationViewPageProvider);
+        navigationService.SetNavigationControl(RootNavigation);
+        _snackbarService.SetSnackbarPresenter(SnackbarPresenter);
+
+        Closing += OnWindowClosing;
+
+        _statusTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        _statusTimer.Tick += (_, _) => ViewModel.RefreshStatusBar();
+        _statusTimer.Start();
+        ViewModel.RefreshStatusBar();
+
+        Loaded += (_, _) =>
         {
-            ViewModel = viewModel;
-            _snackbarService = snackbarService;
-            _navigationService = navigationService;
-            DataContext = this;
+            RootNavigation.Navigate(ViewModel.StartupPageType);
+        };
+    }
 
-            // ����Ӧ���Ѽ�ס�����⣨Ĭ�� Dark������ҳ�л���д�� config.json��
-            AppThemeService.Apply(configService.Theme);
-
-            InitializeComponent();
-            SetPageService(navigationViewPageProvider);
-
-            navigationService.SetNavigationControl(RootNavigation);
-
-            // ���� SnackbarPresenter ��ȫ�� toast ʹ��
-            _snackbarService.SetSnackbarPresenter(SnackbarPresenter);
-
-            // ״̬�� 2 ����ѯˢ�£���ȡ CurrentKb / WikisDir / ShareService.Running ��ʵֵ��
-            _statusTimer = new System.Windows.Threading.DispatcherTimer
+    private void OnKbPickerClick(object sender, RoutedEventArgs e)
+    {
+        var menu = new System.Windows.Controls.ContextMenu { PlacementTarget = KbPickerButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+        foreach (var kb in ViewModel.Kbs)
+        {
+            var item = new System.Windows.Controls.MenuItem
             {
-                Interval = TimeSpan.FromSeconds(2)
+                Header = kb,
+                IsCheckable = true,
+                IsChecked = kb.Equals(ViewModel.CurrentKb, StringComparison.Ordinal),
             };
-            _statusTimer.Tick += (_, _) => ViewModel.RefreshStatusBar();
-            _statusTimer.Start();
-            ViewModel.RefreshStatusBar();
+            var name = kb;
+            item.Click += async (_, _) => await ViewModel.SwitchKbAsync(name);
+            menu.Items.Add(item);
         }
+        if (menu.Items.Count > 0) menu.Items.Add(new System.Windows.Controls.Separator());
+        var create = new System.Windows.Controls.MenuItem { Header = "新建知识库…" };
+        create.Click += async (_, _) => await ShowCreateKbAsync();
+        menu.Items.Add(create);
+        var manage = new System.Windows.Controls.MenuItem { Header = "管理当前知识库" };
+        manage.Click += (_, _) => ViewModel.NavigateTo("kbsettings");
+        menu.Items.Add(manage);
+        menu.IsOpen = true;
+    }
 
-        /// <summary>Ctrl+K �۽�ȫ������������ĵ� 07��6����</summary>
-        protected override void OnPreviewKeyDown(KeyEventArgs e)
+    public async Task ShowCreateKbAsync()
+    {
+        var dialog = new CreateKbDialog(ViewModel.Kbs) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        await ViewModel.CreateKbAsync(dialog.KbName, dialog.Scene, dialog.Purpose);
+        await ViewModel.SwitchKbAsync(dialog.KbName);
+    }
+
+    private void OnHelpClick(object sender, RoutedEventArgs e) => ViewModel.NavigateTo("help");
+
+    private void OnFixStorageClick(object sender, RoutedEventArgs e) => ViewModel.NavigateTo("settings");
+
+    private void OnTopSearchKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
         {
-            base.OnPreviewKeyDown(e);
-
-            if (e.Key == Key.K && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                GlobalSearch.Focus();
-                e.Handled = true;
-            }
+            ViewModel.SearchQuery = TopSearchBox.Text;
+            ViewModel.OpenSearchCommand.Execute(null);
+            FocusSearchOverlay();
+            e.Handled = true;
         }
+    }
 
-        /// <summary>�����س��������Ƶ�����ƥ��ҳ�棨������/ҳ����ڣ�����ȫ����������</summary>
-        private void OnSearchQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+    private void OnTopSearchTextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_syncingSearch) return;
+        if (string.IsNullOrWhiteSpace(TopSearchBox.Text)) return;
+        if (!ViewModel.IsSearchOpen)
         {
-            var query = args.QueryText?.Trim();
-            if (string.IsNullOrEmpty(query))
-            {
-                return;
-            }
-
-            ViewModel.NavigateToNamedPage(query, _navigationService);
-            GlobalSearch.Text = string.Empty;
+            ViewModel.OpenSearchCommand.Execute(null);
+            FocusSearchOverlay();
+            _syncingSearch = true;
+            SearchOverlayBox.Text = TopSearchBox.Text;
+            _syncingSearch = false;
         }
+    }
 
-        /// <summary>������ݰ�ť �� С��ָ�ϡ�</summary>
-        private void OnGuideClick(object sender, RoutedEventArgs e)
+    private void FocusSearchOverlay()
+    {
+        Dispatcher.BeginInvoke(new Action(() =>
         {
-            _navigationService.Navigate(typeof(Views.Pages.GuidePage));
-        }
+            SearchOverlayBox.Focus();
+            SearchOverlayBox.CaretIndex = SearchOverlayBox.Text.Length;
+        }), System.Windows.Threading.DispatcherPriority.Input);
+    }
 
-        #region INavigationWindow methods
-
-        public INavigationView GetNavigation() => RootNavigation;
-
-        public bool Navigate(Type pageType) => RootNavigation.Navigate(pageType);
-
-        public void SetPageService(INavigationViewPageProvider navigationViewPageProvider) => RootNavigation.SetPageProviderService(navigationViewPageProvider);
-
-        public void ShowWindow() => Show();
-
-        public void CloseWindow() => Close();
-
-        private IServiceProvider? _serviceProvider;
-
-        public void SetServiceProvider(IServiceProvider serviceProvider)
+    private void OnSearchOverlayKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
         {
-            _serviceProvider = serviceProvider;
+            ViewModel.CloseSearchCommand.Execute(null);
+            e.Handled = true;
+            return;
         }
-
-        #endregion INavigationWindow methods
-
-        /// <summary>
-        /// Raises the closed event.
-        /// </summary>
-        protected override void OnClosed(EventArgs e)
+        if (e.Key == Key.Down)
         {
-            base.OnClosed(e);
-
-            _statusTimer.Stop();
-
-            // Make sure that closing this window will begin the process of closing the application.
-            Application.Current.Shutdown();
+            if (SearchResultList.Items.Count > 0)
+                SearchResultList.SelectedIndex = Math.Min(SearchResultList.Items.Count - 1, SearchResultList.SelectedIndex + 1);
+            e.Handled = true;
+            return;
         }
+        if (e.Key == Key.Up)
+        {
+            if (SearchResultList.Items.Count > 0)
+                SearchResultList.SelectedIndex = Math.Max(0, SearchResultList.SelectedIndex - 1);
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.Enter)
+        {
+            OpenSelectedSearchResult();
+            e.Handled = true;
+        }
+    }
+
+    private void OnSearchResultDoubleClick(object sender, MouseButtonEventArgs e) => OpenSelectedSearchResult();
+
+    private void OpenSelectedSearchResult()
+    {
+        var result = SearchResultList.SelectedItem as FileSearchResult;
+        if (result == null && SearchResultList.Items.Count > 0)
+            result = SearchResultList.Items[0] as FileSearchResult;
+        if (result == null) return;
+        ViewModel.OpenResult(result);
+        TopSearchBox.Text = "";
+    }
+
+    private void OnCloseSearchClick(object sender, RoutedEventArgs e) => ViewModel.CloseSearchCommand.Execute(null);
+
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        base.OnPreviewKeyDown(e);
+
+        if (e.Key == Key.K && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            ViewModel.OpenSearchCommand.Execute(null);
+            FocusSearchOverlay();
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.K && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            ViewModel.NavigateTo("kbsettings");
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.Escape && ViewModel.IsSearchOpen)
+        {
+            ViewModel.CloseSearchCommand.Execute(null);
+            e.Handled = true;
+        }
+    }
+
+    private async void OnWindowClosing(object? sender, CancelEventArgs e)
+    {
+        if (_closeConfirmed) return;
+        e.Cancel = true;
+        if (!await ViewModel.CanCloseAsync()) return;
+        _closeConfirmed = true;
+        Close();
+    }
+
+    #region INavigationWindow
+
+    public INavigationView GetNavigation() => RootNavigation;
+    public bool Navigate(Type pageType) => RootNavigation.Navigate(pageType);
+    public void SetPageService(INavigationViewPageProvider navigationViewPageProvider) => RootNavigation.SetPageProviderService(navigationViewPageProvider);
+    public void ShowWindow() => Show();
+    public void CloseWindow() => Close();
+
+    public void SetServiceProvider(IServiceProvider serviceProvider) { }
+
+    #endregion
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _statusTimer.Stop();
+        base.OnClosed(e);
+        Application.Current.Shutdown();
     }
 }

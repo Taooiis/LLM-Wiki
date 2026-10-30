@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -38,27 +39,35 @@ public sealed class McpService
     private readonly ConfigService _config;
     private readonly FileBridge _files;
     private readonly KbService _kbs;
-    private readonly WorkflowPromptService _prompts;
+    private readonly PromptComposer _composer;
+    private readonly ReviewService _reviews;
+    private readonly SourceService _sources;
     private readonly object _gate = new();
     private readonly List<McpCallRecord> _recentCalls = new();
     private WebApplication? _app;
     private string _token = "";
+    private string _writeToken = "";
 
     public McpService(
         ConfigService config,
         FileBridge files,
         KbService kbs,
-        WorkflowPromptService prompts,
+        PromptComposer composer,
+        ReviewService reviews,
+        SourceService sources,
         McpAccessPolicy policy,
         McpServerContext context)
     {
         _config = config;
         _files = files;
         _kbs = kbs;
-        _prompts = prompts;
+        _composer = composer;
+        _reviews = reviews;
+        _sources = sources;
         Policy = policy;
         Context = context;
         _token = LoadOrCreateToken();
+        _writeToken = LoadOrCreateWriteToken();
     }
 
     public McpAccessPolicy Policy { get; }
@@ -67,12 +76,18 @@ public sealed class McpService
 
     public bool Running => _app != null;
 
+    /// <summary>本次 MCP 会话绑定的库；不随桌面当前库切换。</summary>
+    public string BoundKb { get; private set; } = "";
+
     public int Port { get; private set; } = DefaultPort;
 
     /// <summary>是否监听局域网。默认仅 127.0.0.1（设计 08§7.1）。</summary>
     public bool AllowLan { get; private set; }
 
     public string Token => _token;
+
+    /// <summary>写权限独立令牌（设计 04§4.2）；只在写入档随请求头发送。</summary>
+    public string WriteToken => _writeToken;
 
     public string LastError { get; private set; } = "";
 
@@ -89,7 +104,7 @@ public sealed class McpService
     }
 
     /// <summary>切换档位；关闭即停止服务，开启失败时回退关闭（设计 08§4）。</summary>
-    public bool SetMode(McpMode mode, out string error)
+    public bool SetMode(string kb, McpMode mode, out string error)
     {
         error = "";
         if (mode == McpMode.Off)
@@ -100,19 +115,21 @@ public sealed class McpService
             return true;
         }
 
+        if (Running && !BoundKb.Equals(kb, StringComparison.OrdinalIgnoreCase)) Stop();
         var previous = Policy.Mode;
         Policy.Mode = mode;
-        if (!Running && !Start(out error))
+        if (!Running && !Start(kb, out error))
         {
             Policy.Mode = previous == McpMode.Off ? McpMode.Off : previous;
             return false;
         }
 
+        Policy.Mode = mode;
         RaiseChanged();
         return true;
     }
 
-    public bool Start(out string error)
+    public bool Start(string kb, out string error)
     {
         error = "";
         if (_app != null) return true;
@@ -121,6 +138,14 @@ public sealed class McpService
             error = "请先选择只读或写入档";
             return false;
         }
+        if (string.IsNullOrWhiteSpace(kb) || !Directory.Exists(Path.Combine(_config.WikisDir, kb)))
+        {
+            error = "请选择一个存在的知识库再开启 MCP 连接";
+            return false;
+        }
+        BoundKb = kb;
+        Policy.AuthorizedKb = kb;
+        Context.CurrentKb = kb;
 
         LastError = "";
         Port = DefaultPort;
@@ -133,6 +158,8 @@ public sealed class McpService
             });
 
             builder.Logging.ClearProviders();
+            builder.Services.RemoveAll<IHostLifetime>();
+            builder.Services.AddSingleton<IHostLifetime, NoopHostLifetime>();
             builder.WebHost.UseKestrel(opt =>
             {
                 if (AllowLan)
@@ -148,7 +175,9 @@ public sealed class McpService
             builder.Services.AddSingleton(_config);
             builder.Services.AddSingleton(_files);
             builder.Services.AddSingleton(_kbs);
-            builder.Services.AddSingleton(_prompts);
+            builder.Services.AddSingleton(_composer);
+            builder.Services.AddSingleton(_reviews);
+            builder.Services.AddSingleton(_sources);
             builder.Services.AddSingleton(Policy);
             builder.Services.AddSingleton(Context);
             builder.Services.AddSingleton<McpKnowledgeService>();
@@ -186,12 +215,26 @@ public sealed class McpService
                     ctx.Response.Headers.WWWAuthenticate = "Bearer";
                     return;
                 }
+                if (Policy.WriteEnabled && !IsWriteAuthorized(ctx.Request.Headers["X-LLM-Wiki-Write-Token"].ToString()))
+                {
+                    ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    ctx.Response.Headers.WWWAuthenticate = "Bearer";
+                    return;
+                }
 
                 await next();
             });
             app.MapMcp("/mcp");
             app.StartAsync().GetAwaiter().GetResult();
             _app = app;
+            app.Lifetime.ApplicationStopping.Register(() =>
+            {
+                if (!ReferenceEquals(_app, app)) return;
+                _app = null;
+                BoundKb = "";
+                Policy.AuthorizedKb = "";
+                RaiseChanged();
+            });
             LastError = "";
             RaiseChanged();
             return true;
@@ -199,6 +242,8 @@ public sealed class McpService
         catch (Exception e)
         {
             _app = null;
+            BoundKb = "";
+            Policy.AuthorizedKb = "";
             LastError = Summarize(e);
             error = LastError;
             return false;
@@ -207,13 +252,25 @@ public sealed class McpService
 
     public void Stop()
     {
-        if (_app == null) return;
-        try { _app.StopAsync(TimeSpan.FromSeconds(2)).GetAwaiter().GetResult(); }
-        catch { /* Dispose 兜底 */ }
-        try { _app.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
-        catch { }
+        var app = _app;
         _app = null;
+        BoundKb = "";
+        Policy.AuthorizedKb = "";
         LastError = "";
+        if (app != null)
+        {
+            var cleanup = Task.Run(() =>
+            {
+                try
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                    app.StopAsync(cts.Token).GetAwaiter().GetResult();
+                }
+                catch { }
+                try { app.DisposeAsync().AsTask().GetAwaiter().GetResult(); } catch { }
+            });
+            try { cleanup.Wait(TimeSpan.FromSeconds(1.5)); } catch { }
+        }
         RaiseChanged();
     }
 
@@ -223,9 +280,10 @@ public sealed class McpService
         error = "";
         if (AllowLan == allow) return true;
         var wasRunning = Running;
+        var kb = BoundKb;
         if (wasRunning) Stop();
         AllowLan = allow;
-        if (wasRunning && !Start(out error))
+        if (wasRunning && !Start(string.IsNullOrWhiteSpace(kb) ? Context.CurrentKb : kb, out error))
         {
             AllowLan = false;
             return false;
@@ -241,6 +299,14 @@ public sealed class McpService
         SaveToken(_token);
         RaiseChanged();
         return _token;
+    }
+
+    public string RegenerateWriteToken()
+    {
+        _writeToken = NewToken();
+        SaveWriteToken(_writeToken);
+        RaiseChanged();
+        return _writeToken;
     }
 
     public string[] LanEndpoints()
@@ -267,32 +333,33 @@ public sealed class McpService
         return $"{t[..4]}••••••••{t[^4..]}";
     }
 
-    /// <summary>客户端配置片段（HTTP 与 stdio 两种，设计 08§9）。</summary>
+    /// <summary>客户端配置片段（HTTP 与 stdio 两种）。写入档额外带独立写令牌头。</summary>
     public string ClientConfigJson()
     {
         var endpoint = Running ? LocalEndpoint : $"http://127.0.0.1:{DefaultPort}/mcp";
-        var http = $$"""
-            {
-              "mcpServers": {
-                "llm-wiki": {
-                  "type": "http",
-                  "url": "{{endpoint}}",
-                  "headers": { "Authorization": "Bearer {{_token}}" }
-                }
-              }
-            }
-            """;
+        var headers = $"{{ \"Authorization\": \"Bearer {_token}\" }}";
+        if (Policy.WriteEnabled)
+        {
+            headers = $"{{ \"Authorization\": \"Bearer {_token}\", \"X-LLM-Wiki-Write-Token\": \"{_writeToken}\" }}";
+        }
+        var http = "{\n"
+                   + "  \"mcpServers\": {\n"
+                   + "    \"llm-wiki\": {\n"
+                   + "      \"type\": \"http\",\n"
+                   + "      \"url\": \"" + endpoint + "\",\n"
+                   + "      \"headers\": " + headers + "\n"
+                   + "    }\n"
+                   + "  }\n"
+                   + "}";
         var exe = Path.Combine(AppContext.BaseDirectory, "LlmWiki.McpStdio.exe");
-        var stdio = $$"""
-            {
-              "mcpServers": {
-                "llm-wiki-stdio": {
-                  "command": "{{exe.Replace("\\", "\\\\")}}",
-                  "args": ["--kb", "{{Context.CurrentKb}}"]
-                }
-              }
-            }
-            """;
+        var stdio = "{\n"
+                    + "  \"mcpServers\": {\n"
+                    + "    \"llm-wiki-stdio\": {\n"
+                    + "      \"command\": \"" + exe.Replace("\\", "\\\\") + "\",\n"
+                    + "      \"args\": [\"--kb\", \"" + (string.IsNullOrWhiteSpace(BoundKb) ? Context.CurrentKb : BoundKb) + "\"]\n"
+                    + "    }\n"
+                    + "  }\n"
+                    + "}";
         return http + "\n\n// stdio（只读）\n" + stdio;
     }
 
@@ -304,6 +371,14 @@ public sealed class McpService
             if (_recentCalls.Count > 20) _recentCalls.RemoveAt(_recentCalls.Count - 1);
         }
         RaiseChanged();
+    }
+
+    private bool IsWriteAuthorized(string provided)
+    {
+        if (string.IsNullOrEmpty(provided)) return false;
+        var a = Encoding.UTF8.GetBytes(provided.Trim());
+        var b = Encoding.UTF8.GetBytes(_writeToken);
+        return a.Length == b.Length && CryptographicOperations.FixedTimeEquals(a, b);
     }
 
     private bool IsAuthorized(string header)
@@ -339,6 +414,40 @@ public sealed class McpService
 
     private static string TokenPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LLM_Wiki", "mcp.token");
+
+    private static string WriteTokenPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LLM_Wiki", "mcp.write.token");
+
+    private static string LoadOrCreateWriteToken()
+    {
+        try
+        {
+            if (File.Exists(WriteTokenPath))
+            {
+                var protectedBytes = File.ReadAllBytes(WriteTokenPath);
+                var raw = ProtectedData.Unprotect(protectedBytes, null, DataProtectionScope.CurrentUser);
+                var token = Encoding.UTF8.GetString(raw);
+                if (token.Length >= 32) return token;
+            }
+        }
+        catch { }
+
+        var created = NewToken();
+        SaveWriteToken(created);
+        return created;
+    }
+
+    private static void SaveWriteToken(string token)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(WriteTokenPath)!;
+            Directory.CreateDirectory(dir);
+            var bytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(token), null, DataProtectionScope.CurrentUser);
+            File.WriteAllBytes(WriteTokenPath, bytes);
+        }
+        catch { }
+    }
 
     private static string LoadOrCreateToken()
     {

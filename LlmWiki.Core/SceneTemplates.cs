@@ -60,7 +60,7 @@ public static class SceneTemplates
 
         - purpose.md：目标、关键问题、研究范围
         - schema.md：本文件（结构规则）
-        - raw/sources/：入库副本（.md/.txt；Word/Excel 上传时自动转换，原件在 raw/original/）；raw/assets/：图片
+        - raw/sources/：原始资料，保持源格式（md/txt/docx/xlsx），不转 Markdown；raw/assets/：图片
         - wiki/index.md：内容目录；wiki/log.md：操作历史；wiki/overview.md：全局摘要
         - wiki/entities/：人、组织、产品；wiki/concepts/：理论、方法、技术
         - wiki/sources/：源摘要；wiki/queries/：问答存档；wiki/synthesis/：跨源分析；wiki/comparisons/：并排对比
@@ -71,6 +71,7 @@ public static class SceneTemplates
         - 每页至少链接 2-3 个相关页面，使用 [[页面名]] 的 wiki 链接
         - 每个 wiki 页面顶部建议加 YAML frontmatter，含 sources: [] 记录贡献本页的源文件（删除级联清理依赖它）
         - 所有断言必须有源引用，格式 [来源: 文件名]
+        - 引用源资料时使用 raw/sources/ 下的真实文件名与扩展名，不得虚构同名 Markdown 副本
         {(isResearch ? "\n- 研究型库：synthesis/ 页优先沉淀跨源论点，每个论点标注支持/矛盾它的来源\n" : "")}
         """;
 }

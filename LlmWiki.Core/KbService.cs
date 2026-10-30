@@ -3,64 +3,95 @@ using System.IO;
 namespace LLM_Wiki.Services;
 
 /// <summary>
-/// 知识库生命周期：列表 / 建库骨架（含场景模板）/ 删库（spec D7 语义）。
-/// 依赖注入 config.WikisDir（来自 ConfigService），不自己读配置。
+/// 知识库生命周期：列表 / 建库骨架（含场景模板）/ 删库。
+/// 新建库不创建 raw/original；已有历史目录只兼容保留，不自动迁移。
 /// </summary>
-public class KbService(ConfigService config)
+public class KbService(ConfigService config, ReviewService reviews)
 {
-    private string WikisDir => config.WikisDir;
-    // 新建库的骨架目录（对照 Demo server.js:51-55，新增 raw/original）
     private static readonly string[] SkeletonDirs =
     [
-        "raw/sources", "raw/assets", "raw/original",
+        "raw/sources", "raw/assets",
         "wiki/entities", "wiki/concepts", "wiki/sources",
         "wiki/queries", "wiki/synthesis", "wiki/comparisons",
+        ".llmwiki",
     ];
 
-    /// <summary>现存库名列表（目录即库，跳过隐藏目录）。</summary>
-    public IReadOnlyList<string> ListKbs()
+    public IReadOnlyList<string> ListKbs() => ListKbsWithError().Kbs;
+
+    /// <summary>区分“没有知识库”和“根目录不可访问”，后者不能冒充无库引导。</summary>
+    public (IReadOnlyList<string> Kbs, string Error) ListKbsWithError()
     {
-        if (!Directory.Exists(config.WikisDir)) return [];
-        return Directory
-            .EnumerateDirectories(config.WikisDir)
-            .Select(d => Path.GetFileName(d))
-            .Where(n => !n.StartsWith('.') && PathGuard.ValidKb(n))
-            .OrderBy(n => n, StringComparer.Ordinal)
-            .ToArray();
+        if (!Directory.Exists(config.WikisDir))
+            return ([], "知识库根目录不存在或不可访问：" + config.WikisDir);
+        try
+        {
+            var list = Directory
+                .EnumerateDirectories(config.WikisDir)
+                .Select(d => Path.GetFileName(d))
+                .Where(n => !n.StartsWith('.') && PathGuard.ValidKb(n))
+                .OrderBy(n => n, StringComparer.Ordinal)
+                .ToArray();
+            return (list, "");
+        }
+        catch (Exception e)
+        {
+            return ([], "读取知识库根目录失败：" + e.Message);
+        }
     }
 
-    /// <summary>建库：校验名 → 骨架目录 + 默认文件 + .changes.json。已存在则补缺失骨架（幂等，同 Demo writeFile 存在即跳过）。</summary>
-    public string CreateKb(string name, string scene = "通用")
+    public bool KbExists(string? kb)
+        => !string.IsNullOrWhiteSpace(kb)
+           && PathGuard.ValidKb(kb)
+           && Directory.Exists(Path.Combine(config.WikisDir, kb));
+
+    public string KbRoot(string kb) => Path.GetFullPath(Path.Combine(config.WikisDir, kb));
+
+    /// <summary>建库：校验名 → 骨架 + 默认文件 + 初始状态。重名抛 <see cref="KbExistsException"/>，不改动已有库。</summary>
+    public string CreateKb(string name, string scene = "通用", string? purposeOverride = null)
     {
         if (!PathGuard.ValidKb(name))
             throw new ArgumentException("知识库名只允许中英文、数字、下划线、中划线", nameof(name));
 
         var root = Path.Combine(config.WikisDir, name);
+        if (Directory.Exists(root) && Directory.EnumerateFileSystemEntries(root).Any())
+            throw new KbExistsException(name);
+
         foreach (var d in SkeletonDirs) Directory.CreateDirectory(Path.Combine(root, d));
 
-        // 场景模板：只影响 purpose/schema 文案（spec 02 §5）
         var (purpose, schema) = SceneTemplates.Get(name, scene, DateTime.Today.ToString("yyyy-MM-dd"));
+        if (!string.IsNullOrWhiteSpace(purposeOverride)) purpose = purposeOverride.Trim();
+        var index = $"# {name} - 内容目录\n\n- [全局摘要](overview.md)\n- [操作历史](log.md)\n";
+        var overview = $"# {name} - 全局摘要\n\n（整理资料后自动更新）\n";
         var files = new Dictionary<string, string>
         {
             ["purpose.md"] = purpose + "\n",
             ["schema.md"] = schema + "\n",
-            ["wiki/index.md"] = $"# {name} - 内容目录\n\n- [全局摘要](overview.md)\n- [操作历史](log.md)\n",
+            ["wiki/index.md"] = index,
             ["wiki/log.md"] = $"# 操作历史\n\n- {DateTime.Today:yyyy-MM-dd} 创建知识库 {name}\n",
-            ["wiki/overview.md"] = $"# {name} - 全局摘要\n\n（Ingest 文档后自动更新）\n",
+            ["wiki/overview.md"] = overview,
         };
         foreach (var (rel, content) in files)
         {
             var p = Path.Combine(root, rel);
-            if (!File.Exists(p)) File.WriteAllText(p, content);
+            if (!File.Exists(p)) File.WriteAllText(p, content, new System.Text.UTF8Encoding(false));
         }
 
-        // 待处理变更清单初始化（点号开头，目录树跳过）
         var changes = Path.Combine(root, ".changes.json");
         if (!File.Exists(changes)) File.WriteAllText(changes, "[]");
+
+        var paths = new KbPaths(root);
+        paths.EnsureStateDirs();
+        StateJson.Save(paths.KbMeta, new KbMeta
+        {
+            SchemaVersion = 1,
+            CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+            IndexTemplateHash = HashUtil.Sha256Text(index),
+            OverviewTemplateHash = HashUtil.Sha256Text(overview),
+        });
+        reviews.InitializeIfMissing(name);
         return root;
     }
 
-    /// <summary>删库前校验：名合法 + 目录存在 + 存储路径可达（UNC 掉线拒绝，spec Review Focus 1）。</summary>
     public (bool ok, string error) ValidateDelete(string name)
     {
         if (!PathGuard.ValidKb(name)) return (false, "知识库名非法");
@@ -71,7 +102,7 @@ public class KbService(ConfigService config)
         return (true, "");
     }
 
-    /// <summary>整库永久删除（含 raw/original/ 原件；调用方负责 UI 输入库名确认，spec D7）。</summary>
+    /// <summary>整库永久删除（含隐藏状态与回收站）。调用方负责输入库名、停止服务与草稿保护。</summary>
     public void DeleteKb(string name)
     {
         var (ok, error) = ValidateDelete(name);
@@ -79,3 +110,5 @@ public class KbService(ConfigService config)
         Directory.Delete(Path.Combine(config.WikisDir, name), true);
     }
 }
+
+public sealed class KbExistsException(string name) : Exception($"这个知识库已存在：{name}");

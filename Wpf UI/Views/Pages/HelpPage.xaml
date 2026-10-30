@@ -1,0 +1,97 @@
+<Page
+  x:Class="LLM_Wiki.Views.Pages.HelpPage"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+  xmlns:local="clr-namespace:LLM_Wiki.Views.Pages"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  Title="使用帮助"
+  d:DataContext="{d:DesignInstance local:HelpPage, IsDesignTimeCreatable=False}"
+  d:DesignHeight="800"
+  d:DesignWidth="1000"
+  ui:Design.Background="{DynamicResource ApplicationBackgroundBrush}"
+  ui:Design.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+  Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+  mc:Ignorable="d">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="{StaticResource PageContentMargin}" MaxWidth="900" HorizontalAlignment="Left">
+      <TextBlock Style="{StaticResource PageTitleText}" Margin="0" Text="使用帮助" />
+      <TextBlock Margin="0,4,0,16" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="LLM Wiki 是本地知识库维护工具：用外部 AI 把原始资料整理为可追溯的知识。应用不内置模型或聊天。" TextWrapping="Wrap" />
+
+      <Expander Header="第一次使用：从创建知识库到确认结果" IsExpanded="True">
+        <StackPanel Margin="0,8,0,0">
+          <TextBlock TextWrapping="Wrap" Text="1. 左上角库切换器 → “新建知识库…”，填写名称；模板只影响目标与规则的默认文案。" />
+          <TextBlock TextWrapping="Wrap" Text="2. 进入“资料”，点“添加文件”选择 md/txt/docx/xlsx；文件按原格式保存，不生成 Markdown 副本。" />
+          <TextBlock TextWrapping="Wrap" Text="3. 进入“整理”，范围选“待整理变更”或“全部资料”，点“复制整理指令”。" />
+          <TextBlock TextWrapping="Wrap" Text="4. 到能访问该文件夹的外部 AI 工具中粘贴执行；应用不会自动判断它是否完成。" />
+          <TextBlock TextWrapping="Wrap" Text="5. 返回“整理” → “查看本次变化”，核对后勾选资料，点“确认完成所选项”。只移出你确认且仍匹配的待整理记录。" />
+        </StackPanel>
+      </Expander>
+
+      <Expander Header="资料：原格式保存、编辑与回收站" Margin="0,8,0,0">
+        <StackPanel Margin="0,8,0,0">
+          <TextBlock TextWrapping="Wrap" Text="支持的资料类型：Markdown、纯文本、Word（.docx）、Excel（.xlsx）。单文件上限 20 MiB，多选按文件逐项提交。" />
+          <TextBlock TextWrapping="Wrap" Text="文本资料可在右侧预览并点“编辑”修改；保存失败会保留草稿，不覆盖磁盘上的其他版本。Word/Excel 用“打开原件”交给系统程序编辑，返回后刷新。" />
+          <TextBlock TextWrapping="Wrap" Text="“移入回收站”可从资料页撤销；回收站入口在资料页工具栏。恢复不会自动恢复已经清理的知识。" />
+          <TextBlock TextWrapping="Wrap" Text="同名上传会询问“覆盖同名 / 跳过同名 / 返回”。覆盖前旧版本会保留在回收站；无法保留时拒绝覆盖。" />
+        </StackPanel>
+      </Expander>
+
+      <Expander Header="整理：三类任务与指令" Margin="0,8,0,0">
+        <StackPanel Margin="0,8,0,0">
+          <TextBlock TextWrapping="Wrap" Text="更新知识：处理待整理变更、所选资料或全部资料。全部资料不会先清空 wiki/。" />
+          <TextBlock TextWrapping="Wrap" Text="提问分析：回答问题 / 对比主题。回答在外部工具中生成，不显示空聊天气泡。" />
+          <TextBlock TextWrapping="Wrap" Text="检查维护：检查知识质量 / 处理已删除资料的引用。清理先生成计划；没有删除工具时真正删除文件需在本机确认。" />
+          <TextBlock TextWrapping="Wrap" Text="复制一次就会带上库身份、路径或逻辑资源、规则入口与版本、源文件清单、范围和边界，不需要先单独复制库说明。" />
+          <TextBlock TextWrapping="Wrap" Text="复制不等于执行完成。任务快照跨重启保留；资料或规则变化后，受影响项会标记失效，仍需保留。" />
+        </StackPanel>
+      </Expander>
+
+      <Expander Header="确认处理：为什么按钮只清除选中项" Margin="0,8,0,0">
+        <StackPanel Margin="0,8,0,0">
+          <TextBlock TextWrapping="Wrap" Text="“确认完成”表示你已核对本次变更由外部 AI 处理过，并不代表系统证明知识质量合格。" />
+          <TextBlock TextWrapping="Wrap" Text="确认时应用会重新扫描并比较源文件版本；有新变化的项不会被清除，会反馈“已确认 x 项；y 项有新变化”。" />
+          <TextBlock TextWrapping="Wrap" Text="没有对应待整理记录的文件可以核对，但不会因此清除其他记录。误确认可在任务详情中“重新列为待整理”。" />
+        </StackPanel>
+      </Expander>
+
+      <Expander Header="浏览分享与访问码" Margin="0,8,0,0">
+        <StackPanel Margin="0,8,0,0">
+          <TextBlock TextWrapping="Wrap" Text="“连接与分享 → 浏览分享”启动后，服务绑定启动时的知识库；桌面切库不会改变分享范围。" />
+          <TextBlock TextWrapping="Wrap" Text="其他设备输入地址和 4 位访问码即可浏览、预览和下载原件，不能上传、编辑或删除。" />
+          <TextBlock TextWrapping="Wrap" Text="更换访问码会使旧码和已认证会话失效；更换分享库需要“停止并更换范围”。" />
+        </StackPanel>
+      </Expander>
+
+      <Expander Header="MCP 连接：只读与写入" Margin="0,8,0,0">
+        <StackPanel Margin="0,8,0,0">
+          <TextBlock TextWrapping="Wrap" Text="MCP 是供外部 AI 工具读取知识库的协议。服务默认关闭、默认只读，绑定单库；开启不等于任务已发送。" />
+          <TextBlock TextWrapping="Wrap" Text="写入需要显式开启，使用独立写入令牌；只允许修改本库 wiki/ 下的文本，禁止资料、规则、日志和删除。重启应用后恢复只读。" />
+          <TextBlock TextWrapping="Wrap" Text="stdio 由外部客户端启动，退出桌面应用不一定停止该进程；授权库通过 --kb 参数指定。" />
+          <TextBlock TextWrapping="Wrap" Text="客户端配置请复制“连接与分享 → AI 工具”中的实际片段，按你的客户端格式调整后再使用。" />
+        </StackPanel>
+      </Expander>
+
+      <Expander Header="规则、手动修订与冲突" Margin="0,8,0,0">
+        <StackPanel Margin="0,8,0,0">
+          <TextBlock TextWrapping="Wrap" Text="purpose.md 与 schema.md 是库内真实文件，在“知识库设置 → 目标与结构”编辑。保存后已有知识尚未按新规则核对，提醒会持续保留。" />
+          <TextBlock TextWrapping="Wrap" Text="知识页默认只读。需要人工修改时，从知识页“更多 → 手动修订知识…”进入；保存后 MCP 写入命中同一版本会拒绝覆盖，需在桌面明确解除保护。" />
+          <TextBlock TextWrapping="Wrap" Text="外部程序修改当前文件时，应用不会静默覆盖；保存失败会保留草稿，可“载入磁盘版本”或另存。" />
+        </StackPanel>
+      </Expander>
+
+      <Expander Header="常见问题" Margin="0,8,0,0">
+        <StackPanel Margin="0,8,0,0">
+          <TextBlock TextWrapping="Wrap" Text="问：复制后没有看到知识变化？答：外部 AI 可能尚未执行或读取失败。查看任务结果与变化列表，不要仅凭复制就确认。" />
+          <TextBlock TextWrapping="Wrap" Text="问：上传后为什么没有 .docx.md？答：新版保持源格式，不再生成 Markdown 副本；外部 AI 需具备原格式读取能力。" />
+          <TextBlock TextWrapping="Wrap" Text="问：切换根目录会搬走原文件吗？答：不会。只更换读取位置；原目录保持不动，服务会先停止并需手动重新开启。" />
+          <TextBlock TextWrapping="Wrap" Text="问：删除资料后知识为什么不消失？答：资料与知识分开维护。需要到整理页处理已删除资料的引用，确认后才会清除对应待整理记录。" />
+          <TextBlock TextWrapping="Wrap" Text="问：关闭应用后未保存的文档会恢复吗？答：正常离开有保护；意外崩溃的未保存草稿不保证恢复，整理任务会跨重启保留。" />
+        </StackPanel>
+      </Expander>
+
+      <TextBlock Margin="0,16,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}" TextWrapping="Wrap" Text="本帮助与当前按钮、权限一致；未实现的适配器、客户端探测或自动执行不会显示为可用功能。" />
+    </StackPanel>
+  </ScrollViewer>
+</Page>

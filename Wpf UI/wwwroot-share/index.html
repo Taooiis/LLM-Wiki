@@ -74,11 +74,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 </style>
 </head>
 <body>
-<header class="banner"><h1><span>只读视图</span><span class="banner-sep" aria-hidden="true"></span><span>编辑请到主机</span></h1></header>
+<header class="banner"><h1><span>只读浏览</span><span class="banner-sep" aria-hidden="true"></span><span>编辑请回到桌面应用</span></h1></header>
 <div class="bar">
-  <label for="kbSelect">知识库</label>
-  <select id="kbSelect" onchange="onKb()">
-    <option value="">（选择知识库）</option>
+  <label for="kbSelect">分享知识库</label>
+  <select id="kbSelect" onchange="onKb()" aria-label="分享知识库">
+    <option value="">（加载中）</option>
   </select>
 </div>
 <div class="pane">
@@ -90,6 +90,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 </div>
 
 <script>
+
 let treeData = [];
 
 function gate(r) {
@@ -97,70 +98,92 @@ function gate(r) {
   return r;
 }
 
-fetch('/api/kbs')
-  .then(gate)
-  .then(r => r.json())
-  .then(d => {
-    d.kbs.forEach(k => {
-      const o = document.createElement('option');
-      o.value = k; o.textContent = k;
-      document.getElementById('kbSelect').appendChild(o);
-    });
-  })
-  .catch(() => { document.getElementById('tree').innerHTML = '<div class="empty">知识库列表加载失败，请刷新重试</div>'; });
+function esc(v) {
+  return String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function safeHref(url) {
+  return /^(https?:|\/|\.\.?\/)/i.test(url) ? url : '#';
+}
+
+function renderMarkdown(md) {
+  let html = esc(md);
+  html = html.replace(/^###### (.+)$/gm, '<h6>$1</h6>')
+    .replace(/^##### (.+)$/gm, '<h5>$1</h5>')
+    .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, text, url) => '<a href="' + safeHref(url) + '" rel="noreferrer">' + text + '</a>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/\n/g, '<br/>');
+  return '<div class="doc-inner">' + html + '</div>';
+}
+
+function renderItems(nodes, base) {
+  return (nodes || []).map(n => n.type === 'dir'
+    ? '<li>' + esc(n.name) + (n.children && n.children.length ? renderChildren(n.children, base + n.name + '/') : '') + '</li>'
+    : '<li><a tabindex="0" data-path="' + esc(base + n.name) + '" onclick="openFile(this.dataset.path)">' + esc(n.name) + '</a></li>'
+  ).join('');
+}
+
+function renderChildren(nodes, base) {
+  return '<ul>' + renderItems(nodes, base) + '</ul>';
+}
+
+function renderTree(nodes) {
+  const el = document.getElementById('tree');
+  if (!treeData.length) { el.innerHTML = '<div class="empty">本库目录为空</div>'; return; }
+  el.innerHTML = '<ul>' + renderItems(nodes, '') + '</ul>';
+}
 
 function onKb() {
   const k = document.getElementById('kbSelect').value;
-  document.getElementById('doc').innerHTML = '<div class="doc-inner"><div class="empty">加载中…</div></div>';
+  const doc = document.getElementById('doc');
+  doc.innerHTML = '<div class="doc-inner"><div class="empty">加载中…</div></div>';
   if (!k) return;
   fetch('/api/tree?kb=' + encodeURIComponent(k))
     .then(gate)
     .then(r => r.json())
-    .then(d => { treeData = d.tree || []; renderTree(treeData); });
+    .then(d => { treeData = d.tree || []; renderTree(treeData); })
+    .catch(() => { document.getElementById('tree').innerHTML = '<div class="empty">目录加载失败，请刷新重试</div>'; });
 }
+
+function openFile(name) {
+  const k = document.getElementById('kbSelect').value;
+  const lower = name.toLowerCase();
+  if (lower.endsWith('.docx') || lower.endsWith('.xlsx')) {
+    location.href = '/download?kb=' + encodeURIComponent(k) + '&path=' + encodeURIComponent(name);
+    return;
+  }
+  fetch('/api/file?kb=' + encodeURIComponent(k) + '&path=' + encodeURIComponent(name))
+    .then(gate)
+    .then(r => r.text())
+    .then(md => { document.getElementById('doc').innerHTML = renderMarkdown(md); })
+    .catch(() => { document.getElementById('doc').innerHTML = '<div class="doc-inner"><div class="empty">文件读取失败，请刷新重试</div></div>'; });
+}
+
+fetch('/api/kbs')
+  .then(gate)
+  .then(r => r.json())
+  .then(d => {
+    const sel = document.getElementById('kbSelect');
+    sel.innerHTML = '';
+    (d.kbs || []).forEach(k => {
+      const o = document.createElement('option');
+      o.value = k; o.textContent = k;
+      sel.appendChild(o);
+    });
+    if (d.bound) { sel.value = d.bound; onKb(); }
+    if ((d.kbs || []).length <= 1) sel.disabled = true;
+  })
+  .catch(() => { document.getElementById('tree').innerHTML = '<div class="empty">知识库加载失败，请刷新重试</div>'; });
 
 document.getElementById('tree').addEventListener('keydown', (e) => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('a')) { e.preventDefault(); e.target.click(); }
 });
 
-function renderTree(nodes) {
-  const el = document.getElementById('tree');
-  if (!treeData.length) return el.innerHTML = '<div class="empty">本库目录为空</div>';
-  const k = document.getElementById('kbSelect').value;
-  el.innerHTML = '<ul>' + renderItems(nodes, k, '') + '</ul>';
-}
-
-function renderItems(nodes, k, base) {
-  return (nodes || []).map(n =>
-    n.type === 'dir'
-      ? '<li>' + n.name + (n.children && n.children.length ? renderChildren(n.children, k, base + n.name + '/') : '') + '</li>'
-      : '<li><a tabindex="0" onclick="openFile(\'' + (base + n.name) + '\')">' + n.name + '</a></li>'
-  ).join('');
-}
-
-function renderChildren(nodes, k, base) {
-  return '<ul>' + renderItems(nodes, k, base) + '</ul>';
-}
-
-function openFile(name) {
-  const k = document.getElementById('kbSelect').value;
-  fetch('/api/file?kb=' + encodeURIComponent(k) + '&path=raw/sources/' + encodeURIComponent(name))
-    .then(gate)
-    .then(r => r.text())
-    .then(md => {
-      document.getElementById('doc').innerHTML = '<div class="doc-inner">' + md
-        .replace(/^###### (.+)/gm, '<h6>$1</h6>')
-        .replace(/^##### (.+)/gm, '<h5>$1</h5>')
-        .replace(/^#### (.+)/gm, '<h4>$1</h4>')
-        .replace(/^### (.+)/gm, '<h3>$1</h3>')
-        .replace(/^## (.+)/gm, '<h2>$1</h2>')
-        .replace(/^# (.+)/gm, '<h1>$1</h1>')
-        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/^\- (.+)/gm, '<li>$1</li>')
-        .replace(/\n/g, '<br/>') + '</div>';
-    });
-}
 </script>
 </body>
 </html>

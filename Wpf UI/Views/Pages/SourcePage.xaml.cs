@@ -1,91 +1,58 @@
 using System.Windows;
 using System.Windows.Controls;
 
+using LLM_Wiki.Services;
 using LLM_Wiki.ViewModels;
 using LLM_Wiki.ViewModels.Pages;
 using LLM_Wiki.Views.Dialogs;
+using LLM_Wiki.Views.Windows;
 
-using Wpf.Ui;
-using Wpf.Ui.Abstractions.Controls;
-using Wpf.Ui.Controls;
+namespace LLM_Wiki.Views.Pages;
 
-namespace LLM_Wiki.Views.Pages
+public partial class SourcePage
 {
-    public partial class SourcePage : INavigableView<SourceViewModel>
+    public SourceViewModel ViewModel { get; }
+    private readonly UnsavedChangesDialog _unsavedDlg;
+
+    public SourcePage(SourceViewModel viewModel)
     {
-        public SourceViewModel ViewModel { get; }
-
-        private readonly ISnackbarService _snackbarService;
-        private readonly UnsavedChangesDialog _unsavedDlg;
-
-        public SourcePage(SourceViewModel viewModel, ISnackbarService snackbarService)
+        ViewModel = viewModel;
+        DataContext = this;
+        InitializeComponent();
+        _unsavedDlg = (UnsavedChangesDialog)Resources["UnsavedDlg"];
+        ViewModel.Workspace.ConfirmUnsaved = async () => await _unsavedDlg.ShowChoiceAsync(CancellationToken.None);
+        ViewModel.ResolveConflict = async names =>
         {
-            ViewModel = viewModel;
-            _snackbarService = snackbarService;
-            DataContext = this;
+            var dialog = new ImportConflictWindow(names) { Owner = Window.GetWindow(this) };
+            return dialog.ShowDialog() == true ? dialog.Choice : SourceConflictPolicy.Ask;
+        };
+        ViewModel.MarkVisited();
+    }
 
-            InitializeComponent();
+    private async void OnFileSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (FileList.SelectedItem is SourceRow row) await ViewModel.SelectRowAsync(row);
+    }
 
-            _unsavedDlg = (UnsavedChangesDialog)Resources["UnsavedDlg"];
+    private void OnNewClick(object sender, RoutedEventArgs e) => ViewModel.NewSourceCommand.Execute(null);
 
-            // 工作区的未保存确认回调（指南 §11.4，不用 MessageBox）
-            ViewModel.Workspace.ConfirmUnsaved = async () =>
-                await _unsavedDlg.ShowChoiceAsync(System.Threading.CancellationToken.None);
-        }
+    private void OnAddFilesClick(object sender, RoutedEventArgs e) => ViewModel.AddFilesCommand.Execute(null);
 
-        /// <summary>选中文件：经未保存保护后加载到工作区预览。</summary>
-        private async void FileList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (sender is not ListBox list || list.SelectedItem is not Services.SourceEntry entry)
-            {
-                return;
-            }
+    private void OnTrashClick(object sender, RoutedEventArgs e)
+    {
+        var window = new TrashWindow(ViewModel) { Owner = Window.GetWindow(this) };
+        window.ShowDialog();
+        ViewModel.Reload();
+    }
 
-            await ViewModel.SelectFileAsync(entry.Name);
-        }
+    private void OnOpenFolderClick(object sender, RoutedEventArgs e) => ViewModel.OpenKbFolderCommand.Execute(null);
 
-        /// <summary>新建文档：右侧工作区直接进入编辑（不再弹窗，指南 §6.4）。</summary>
-        private void OnNewClick(object sender, RoutedEventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(ViewModel.SelectedKb))
-            {
-                ShowToast("请先选择知识库", false);
-                return;
-            }
+    private void OnRefreshClick(object sender, RoutedEventArgs e) => ViewModel.RefreshCommand.Execute(null);
 
-            ViewModel.Workspace.EnterNewMode(ViewModel.SelectedKb);
-        }
+    private void OnOpenOriginalClick(object sender, RoutedEventArgs e) => ViewModel.Workspace.OpenWithDefaultProgramCommand.Execute(null);
 
-        private void OnUploadClick(object sender, RoutedEventArgs e)
-        {
-            ViewModel.UploadFileCommand.Execute(null);
-        }
-
-        /// <summary>删除当前选中的源文档（带确认）。</summary>
-        private async void OnDeleteClick(object sender, RoutedEventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(ViewModel.SelectedKb) || string.IsNullOrWhiteSpace(ViewModel.SelectedFile))
-            {
-                ShowToast("请先选中要删除的文档", false);
-                return;
-            }
-
-            var confirm = (ConfirmationDialog)Resources["ConfirmDlg"];
-            if (await confirm.ShowAsync(
-                    $"确定删除\"{ViewModel.SelectedFile}\"吗？删除后会记录一条待处理变更，后续可通过增量 Ingest 更新 Wiki。",
-                    "删除源文档",
-                    primaryButtonText: "删除文件"))
-            {
-                ViewModel.DeleteFileCommand.Execute(ViewModel.SelectedFile);
-            }
-        }
-
-        private void ShowToast(string message, bool success)
-        {
-            var appearance = success
-                ? ControlAppearance.Success
-                : ControlAppearance.Danger;
-            _snackbarService.Show(success ? "成功" : "错误", message, appearance, null, TimeSpan.FromSeconds(2.6));
-        }
+    private async void OnCreateKbClick(object sender, RoutedEventArgs e)
+    {
+        if (Window.GetWindow(this) is MainWindow window) await window.ShowCreateKbAsync();
     }
 }

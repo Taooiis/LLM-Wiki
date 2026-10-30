@@ -20,9 +20,13 @@ public static class McpErrorCodes
     public const string ReadOnlyMode = "READ_ONLY_MODE";
     public const string WriteNotAllowedPath = "WRITE_NOT_ALLOWED_PATH";
     public const string VersionConflict = "VERSION_CONFLICT";
+    public const string VersionRequired = "VERSION_REQUIRED";
     public const string FileTooLarge = "FILE_TOO_LARGE";
     public const string ServiceUnavailable = "SERVICE_UNAVAILABLE";
     public const string FileNotFound = "FILE_NOT_FOUND";
+    public const string ManualReviewRequired = "MANUAL_REVIEW_REQUIRED";
+    public const string FormatNotSupported = "FORMAT_NOT_SUPPORTED";
+    public const string SourceReadFailed = "SOURCE_READ_FAILED";
 }
 
 /// <summary>
@@ -31,16 +35,22 @@ public static class McpErrorCodes
 /// </summary>
 public sealed class McpAccessPolicy(ConfigService config)
 {
-    /// <summary>读文件大小上限；与预览一致：超过即拒绝，避免把整个大文件塞给 Agent。</summary>
-    public const int MaxReadBytes = 2 * 1024 * 1024;
+    /// <summary>读文件总大小上限；单次响应仍按 64 KiB 分段。</summary>
+    public const int MaxReadBytes = 20 * 1024 * 1024;
 
-    /// <summary>写入内容上限（字符数）。</summary>
-    public const int MaxWriteChars = 2 * 1024 * 1024;
+    /// <summary>单次读取最多返回的 UTF-8 内容字节数。</summary>
+    public const int MaxChunkBytes = 64 * 1024;
+
+    /// <summary>MCP 文本写入上限：4 MiB UTF-8。</summary>
+    public const int MaxWriteBytes = 4 * 1024 * 1024;
 
     /// <summary>单条路径长度上限（设计 08§6）。</summary>
     public const int MaxPathLength = 260;
 
     private volatile int _mode;
+
+    /// <summary>HTTP/stdio 会话绑定的授权库；空表示尚未绑定，不授权任何库。</summary>
+    public string AuthorizedKb { get; set; } = "";
 
     public McpMode Mode
     {
@@ -56,6 +66,8 @@ public sealed class McpAccessPolicy(ConfigService config)
     public bool KbExists(string? kb)
     {
         if (string.IsNullOrWhiteSpace(kb) || !PathGuard.ValidKb(kb)) return false;
+        if (string.IsNullOrEmpty(AuthorizedKb)
+            || !kb.Equals(AuthorizedKb, StringComparison.OrdinalIgnoreCase)) return false;
         var dir = Path.Combine(config.WikisDir, kb);
         return Directory.Exists(dir) && !IsReparsePoint(dir);
     }
@@ -93,6 +105,26 @@ public sealed class McpAccessPolicy(ConfigService config)
             return null;
         }
 
+        return ResolveWithinKb(kb!, normalized, out errorCode);
+    }
+
+    /// <summary>解析原格式资料路径：只允许 raw/sources/ 下受支持文件。</summary>
+    public string? ResolveSourcePath(string? kb, string? relativePath, out string errorCode)
+    {
+        errorCode = "";
+        if (!KbExists(kb))
+        {
+            errorCode = McpErrorCodes.KbNotFound;
+            return null;
+        }
+        var normalized = NormalizeRelative(relativePath, out _);
+        if (normalized == null
+            || !normalized.StartsWith("raw/sources/", StringComparison.OrdinalIgnoreCase)
+            || !SourceRules.IsSupported(normalized))
+        {
+            errorCode = McpErrorCodes.FormatNotSupported;
+            return null;
+        }
         return ResolveWithinKb(kb!, normalized, out errorCode);
     }
 

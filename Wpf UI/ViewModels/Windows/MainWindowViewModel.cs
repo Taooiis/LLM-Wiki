@@ -1,165 +1,441 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
+using System.IO;
+
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 using LLM_Wiki.Services;
 using LLM_Wiki.Share;
-
-using CommunityToolkit.Mvvm.ComponentModel;
+using LLM_Wiki.Views.Pages;
 
 using Wpf.Ui;
 using Wpf.Ui.Controls;
 
-namespace LLM_Wiki.ViewModels.Windows
+namespace LLM_Wiki.ViewModels.Windows;
+
+/// <summary>
+/// 主窗口：当前知识库上下文、三主导航、库切换、全局文件名查找与状态栏。
+/// 所有状态来自真实服务；切库前统一处理未保存草稿。
+/// </summary>
+public partial class MainWindowViewModel : ObservableObject
 {
-    public partial class MainWindowViewModel : ObservableObject
+    private readonly ConfigService _config;
+    private readonly KbService _kbService;
+    private readonly ChangeService _changes;
+    private readonly ScanService _scanner;
+    private readonly SourceService _sources;
+    private readonly KnowledgeService _knowledge;
+    private readonly UnsavedChangesCoordinator _unsaved;
+    private readonly ShareService _share;
+    private readonly McpService _mcp;
+    private readonly ToastService _toast;
+    private readonly INavigationService _navigation;
+
+    public MainWindowViewModel(
+        ConfigService config,
+        KbService kbs,
+        ChangeService changes,
+        ScanService scanner,
+        SourceService sources,
+        KnowledgeService knowledge,
+        UnsavedChangesCoordinator unsaved,
+        ShareService share,
+        McpService mcp,
+        ToastService toast,
+        INavigationService navigation)
     {
-        private readonly ConfigService _config;
-        private readonly ShareService _share;
+        _config = config;
+        _kbService = kbs;
+        _changes = changes;
+        _scanner = scanner;
+        _sources = sources;
+        _knowledge = knowledge;
+        _unsaved = unsaved;
+        _share = share;
+        _mcp = mcp;
+        _toast = toast;
+        _navigation = navigation;
+        _share.Changed += OnShareServiceChanged;
 
-        public MainWindowViewModel(ConfigService config, ShareService share)
-        {
-            _config = config;
-            _share = share;
+        var version = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version;
+        AppVersion = version is null ? "" : $"v{version.Major}.{version.Minor}.{version.Build}";
+        Kbs = [];
+        BuildNav();
+        Initialize();
+    }
 
-            // 状态栏版本号来自程序集，不硬编码
-            var version = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version;
-            AppVersion = version is null ? "" : $"v{version.Major}.{version.Minor}.{version.Build}";
-        }
+    [ObservableProperty] private string _applicationTitle = "LLM Wiki";
+    [ObservableProperty] private string _currentKb = "";
+    [ObservableProperty] private string _kbPickerText = "未选择知识库";
+    [ObservableProperty] private ObservableCollection<string> _kbs = [];
+    [ObservableProperty] private int _pendingCount;
+    [ObservableProperty] private string _statusStorage = "";
+    [ObservableProperty] private string _statusDirectory = "目录正常";
+    [ObservableProperty] private string _statusShare = "浏览分享：关闭";
+    [ObservableProperty] private string _statusAi = "AI：未连接";
+    [ObservableProperty] private string _storageError = "";
+    [ObservableProperty] private string _statusPending = "";
+    [ObservableProperty] private string _appVersion = "";
 
-        [ObservableProperty]
-        private string _applicationTitle = "LLM Wiki";
+    [ObservableProperty] private bool _isBusy;
+    [ObservableProperty] private string _busyText = "";
 
-        [ObservableProperty]
-        private ObservableCollection<object> _menuItems = new()
-        {
-            new NavigationViewItem()
+    [ObservableProperty] private bool _isSearchOpen;
+    [ObservableProperty] private string _searchQuery = "";
+    [ObservableProperty] private ObservableCollection<FileSearchResult> _searchResults = [];
+    [ObservableProperty] private string _searchStatus = "";
+
+    [ObservableProperty] private ObservableCollection<object> _menuItems = [];
+    [ObservableProperty] private ObservableCollection<object> _footerMenuItems = [];
+
+    /// <summary>页面请求打开某个相对路径（全局查找结果）。</summary>
+    public event Action<FileSearchResult>? OpenRequested;
+
+    /// <summary>资料页“整理所选”带入的相对路径；整理页消费后清空。</summary>
+    public IReadOnlyList<string>? PendingOrganizeSelection { get; set; }
+
+    public event Action? OrganizeSelectionRequested;
+
+    public void RequestOrganizeSelection() => OrganizeSelectionRequested?.Invoke();
+
+    public bool HasKb => !string.IsNullOrWhiteSpace(CurrentKb)
+                         && Directory.Exists(Path.Combine(_config.WikisDir, CurrentKb));
+    public bool HasStorageError => !string.IsNullOrEmpty(StorageError);
+    public bool HasNoKb => !HasKb;
+    public string CurrentKbRoot => HasKb ? Path.Combine(_config.WikisDir, CurrentKb) : "";
+
+    private void BuildNav()
+    {
+        MenuItems =
+        [
+            new NavigationViewItem
             {
-                Content = "首页",
-                Icon = new SymbolIcon { Symbol = SymbolRegular.Home24 },
-                TargetPageType = typeof(Views.Pages.DashboardPage)
+                Content = "知识",
+                Icon = new SymbolIcon { Symbol = SymbolRegular.BookOpen24 },
+                TargetPageType = typeof(KnowledgePage),
             },
-            new NavigationViewItem()
+            new NavigationViewItem
             {
-                Content = "源文档",
+                Content = "资料",
                 Icon = new SymbolIcon { Symbol = SymbolRegular.Document24 },
-                TargetPageType = typeof(Views.Pages.SourcePage)
+                TargetPageType = typeof(SourcePage),
             },
-            new NavigationViewItem()
+            new NavigationViewItem
             {
-                Content = "目录浏览",
-                Icon = new SymbolIcon { Symbol = SymbolRegular.List24 },
-                TargetPageType = typeof(Views.Pages.TreeBrowserPage)
+                Content = "整理",
+                Icon = new SymbolIcon { Symbol = SymbolRegular.ArrowSync24 },
+                TargetPageType = typeof(OrganizePage),
             },
-            new NavigationViewItem()
+        ];
+
+        FooterMenuItems =
+        [
+            new NavigationViewItem
             {
-                Content = "工作流",
-                Icon = new SymbolIcon { Symbol = SymbolRegular.Flow24 },
-                TargetPageType = typeof(Views.Pages.WorkflowPage)
-            },
-            new NavigationViewItem()
-            {
-                Content = "分享",
+                Content = "连接与分享",
                 Icon = new SymbolIcon { Symbol = SymbolRegular.Share24 },
-                TargetPageType = typeof(Views.Pages.SharePage)
-            }
-        };
-
-        // 底部导航固定顺序：小白指南、配置、设置（设计文档 00§3）
-        [ObservableProperty]
-        private ObservableCollection<object> _footerMenuItems = new()
-        {
-            new NavigationViewItem()
-            {
-                Content = "小白指南",
-                Icon = new SymbolIcon { Symbol = SymbolRegular.Info24 },
-                TargetPageType = typeof(Views.Pages.GuidePage)
+                TargetPageType = typeof(ConnectionsPage),
             },
-            new NavigationViewItem()
+            new NavigationViewItem
             {
-                Content = "配置",
-                Icon = new SymbolIcon { Symbol = SymbolRegular.Settings24 },
-                TargetPageType = typeof(Views.Pages.ConfigPage)
+                Content = "知识库设置",
+                Icon = new SymbolIcon { Symbol = SymbolRegular.Folder24 },
+                TargetPageType = typeof(KbSettingsPage),
             },
-            new NavigationViewItem()
+            new NavigationViewItem
             {
-                Content = "设置",
+                Content = "应用设置",
                 Icon = new SymbolIcon { Symbol = SymbolRegular.Settings24 },
-                TargetPageType = typeof(Views.Pages.SettingsPage)
-            }
-        };
+                TargetPageType = typeof(AppSettingsPage),
+            },
+            new NavigationViewItem
+            {
+                Content = "使用帮助",
+                Icon = new SymbolIcon { Symbol = SymbolRegular.QuestionCircle24 },
+                TargetPageType = typeof(HelpPage),
+            },
+        ];
+    }
 
-        [ObservableProperty]
-        private ObservableCollection<MenuItem> _trayMenuItems = new()
+    private void Initialize()
+    {
+        ReloadKbs();
+        var target = _config.LastKb;
+        if (string.IsNullOrWhiteSpace(target) || (!Kbs.Contains(target) && string.IsNullOrEmpty(StorageError)))
+            target = Kbs.FirstOrDefault() ?? "";
+        if (!string.IsNullOrWhiteSpace(target)) SetCurrentKb(target);
+        else RefreshStatusBar();
+    }
+
+    public void ReloadKbs()
+    {
+        var (list, error) = _kbService.ListKbsWithError();
+        Kbs = new ObservableCollection<string>(list);
+        StorageError = error;
+        OnPropertyChanged(nameof(HasStorageError));
+        if (!string.IsNullOrEmpty(error))
         {
-            new MenuItem { Header = "Home", Tag = "tray_home" }
-        };
-
-        /// <summary>当前选中的知识库名（供源文档页等页面读取）。</summary>
-        [ObservableProperty]
-        private string _currentKb = "";
-
-        /// <summary>从源文档页“待处理变更”点击“生成 Ingest”后，传递给工作流页的文件清单（逗号分隔，含 raw/sources/ 前缀）。</summary>
-        [ObservableProperty]
-        private string _pendingIngestFiles = "";
-
-        /// <summary>对应的知识库名。</summary>
-        [ObservableProperty]
-        private string _pendingIngestKb = "";
-
-        #region 状态栏（设计文档 00§2：当前库 / 存储 / 分享服务 / 版本）
-
-        [ObservableProperty]
-        private string _statusKb = "未选择";
-
-        [ObservableProperty]
-        private string _statusStorage = "";
-
-        [ObservableProperty]
-        private string _statusShare = "已停止";
-
-        [ObservableProperty]
-        private string _appVersion = "";
-
-        /// <summary>从真实服务读取状态，不缓存不伪造；由主窗口定时调用。</summary>
-        public void RefreshStatusBar()
-        {
-            StatusKb = string.IsNullOrWhiteSpace(CurrentKb) ? "未选择" : CurrentKb;
+            StatusDirectory = "目录不可访问";
             StatusStorage = _config.WikisDir;
-            StatusShare = _share.Running ? $"运行中 · 端口 {_share.Port}" : "已停止";
-        }
-
-        /// <summary>当前库变化时状态栏即时跟随。</summary>
-        partial void OnCurrentKbChanged(string value) => RefreshStatusBar();
-
-        #endregion
-
-        /// <summary>
-        /// 全局搜索回车后按名称导航（仅功能/页面入口，不做全文搜索——设计文档 00§4）。
-        /// </summary>
-        public void NavigateToNamedPage(string query, INavigationService navigationService)
-        {
-            var map = new (string[] Keys, Type Page)[]
-            {
-                (new[] { "首页", "主页", "home" }, typeof(Views.Pages.DashboardPage)),
-                (new[] { "源文档", "文档", "上传" }, typeof(Views.Pages.SourcePage)),
-                (new[] { "目录浏览", "目录", "wiki" }, typeof(Views.Pages.TreeBrowserPage)),
-                (new[] { "工作流", "提示词", "ingest" }, typeof(Views.Pages.WorkflowPage)),
-                (new[] { "分享", "share" }, typeof(Views.Pages.SharePage)),
-                (new[] { "配置", "存储", "路径" }, typeof(Views.Pages.ConfigPage)),
-                (new[] { "设置", "主题", "版本" }, typeof(Views.Pages.SettingsPage)),
-                (new[] { "小白指南", "指南", "帮助", "guide" }, typeof(Views.Pages.GuidePage)),
-            };
-
-            foreach (var (keys, page) in map)
-            {
-                foreach (var key in keys)
-                {
-                    if (query.Contains(key, StringComparison.OrdinalIgnoreCase))
-                    {
-                        navigationService.Navigate(page);
-                        return;
-                    }
-                }
-            }
         }
     }
+
+    /// <summary>根目录切换成功后：重建库列表，不复用旧库同名身份。</summary>
+    public void ResetForNewRoot()
+    {
+        ReloadKbs();
+        var previous = CurrentKb;
+        CurrentKb = "";
+        SetCurrentKb(Kbs.FirstOrDefault() ?? "");
+        if (string.Equals(previous, CurrentKb, StringComparison.Ordinal)) UpdateKbState();
+    }
+
+    public void SetCurrentKb(string kb)
+    {
+        if (string.Equals(CurrentKb, kb, StringComparison.Ordinal)) return;
+        CurrentKb = kb;
+        _config.SetLastKb(kb);
+        UpdateKbState();
+    }
+
+    public async Task<bool> SwitchKbAsync(string kb)
+    {
+        if (string.Equals(CurrentKb, kb, StringComparison.Ordinal)) return true;
+        if (!await _unsaved.CanLeaveAsync()) return false;
+        SetCurrentKb(kb);
+        return true;
+    }
+
+    private void UpdateKbState()
+    {
+        KbPickerText = string.IsNullOrWhiteSpace(CurrentKb) ? "未选择知识库" : CurrentKb;
+        OnPropertyChanged(nameof(HasKb));
+        OnPropertyChanged(nameof(HasNoKb));
+        OnPropertyChanged(nameof(CurrentKbRoot));
+
+        if (HasKb)
+        {
+            try { _scanner.Scan(CurrentKb, recordChanges: true); }
+            catch { }
+        }
+        RefreshStatusBar();
+    }
+
+    private void OnShareServiceChanged()
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.CheckAccess()) RefreshStatusBar();
+        else dispatcher.BeginInvoke(RefreshStatusBar);
+    }
+
+    partial void OnCurrentKbChanged(string value)
+    {
+        KbPickerText = string.IsNullOrWhiteSpace(value) ? "未选择知识库" : value;
+        OnPropertyChanged(nameof(HasKb));
+        OnPropertyChanged(nameof(HasNoKb));
+        OnPropertyChanged(nameof(CurrentKbRoot));
+    }
+
+    public void RefreshStatusBar()
+    {
+        PendingCount = string.IsNullOrWhiteSpace(CurrentKb) ? 0 : _changes.Load(CurrentKb).Count;
+        StatusPending = PendingCount > 0 ? $"{PendingCount} 项待整理" : "暂无待整理";
+        StatusStorage = _config.WikisDir;
+        StatusDirectory = !string.IsNullOrEmpty(StorageError) ? "目录不可访问"
+            : HasKb ? "目录正常"
+            : string.IsNullOrWhiteSpace(CurrentKb) ? "未选择知识库" : "目录不可访问";
+        StatusShare = _share.Running ? $"浏览分享：{_share.BoundKb}" : "浏览分享：关闭";
+        StatusAi = _mcp.Running
+            ? $"AI：{(_mcp.Policy.WriteEnabled ? "写入" : "只读")} · {_mcp.BoundKb}"
+            : "AI：未连接";
+        UpdateNavBadge();
+    }
+
+    private void UpdateNavBadge()
+    {
+        foreach (var item in MenuItems.OfType<NavigationViewItem>())
+        {
+            if (item.TargetPageType != typeof(OrganizePage)) continue;
+            item.Content = PendingCount > 0 ? $"整理  ({PendingCount})" : "整理";
+        }
+    }
+
+    public async Task<bool> CreateKbAsync(string name, string scene, string? purpose = null)
+    {
+        try
+        {
+            IsBusy = true;
+            BusyText = "正在创建知识库…";
+            _kbService.CreateKb(name, scene, purpose);
+            ReloadKbs();
+            if (!await SwitchKbAsync(name))
+            {
+                SetCurrentKb(name);
+            }
+            _config.SetLastPage(name, "sources");
+            _navigation.Navigate(typeof(SourcePage));
+            _toast.ShowSuccess("知识库已创建：" + name);
+            return true;
+        }
+        catch (KbExistsException)
+        {
+            _toast.ShowWarning("这个知识库已存在，可从切换器打开已有知识库");
+            return false;
+        }
+        catch (Exception e)
+        {
+            _toast.ShowError("创建知识库失败：" + e.Message);
+            return false;
+        }
+        finally
+        {
+            IsBusy = false;
+            BusyText = "";
+        }
+    }
+
+    public async Task<bool> DeleteCurrentKbAsync()
+    {
+        if (!HasKb) return false;
+        if (!await _unsaved.CanLeaveAsync()) return false;
+        var name = CurrentKb;
+        if (_share.Running && _share.BoundKb.Equals(name, StringComparison.OrdinalIgnoreCase))
+        {
+            _share.Stop();
+        }
+        if (_mcp.Running && _mcp.BoundKb.Equals(name, StringComparison.OrdinalIgnoreCase))
+        {
+            _mcp.SetMode(_mcp.BoundKb, McpMode.Off, out _);
+        }
+        try
+        {
+            _kbService.DeleteKb(name);
+            ReloadKbs();
+            var next = Kbs.FirstOrDefault() ?? "";
+            CurrentKb = "";
+            SetCurrentKb(next);
+            _navigation.Navigate(typeof(KnowledgePage));
+            _toast.ShowSuccess("知识库已永久删除：" + name);
+            return true;
+        }
+        catch (Exception e)
+        {
+            _toast.ShowError("删除知识库失败：" + e.Message);
+            return false;
+        }
+    }
+
+    public void NavigateTo(string pageKey)
+    {
+        var type = pageKey switch
+        {
+            "sources" => typeof(SourcePage),
+            "organize" => typeof(OrganizePage),
+            "connections" => typeof(ConnectionsPage),
+            "kbsettings" => typeof(KbSettingsPage),
+            "settings" => typeof(AppSettingsPage),
+            "help" => typeof(HelpPage),
+            _ => typeof(KnowledgePage),
+        };
+        _navigation.Navigate(type);
+    }
+
+    public Type StartupPageType => PageTypeFor(_config.LastPageFor(CurrentKb));
+
+    private static Type PageTypeFor(string pageKey) => pageKey switch
+    {
+        "sources" => typeof(SourcePage),
+        "organize" => typeof(OrganizePage),
+        "connections" => typeof(ConnectionsPage),
+        "kbsettings" => typeof(KbSettingsPage),
+        "settings" => typeof(AppSettingsPage),
+        "help" => typeof(HelpPage),
+        _ => typeof(KnowledgePage),
+    };
+
+    public void RememberPage(string pageKey)
+    {
+        if (!string.IsNullOrWhiteSpace(CurrentKb)) _config.SetLastPage(CurrentKb, pageKey);
+    }
+
+    #region 全局文件名查找（只查当前库文件名，不做正文检索）
+
+    [RelayCommand]
+    private void OpenSearch()
+    {
+        if (!HasKb)
+        {
+            _toast.ShowWarning("请先选择或创建知识库");
+            return;
+        }
+        SearchQuery = "";
+        SearchResults = [];
+        SearchStatus = "";
+        IsSearchOpen = true;
+    }
+
+    [RelayCommand]
+    private void CloseSearch() => IsSearchOpen = false;
+
+    partial void OnSearchQueryChanged(string value) => RunSearch();
+
+    private void RunSearch()
+    {
+        SearchResults = [];
+        if (!HasKb)
+        {
+            SearchStatus = "请先选择知识库";
+            return;
+        }
+        var query = (SearchQuery ?? "").Trim();
+        if (query.Length == 0)
+        {
+            SearchStatus = "输入文件名片段，只查找当前库的文件名";
+            return;
+        }
+
+        var results = new List<FileSearchResult>();
+        foreach (var source in _sources.List(CurrentKb))
+        {
+            if (source.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+            {
+                results.Add(new FileSearchResult(source.Name, source.RelPath, "资料", "资料 · " + source.TypeText));
+            }
+        }
+        foreach (var node in Flatten(_knowledge.Tree(CurrentKb)))
+        {
+            if (node.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+            {
+                results.Add(new FileSearchResult(node.Name, node.RelPath, "知识", "知识 · " + node.DisplayName));
+            }
+        }
+        SearchResults = new ObservableCollection<FileSearchResult>(results.Take(50));
+        SearchStatus = results.Count == 0 ? "没有匹配文件" : $"找到 {results.Count} 项";
+    }
+
+    private static IEnumerable<KnowledgeNode> Flatten(IEnumerable<KnowledgeNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            if (!node.IsFolder) yield return node;
+            foreach (var child in Flatten(node.Children)) yield return child;
+        }
+    }
+
+    public void OpenResult(FileSearchResult result)
+    {
+        IsSearchOpen = false;
+        OpenRequested?.Invoke(result);
+        NavigateTo(result.Kind == "资料" ? "sources" : "knowledge");
+    }
+
+    #endregion
+
+    /// <summary>关闭窗口前的统一保护；返回 false 表示留在应用。</summary>
+    public async Task<bool> CanCloseAsync() => await _unsaved.CanLeaveAsync();
+}
+
+public sealed record FileSearchResult(string Name, string RelPath, string Kind, string GroupText)
+{
+    public string PathText => RelPath;
 }
