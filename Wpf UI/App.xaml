@@ -66,6 +66,9 @@
           <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#F5F5F5" />
           <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#C5C5C5" />
           <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#9A9A9A" />
+
+          <!-- 欢迎 Banner 底色（设计文档 01§3.2：#252B30 同色系层次，不用渐变） -->
+          <SolidColorBrush x:Key="BannerBackgroundBrush" Color="#252B30" />
         </ResourceDictionary>
       </ResourceDictionary.MergedDictionaries>
 

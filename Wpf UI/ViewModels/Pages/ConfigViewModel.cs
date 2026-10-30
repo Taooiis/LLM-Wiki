@@ -164,8 +164,8 @@ namespace LLM_Wiki.ViewModels.Pages
 
             WikisDir = _configService.WikisDir;
             WikisDirInput = WikisDir;
-            // 存储路径变更立即生效：重载库列表（选中失效时自动回退到首个库，见 Dashboard.LoadKbs）
-            _dashboardViewModel.LoadKbs();
+            // 存储路径变更立即生效：重载库列表（选中失效时自动回退到首个库，见 Dashboard.LoadOverview）
+            _dashboardViewModel.LoadOverview();
             _toastService.ShowSuccess("存储路径已更新：" + WikisDir);
         }
 

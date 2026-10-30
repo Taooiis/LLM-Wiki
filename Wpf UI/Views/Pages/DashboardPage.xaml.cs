@@ -1,6 +1,6 @@
-﻿using System.ComponentModel;
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 using LLM_Wiki.ViewModels.Pages;
 using LLM_Wiki.Views.Dialogs;
@@ -22,51 +22,30 @@ namespace LLM_Wiki.Views.Pages
             _snackbarService = snackbarService;
             DataContext = this;
 
-            ViewModel.PropertyChanged += ViewModel_PropertyChanged;
-
             InitializeComponent();
-
-            // 页面晚于 VM 构造：SelectedKb 的首次赋值已发生过，主动补载当前库的文件列表
-            if (!string.IsNullOrWhiteSpace(ViewModel.SelectedKb))
-            {
-                ViewModel.LoadFiles(ViewModel.SelectedKb);
-            }
         }
 
-        private async void OnDeleteClick(object sender, RoutedEventArgs e)
+        /// <summary>知识库卡片删除按钮：确认后执行（设计文档 07§3：删除必须确认并明示不可恢复）。</summary>
+        private async void OnDeleteKbClick(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrWhiteSpace(ViewModel.SelectedKb))
+            if (sender is not System.Windows.Controls.Button btn || btn.CommandParameter is not DashboardViewModel.KbItem item)
             {
-                _snackbarService.Show("提示", "请先选中要删除的知识库", ControlAppearance.Info, null, TimeSpan.FromSeconds(2.6));
                 return;
             }
 
             var confirm = (ConfirmationDialog)Resources["ConfirmDlg"];
-            if (await confirm.ShowAsync($"确定要删除知识库 \"{ViewModel.SelectedKb}\" 吗？\n此操作不可恢复。", "确认删除"))
+            if (await confirm.ShowAsync(
+                    $"确定要删除知识库 \"{item.Name}\" 吗？\n该库全部文件将被删除，此操作不可恢复。",
+                    "确认删除"))
             {
-                ViewModel.DeleteKbCommand.Execute(ViewModel.SelectedKb);
+                ViewModel.DeleteKbCommand.Execute(item.Name);
             }
         }
 
-        private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        /// <summary>双击知识库卡片 → 进入源文档页（设计文档 01§4）。</summary>
+        private void OnKbCardDoubleClick(object sender, MouseButtonEventArgs e)
         {
-            if (e.PropertyName == nameof(DashboardViewModel.SelectedKb))
-            {
-                if (!string.IsNullOrWhiteSpace(ViewModel.SelectedKb))
-                {
-                    ViewModel.LoadFiles(ViewModel.SelectedKb);
-                }
-            }
-        }
-
-        private void FileList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (sender is not System.Windows.Controls.ListView list || list.SelectedItem is not string file)
-            {
-                return;
-            }
-
-            ViewModel.LoadFileContent(ViewModel.SelectedKb, file);
+            ViewModel.OpenSelectedKbCommand.Execute(null);
         }
     }
 }
