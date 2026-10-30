@@ -8,98 +8,108 @@
   xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
   Title="GuidePage"
   d:DataContext="{d:DesignInstance local:GuidePage, IsDesignTimeCreatable=False}"
-  d:DesignHeight="700"
-  d:DesignWidth="1000"
   ui:Design.Background="{DynamicResource ApplicationBackgroundBrush}"
   ui:Design.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
   mc:Ignorable="d">
-  <Grid Margin="{StaticResource PageContentMargin}" MaxWidth="900">
+  <Grid Margin="{StaticResource PageContentMargin}" MaxWidth="960">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
 
     <!-- 标题 -->
-    <TextBlock Grid.Row="0" Style="{StaticResource PageTitleText}" Text="小白指南（分类速查）" />
+    <StackPanel Grid.Row="0" Margin="0,0,0,16">
+      <TextBlock Style="{StaticResource PageTitleText}" Text="小白指南" />
+      <TextBlock
+        Margin="0,-8,0,0"
+        Text="按界面按钮名称组织的操作速查，五组可折叠。"
+        Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+    </StackPanel>
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
       <StackPanel Margin="0,0,0,12">
 
-        <!-- 快速上手 -->
-        <Expander
-          Grid.Row="0"
-          IsExpanded="True"
-          Margin="0,0,0,12">
+        <!-- 一、快速上手 -->
+        <Expander IsExpanded="True" Margin="0,0,0,12">
           <Expander.Header>
-            <TextBlock Text="一、快速上手三步" FontWeight="SemiBold" />
+            <TextBlock FontWeight="SemiBold" Text="一、快速上手" />
           </Expander.Header>
           <StackPanel Margin="8,4">
-            <TextBlock Text="1. 新建知识库 → 源文档页上传 .md → 配置页填写目标和规则。" Margin="0,0,0,4" TextWrapping="Wrap" />
-            <TextBlock Text="2. 工作流页先做第 1 步接入（边界说明进 Agent 配置）→ 再生成 Ingest 等提示词 → 粘贴执行 → 回面板刷新看 wiki/ 成果。" Margin="0,0,0,4" TextWrapping="Wrap" />
-            <TextBlock Text="3. 双击程序启动，退出双击关闭。" Margin="0,0,0,0" TextWrapping="Wrap" />
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                       Text="1. 首页点「新建知识库」，输入名称后点「创建」；卡片会自动选中新库。" />
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                       Text="2. 进入「源文档」页，点「上传」放入 .md/.txt，或点「新建」写一篇。" />
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                       Text="3. 打开「配置」页，编辑 purpose.md / schema.md，告诉 AI 这个库的目标与结构。" />
+            <TextBlock TextWrapping="Wrap"
+                       Text="4. 进入「工作流」页，先复制第 1 张「边界说明」给 Agent，再按需生成 Ingest 等提示词。" />
           </StackPanel>
         </Expander>
 
-        <!-- 日常使用 -->
-        <Expander
-          Grid.Row="1"
-          IsExpanded="True"
-          Margin="0,0,0,12">
+        <!-- 二、日常使用 -->
+        <Expander IsExpanded="False" Margin="0,0,0,12">
           <Expander.Header>
-            <TextBlock Text="二、日常使用：文档与编辑" FontWeight="SemiBold" />
+            <TextBlock FontWeight="SemiBold" Text="二、日常使用：文档与编辑" />
           </Expander.Header>
           <StackPanel Margin="8,4">
-            <TextBlock Text="源文档页：＋新建文档 / 上传 / 点编辑弹窗修改 / 删除。只收 .md/.txt。" Margin="0,0,0,4" TextWrapping="Wrap" />
-            <TextBlock Text="改了哪些不用记：顶部待处理变更自动列出，勾选 → 生成选中 Ingest → 执行完标记已处理。" Margin="0,0,0,4" TextWrapping="Wrap" />
-            <TextBlock Text="目录浏览页：刷新目录树，点文件名弹窗编辑，下方同步预览。" Margin="0,0,0,4" TextWrapping="Wrap" />
-            <TextBlock Text="弹窗通用操作：改后标题栏 ● 未保存提醒；Ctrl+S 保存；Esc 关闭（未保存会确认）。" Margin="0,0,0,4" TextWrapping="Wrap" />
-            <TextBlock Text="重要规则：源文档的新增/修改/删除只写文件并自动记入 wiki/log.md，wiki 页面不会自己变——保存后按提醒去工作流页重新 Ingest 该文档。" Margin="0,0,0,0" TextWrapping="Wrap" />
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                       Text="源文档页：左侧文件列表，右侧是工作区。选中文件即预览；点编辑进入编辑状态，改完按 Ctrl+S 或点保存。" />
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                       Text="有未保存修改时切换文件或离开页面会先询问：保存后离开 / 放弃更改 / 继续编辑。" />
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                       Text="删除文件会弹确认框；删除后会记一条待处理变更，供后续增量 Ingest 处理。" />
+            <TextBlock TextWrapping="Wrap"
+                       Text="目录浏览页：左侧目录树选中文件，右侧预览或编辑，保存会写回原相对路径。" />
           </StackPanel>
         </Expander>
 
-        <!-- 管理与配置 -->
-        <Expander
-          Grid.Row="2"
-          IsExpanded="False"
-          Margin="0,0,0,12">
+        <!-- 三、知识维护 -->
+        <Expander IsExpanded="False" Margin="0,0,0,12">
           <Expander.Header>
-            <TextBlock Text="三、管理与配置" FontWeight="SemiBold" />
+            <TextBlock FontWeight="SemiBold" Text="三、知识维护：变更与提示词" />
           </Expander.Header>
           <StackPanel Margin="8,4">
-            <TextBlock Text="存储路径：点浏览（直达桌面/文档/程序目录、地址栏直达）或手填，点更改路径立即生效；旧文件不会自动搬移，需手动复制到新位置。" Margin="0,0,0,4" TextWrapping="Wrap" />
-            <TextBlock Text="配置页：点 purpose.md / schema.md 旁编辑，弹窗改目标规则，保存即生效。" Margin="0,0,0,4" TextWrapping="Wrap" />
-            <TextBlock Text="目录：库名/ 下 purpose.md、schema.md、raw/sources/、wiki/（index/log/overview/entities/concepts/...）。" Margin="0,0,0,0" TextWrapping="Wrap" />
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                       Text="新增 / 修改 / 删除源文档都会记入待处理变更，首页卡片和状态栏能看到数量。" />
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                       Text="工作流页「从变更列表导入」可把这些文件名写进批量 Ingest 输入框；「Ingest（增量）」只处理待处理变更。" />
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                       Text="Lint 检查格式、链接与引用；Compare 对比多个源文档；Clean 清理已删文档留下的摘要页与失效链接。" />
+            <TextBlock TextWrapping="Wrap"
+                       Text="提示词预览默认折叠，点开可确认内容；「生成」按当前输入重建，「复制」写入剪贴板。" />
           </StackPanel>
         </Expander>
 
-        <!-- AI 协作 -->
-        <Expander
-          Grid.Row="3"
-          IsExpanded="False"
-          Margin="0,0,0,12">
+        <!-- 四、AI 协作 -->
+        <Expander IsExpanded="False" Margin="0,0,0,12">
           <Expander.Header>
-            <TextBlock Text="四、AI 协作：工作流与边界说明" FontWeight="SemiBold" />
+            <TextBlock FontWeight="SemiBold" Text="四、AI 协作：把提示词交给 Agent" />
           </Expander.Header>
           <StackPanel Margin="8,4">
-            <TextBlock Text="第一步先接入：点生成边界说明 → 复制 → 粘贴进 Agent 配置（全局 AGENTS.md 等），新会话可直接读库；换库或大改后重新生成覆盖。" Margin="0,0,0,4" TextWrapping="Wrap" />
-            <TextBlock Text="工作流页：Ingest（填源文件名，支持批量留空全选）/ Query（填问题）/ Lint / Compare / 变更文档 Ingest（只处理新增/改动/删除）→ 生成 → 一键复制 → 粘贴到已接入的 AI 工具执行 → 回来刷新。" Margin="0,0,0,4" TextWrapping="Wrap" />
-            <TextBlock Text="不开面板可用 prompts/ 下离线模板（ingest/query/lint/compare/context）。" Margin="0,0,0,0" TextWrapping="Wrap" />
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                       Text="先接入：复制「边界说明」粘贴进 Agent 的配置（如全局 AGENTS.md），新会话即可直接读取本库。" />
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                       Text="再执行：在工作流页输入参数（如 Query 的问题、Compare 的主题），点「复制」，粘贴到已接入的 AI 工具执行。" />
+            <TextBlock TextWrapping="Wrap"
+                       Text="执行完成后回到面板点首页「刷新」或工作流页「刷新工作流」，查看 wiki/ 下的新页面。" />
           </StackPanel>
         </Expander>
 
-        <!-- 运行与网络 -->
-        <Expander
-          Grid.Row="4"
-          IsExpanded="False"
-          Margin="0,0,0,12">
+        <!-- 五、运行与网络 -->
+        <Expander IsExpanded="False" Margin="0,0,0,12">
           <Expander.Header>
-            <TextBlock Text="五、运行与网络" FontWeight="SemiBold" />
+            <TextBlock FontWeight="SemiBold" Text="五、运行与网络：存储与分享" />
           </Expander.Header>
           <StackPanel Margin="8,4">
-            <TextBlock Text="改完代码行为没变：先 stop 再启动，防止旧服务占着 8765 端口。" Margin="0,0,0,4" TextWrapping="Wrap" />
-            <TextBlock Text="局域网：同一 WiFi 下用打印的局域网地址（如 http://192.168.x.x:8765）在手机/另一电脑打开；防火墙弹窗点允许；仅可信网络使用。" Margin="0,0,0,4" TextWrapping="Wrap" />
-            <TextBlock Text="多电脑（库在 A，B 要用）：B 直接用浏览器打开 A 的面板可看可改；B 想自己跑 AI，A 把 wikis 文件夹共享，B 面板点浏览 → 局域网一路点选共享，路径自动填入。双方别同时改同一文件。" Margin="0,0,0,0" TextWrapping="Wrap" />
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                       Text="存储位置：配置页可手填或点「浏览」，路径状态会即时显示；点「保存」后所有页面读取新路径，旧目录不会自动搬移或删除。" />
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                       Text="局域网分享：分享页打开开关启动服务，把显示的局域网地址发给其他设备，访问者需输入 4 位 PIN。" />
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                       Text="只读边界：访问者能浏览目录、预览与下载文档，不能编辑、上传、删除或执行工作流，写接口由服务端拒绝。" />
+            <TextBlock TextWrapping="Wrap"
+                       Text="安全提示：仅在可信局域网开启分享；不用时关闭开关，PIN 会随下次启动重新生成。" />
           </StackPanel>
         </Expander>
 

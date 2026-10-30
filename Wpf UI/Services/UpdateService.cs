@@ -60,6 +60,38 @@ public class UpdateService
     }
 
     /// <summary>
+    /// 带结果的检查更新（设置页用）：返回状态与最新版本号，失败时给出可展示的原因。
+    /// 与 CheckAsync 共用版本比较逻辑，CheckAsync 仍保持"静默不打扰"的启动行为。
+    /// </summary>
+    public async Task<UpdateCheckResult> CheckResultAsync()
+    {
+        try
+        {
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("LLM-Wiki-Desktop");
+            client.Timeout = TimeSpan.FromSeconds(8);
+
+            var json = await client.GetStringAsync(_releasesUrl);
+            var release = JsonSerializer.Deserialize<GitHubRelease>(json);
+            if (release == null)
+            {
+                return new UpdateCheckResult(false, "", "返回内容无法解析");
+            }
+
+            var latest = release.TagName.TrimStart('v');
+            var newer = IsNewerVersion(latest, _currentVersion);
+            return new UpdateCheckResult(true, latest, newer ? "发现新版本" : "已是最新版本");
+        }
+        catch (Exception ex)
+        {
+            return new UpdateCheckResult(false, "", "检查失败：" + ex.Message);
+        }
+    }
+
+    /// <summary>检查更新结果：是否成功、最新版本号、可展示的状态说明。</summary>
+    public record UpdateCheckResult(bool Success, string LatestVersion, string Message);
+
+    /// <summary>
     /// 比较版本号：a > b 返回 true。
     /// </summary>
     private static bool IsNewerVersion(string latest, string current)

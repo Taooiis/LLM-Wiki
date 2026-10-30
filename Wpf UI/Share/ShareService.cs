@@ -47,6 +47,23 @@ public class ShareService(ConfigService config)
     private const string PinCookie = "llmwiki_pin";
 
     /// <summary>
+    /// 重新生成 PIN（服务运行中）：旧 PIN 立即失效，已连接的设备需要重新输入新 PIN。
+    /// 未运行时返回 false——启动时本来就会生成新 PIN。
+    /// </summary>
+    public bool RegeneratePin(out string error)
+    {
+        if (_host == null)
+        {
+            error = "分享服务未运行，启动时会自动生成新 PIN";
+            return false;
+        }
+
+        Pin = Random.Shared.Next(1000, 10000).ToString();
+        error = "";
+        return true;
+    }
+
+    /// <summary>
     /// 启动服务。port=0 时系统分配一个空闲端口。
     /// </summary>
     public bool Start(int port, out string error)
@@ -122,10 +139,14 @@ public class ShareService(ConfigService config)
         catch { return addr; }
     }
 
-    /// <summary>局域网可用地址（本机回环 + 所有 IPv4 局域网地址）。</summary>
+    /// <summary>
+    /// 局域网可用地址：只返回真实 IPv4 局域网地址（不含回环）。
+    /// 本机回环地址由 <see cref="LocalAddress"/> 单独提供——混在局域网列表里会让用户
+    /// 把 localhost 当成可以发给其他设备的地址。
+    /// </summary>
     public string[] LanAddresses()
     {
-        var addrs = new List<string> { LocalAddress() };
+        var addrs = new List<string>();
         try
         {
             var host = Dns.GetHostEntry(Dns.GetHostName());

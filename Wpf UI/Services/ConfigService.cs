@@ -24,12 +24,14 @@ public class ConfigService
 
         // 实例级初始化：读取配置 → 若位置在 exe 目录下（旧默认），自动搬到 %APPDATA%
         string? configured = null;
+        string theme = "Dark";
         if (File.Exists(_configFile))
         {
             try
             {
                 var c = JsonSerializer.Deserialize<WikisConfig>(File.ReadAllText(_configFile));
                 if (!string.IsNullOrWhiteSpace(c?.WikisDir)) configured = c.WikisDir;
+                if (!string.IsNullOrWhiteSpace(c?.Theme)) theme = c.Theme;
             }
             catch { /* 坏 JSON 回退默认 */ }
         }
@@ -44,6 +46,7 @@ public class ConfigService
         }
 
         WikisDir = dir ?? (Directory.Exists(DefaultWikis) ? DefaultWikis : CreateDefaultWikis());
+        Theme = theme;
     }
 
     /// <summary>搬库：从旧目录复制到 %APPDATA%，写配置并返回新路径。</summary>
@@ -77,6 +80,27 @@ public class ConfigService
     // 当前存储根目录（构造时读取，SetWikisDir 更新）
     public string WikisDir { get; private set; }
 
+    /// <summary>主题偏好："Dark" / "Light"，默认 Dark（设计文档 06§5）。</summary>
+    public string Theme { get; private set; } = "Dark";
+
+    /// <summary>记住主题选择：写 config.json（与 wikisDir 共存，不互相覆盖）。</summary>
+    public bool SetTheme(string theme, out string error)
+    {
+        error = "";
+        var v = theme == "Light" ? "Light" : "Dark";
+        try
+        {
+            WriteConfig(v, WikisDir);
+            Theme = v;
+            return true;
+        }
+        catch (Exception e)
+        {
+            error = e.Message;
+            return false;
+        }
+    }
+
     /// <summary>改存储路径：校验合法 → 建目录 → 写 config.json → 立即生效。</summary>
     public bool SetWikisDir(string v, out string error)
     {
@@ -93,10 +117,22 @@ public class ConfigService
             error = "路径不可用，无法创建目录：" + e.Message;
             return false;
         }
-        File.WriteAllText(_configFile, JsonSerializer.Serialize(new WikisConfig { WikisDir = v.Trim() },
-            new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+        try { WriteConfig(Theme, v.Trim()); }
+        catch (Exception e)
+        {
+            error = "写入配置失败：" + e.Message;
+            return false;
+        }
         WikisDir = dir;
         return true;
+    }
+
+    /// <summary>写 config.json：wikisDir 保持用户输入原文（与 Demo 互导），theme 一并保存。</summary>
+    private void WriteConfig(string theme, string wikisDir)
+    {
+        File.WriteAllText(_configFile, JsonSerializer.Serialize(
+            new WikisConfig { WikisDir = wikisDir, Theme = theme },
+            new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
     }
 
     private sealed class WikisConfig
@@ -104,5 +140,8 @@ public class ConfigService
         // 键名与 Demo config.json 逐字一致（小写 wikisDir），保证互导
         [JsonPropertyName("wikisDir")]
         public string WikisDir { get; set; } = "";
+
+        [JsonPropertyName("theme")]
+        public string Theme { get; set; } = "Dark";
     }
 }

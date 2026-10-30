@@ -48,6 +48,11 @@ namespace LLM_Wiki.ViewModels.Pages
         [ObservableProperty]
         private string _kbPath = "";
 
+        /// <summary>顶部「当前库」展示文案：未选库时明确写「未选择知识库」，避免冒号后空白。</summary>
+        public string KbPathText => string.IsNullOrWhiteSpace(KbPath) ? "未选择知识库" : KbPath;
+
+        partial void OnKbPathChanged(string value) => OnPropertyChanged(nameof(KbPathText));
+
         /// <summary>当前库待处理变更数（顶部状态行与增量卡状态的真实来源）。</summary>
         [ObservableProperty]
         private int _pendingCount;

@@ -6,122 +6,325 @@
   xmlns:local="clr-namespace:LLM_Wiki.Views.Pages"
   xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
   xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  xmlns:helpers="clr-namespace:LLM_Wiki.Helpers"
   Title="SharePage"
   d:DataContext="{d:DesignInstance local:SharePage, IsDesignTimeCreatable=False}"
-  d:DesignHeight="500"
-  d:DesignWidth="700"
   ui:Design.Background="{DynamicResource ApplicationBackgroundBrush}"
   ui:Design.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
   mc:Ignorable="d"
 >
-  <Grid Margin="{StaticResource PageContentMargin}" MaxWidth="900">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto" />
-      <RowDefinition Height="*" />
-    </Grid.RowDefinitions>
+  <Page.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    <helpers:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis" />
+    <helpers:InverseBoolConverter x:Key="InverseBool" />
+    <helpers:CountToEmptyVisibilityConverter x:Key="CountToEmptyVis" />
+  </Page.Resources>
 
-    <!-- 标题 -->
-    <TextBlock Grid.Row="0" Style="{StaticResource PageTitleText}" Text="分享（局域网只读访问）" />
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <Grid Margin="{StaticResource PageContentMargin}" MaxWidth="1000">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
 
-    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-      <StackPanel Margin="0,0,0,12">
+      <!-- ============ 标题 ============ -->
+      <StackPanel Grid.Row="0" Margin="0,0,0,16">
+        <TextBlock Style="{StaticResource PageTitleText}" Text="分享" />
+        <TextBlock
+          Margin="0,-8,0,0"
+          Text="在局域网内安全地只读查看当前知识库。"
+          Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+      </StackPanel>
 
-        <!-- 开关卡片 -->
-        <Border
-          Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-          CornerRadius="8"
-          Padding="16"
-          Margin="0,0,0,16"
-          BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
-          BorderThickness="1">
-          <StackPanel>
-            <TextBlock Style="{StaticResource SectionTitleText}" Text="只读分享服务" />
-            <TextBlock Text="开启后，局域网内其它设备可通过浏览器只读浏览知识库。不支持上传/编辑/删除。" Margin="0,0,0,12" />
-            <ui:ToggleSwitch
-              OnContent="{Binding ViewModel.ToggleText}"
-              OffContent="{Binding ViewModel.ToggleText}"
-              IsChecked="{Binding ViewModel.IsRunning, Mode=OneWay}"
-              Command="{Binding ViewModel.ToggleShareCommand}"
-              Margin="0,0,0,12" />
+      <!-- ============ 服务状态卡（设计文档 05§3） ============ -->
+      <Border Grid.Row="1" Style="{StaticResource CardBorder}" Margin="0,0,0,16">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+
+          <StackPanel Grid.Column="0" Margin="0,0,16,0">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock
+                VerticalAlignment="Center"
+                FontSize="{StaticResource FontSizeSectionTitle}"
+                FontWeight="SemiBold"
+                Text="局域网分享服务" />
+
+              <!-- 状态徽标：颜色 + 文字双重区分（设计文档 07§7） -->
+              <Border
+                Margin="10,0,0,0"
+                Padding="8,2"
+                VerticalAlignment="Center"
+                CornerRadius="10">
+                <Border.Style>
+                  <Style TargetType="Border">
+                    <Setter Property="Background" Value="#33C5C5C5" />
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding ViewModel.IsRunning}" Value="True">
+                        <Setter Property="Background" Value="#336CCB5F" />
+                      </DataTrigger>
+                      <DataTrigger Binding="{Binding ViewModel.HasError}" Value="True">
+                        <Setter Property="Background" Value="#33FF6B6B" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </Border.Style>
+                <StackPanel Orientation="Horizontal">
+                  <ui:SymbolIcon
+                    FontSize="12"
+                    VerticalAlignment="Center"
+                    Symbol="Circle24"
+                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                    Visibility="{Binding ViewModel.IsRunning, Converter={StaticResource InverseBoolToVis}}" />
+                  <ui:SymbolIcon
+                    FontSize="12"
+                    VerticalAlignment="Center"
+                    Symbol="CheckmarkCircle24"
+                    Foreground="{DynamicResource SuccessBrush}"
+                    Visibility="{Binding ViewModel.IsRunning, Converter={StaticResource BoolToVis}}" />
+                  <TextBlock
+                    Margin="5,0,0,0"
+                    VerticalAlignment="Center"
+                    FontSize="{StaticResource FontSizeCaption}"
+                    Text="{Binding ViewModel.StatusText}" />
+                </StackPanel>
+              </Border>
+            </StackPanel>
+
             <TextBlock
-              Text="{Binding ViewModel.Pin, StringFormat='访问 PIN: {0}'}"
-              FontWeight="SemiBold"
-              Margin="0,0,0,8"
-              Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-          </StackPanel>
-        </Border>
+              Margin="0,8,0,0"
+              Text="启动后，其他设备可通过浏览器只读浏览当前知识库；不提供任何写操作。"
+              TextWrapping="Wrap"
+              Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
-        <!-- 地址卡片 -->
-        <Border
-          Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-          CornerRadius="8"
-          Padding="16"
-          Margin="0,0,0,16"
-          BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
-          BorderThickness="1">
+            <!-- 未选知识库提示 -->
+            <TextBlock
+              Margin="0,8,0,0"
+              Foreground="{DynamicResource WarningBrush}"
+              TextWrapping="Wrap"
+              Text="{Binding ViewModel.EmptyKbHint}" />
+
+            <!-- 启动失败：原因 + 重试 -->
+            <StackPanel
+              Margin="0,8,0,0"
+              Orientation="Horizontal"
+              Visibility="{Binding ViewModel.HasError, Converter={StaticResource BoolToVis}}">
+              <TextBlock
+                Margin="0,0,12,0"
+                VerticalAlignment="Center"
+                Foreground="{DynamicResource DangerBrush}"
+                TextWrapping="Wrap"
+                Text="{Binding ViewModel.LastError, StringFormat='启动失败：{0}'}" />
+              <ui:Button
+                Content="重试"
+                Appearance="Secondary"
+                Command="{Binding ViewModel.StartShareCommand}" />
+            </StackPanel>
+          </StackPanel>
+
+          <StackPanel Grid.Column="1" VerticalAlignment="Center" Orientation="Horizontal">
+            <TextBlock
+              Margin="0,0,8,0"
+              VerticalAlignment="Center"
+              FontSize="{StaticResource FontSizeCaption}"
+              Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+              Text="{Binding ViewModel.ToggleText}" />
+            <ui:ToggleSwitch
+              IsChecked="{Binding ViewModel.IsRunning, Mode=OneWay}"
+              IsEnabled="{Binding ViewModel.CanToggle}"
+              Command="{Binding ViewModel.ToggleShareCommand}" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- ============ 地址卡 + PIN 卡（仅运行中） ============ -->
+      <Grid
+        Grid.Row="2"
+        Margin="0,0,0,16"
+        Visibility="{Binding ViewModel.ShowConnectionInfo, Converter={StaticResource BoolToVis}}">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="2*" />
+          <ColumnDefinition Width="16" />
+          <ColumnDefinition Width="1*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- 访问地址 -->
+        <Border Grid.Column="0" Style="{StaticResource CardBorder}">
           <StackPanel>
             <TextBlock Style="{StaticResource SectionTitleText}" Text="访问地址" />
-            <TextBlock Text="手机或其它电脑在局域网内打开以下地址，输入 PIN 即可浏览：" Margin="0,0,0,8" />
-            
-            <TextBlock Text="本机地址：" FontWeight="SemiBold" Margin="0,8,0,4" />
-            <ui:TextBox
-              Text="{Binding ViewModel.LocalAddress, Mode=OneWay}"
-              IsReadOnly="True"
-              Background="{DynamicResource ApplicationBackgroundBrush}"
-              BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
+            <TextBlock
+              Margin="0,-6,0,10"
+              FontSize="{StaticResource FontSizeCaption}"
+              Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+              Text="其他设备在浏览器打开以下地址并输入 PIN。多网卡时逐条列出。" />
 
-            <TextBlock Text="局域网地址：" FontWeight="SemiBold" Margin="0,8,0,4" />
-            <ItemsControl ItemsSource="{Binding ViewModel.LanAddresses, Mode=OneWay}">
+            <TextBlock
+              FontSize="{StaticResource FontSizeCaption}"
+              Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+              Text="本机：" />
+            <ui:TextBox
+              Margin="0,2,0,0"
+              FontFamily="Consolas"
+              FontSize="12"
+              IsReadOnly="True"
+              Text="{Binding ViewModel.LocalAddress, Mode=OneWay}" />
+
+            <TextBlock
+              Margin="0,10,0,0"
+              FontSize="{StaticResource FontSizeCaption}"
+              Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+              Text="局域网（其他设备用这些）：" />
+            <ItemsControl Margin="0,2,0,0" ItemsSource="{Binding ViewModel.LanAddresses, Mode=OneWay}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
                   <ui:TextBox
-                    Text="{Binding Mode=OneWay}"
+                    Margin="0,2,0,0"
+                    FontFamily="Consolas"
+                    FontSize="12"
                     IsReadOnly="True"
-                    Margin="0,2,0,2"
-                    Background="{DynamicResource ApplicationBackgroundBrush}"
-                    BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
+                    Text="{Binding Mode=OneWay}" />
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
+            <TextBlock
+              Margin="0,4,0,0"
+              FontSize="{StaticResource FontSizeCaption}"
+              Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+              Text="未检测到局域网地址：请确认已连接网络，或让其他设备用上面的本机地址（仅本机可用）。"
+              TextWrapping="Wrap"
+              Visibility="{Binding ViewModel.LanAddresses.Count, Converter={StaticResource CountToEmptyVis}}" />
+            <TextBlock
+              Margin="0,4,0,0"
+              FontSize="{StaticResource FontSizeCaption}"
+              Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+              Text="{Binding ViewModel.FriendlyAddress, StringFormat='mDNS 地址：{0}'}"
+              TextWrapping="Wrap" />
 
-            <TextBlock Text="mDNS 友好地址：" FontWeight="SemiBold" Margin="0,8,0,4" />
-            <ui:TextBox
-              Text="{Binding ViewModel.FriendlyAddress, Mode=OneWay}"
-              IsReadOnly="True"
-              Background="{DynamicResource ApplicationBackgroundBrush}"
-              BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
-            <TextBlock Text="(如为空表示 mDNS 不可用，请使用上面的 IP 地址)" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="{StaticResource FontSizeCaption}" Margin="0,4,0,0" />
-
-            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+            <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
               <ui:Button
                 Content="复制地址"
-                Command="{Binding ViewModel.CopyUrlCommand}"
+                Appearance="Primary"
+                Icon="Copy24"
                 Margin="0,0,8,0"
-                Icon="Copy24" />
+                Command="{Binding ViewModel.CopyUrlCommand}" />
+              <ui:Button
+                Content="在浏览器中打开"
+                Appearance="Secondary"
+                Icon="Open24"
+                Command="{Binding ViewModel.OpenLocalUrlCommand}" />
             </StackPanel>
           </StackPanel>
         </Border>
 
-        <!-- 说明 -->
-        <Border
-          Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-          CornerRadius="8"
-          Padding="16"
-          Margin="0,0,0,16"
-          BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
-          BorderThickness="1">
+        <!-- 访问 PIN -->
+        <Border Grid.Column="2" Style="{StaticResource CardBorder}">
           <StackPanel>
-            <TextBlock Style="{StaticResource SectionTitleText}" Text="使用说明" />
-            <TextBlock Text="1. 点击开关启动分享服务（默认端口 8765）。" Margin="0,0,0,4" />
-            <TextBlock Text="2. 在手机或其它电脑浏览器打开上方显示的地址。" Margin="0,0,0,4" />
-            <TextBlock Text="3. 输入显示的 4 位 PIN 码进入只读页面。" Margin="0,0,0,4" />
-            <TextBlock Text="4. 只读页面支持浏览目录树、预览与下载文档，不支持任何写操作。" Margin="0,0,0,4" />
-            <TextBlock Text="5. 关闭开关即停止服务；程序退出自动停止。" Margin="0,0,0,4" />
+            <TextBlock Style="{StaticResource SectionTitleText}" Text="访问 PIN" />
+            <TextBlock
+              Margin="0,-6,0,10"
+              FontSize="{StaticResource FontSizeCaption}"
+              Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+              Text="访问者输入此 4 位 PIN 才能打开页面。" />
+
+            <TextBlock
+              Margin="0,4,0,8"
+              HorizontalAlignment="Center"
+              FontFamily="Consolas"
+              FontSize="34"
+              FontWeight="Bold"
+              Text="{Binding ViewModel.Pin}" />
+
+            <ui:Button
+              Content="复制 PIN"
+              Appearance="Primary"
+              Icon="Copy24"
+              Margin="0,0,0,8"
+              Command="{Binding ViewModel.CopyPinCommand}" />
+            <ui:Button
+              Content="重新生成 PIN"
+              Appearance="Secondary"
+              Icon="ArrowClockwise24"
+              Command="{Binding ViewModel.RegeneratePinCommand}" />
+            <TextBlock
+              Margin="0,8,0,0"
+              FontSize="{StaticResource FontSizeCaption}"
+              Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+              TextWrapping="Wrap"
+              Text="重新生成后旧 PIN 立即失效，已连接的设备需要重新输入。" />
           </StackPanel>
         </Border>
+      </Grid>
 
-      </StackPanel>
-    </ScrollViewer>
-  </Grid>
+      <!-- ============ 分享内容与安全边界（设计文档 05§5） ============ -->
+      <Border Grid.Row="3" Style="{StaticResource CardBorder}" Margin="0,0,0,16">
+        <StackPanel>
+          <TextBlock Style="{StaticResource SectionTitleText}" Text="分享内容" />
+          <WrapPanel>
+            <StackPanel Margin="0,0,24,6" Orientation="Horizontal">
+              <ui:SymbolIcon Symbol="CheckmarkCircle24" FontSize="14" Foreground="{DynamicResource SuccessBrush}" />
+              <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="目录浏览" />
+            </StackPanel>
+            <StackPanel Margin="0,0,24,6" Orientation="Horizontal">
+              <ui:SymbolIcon Symbol="CheckmarkCircle24" FontSize="14" Foreground="{DynamicResource SuccessBrush}" />
+              <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="Markdown 预览" />
+            </StackPanel>
+            <StackPanel Margin="0,0,24,6" Orientation="Horizontal">
+              <ui:SymbolIcon Symbol="CheckmarkCircle24" FontSize="14" Foreground="{DynamicResource SuccessBrush}" />
+              <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="文件下载" />
+            </StackPanel>
+            <StackPanel Margin="0,0,24,6" Orientation="Horizontal">
+              <ui:SymbolIcon Symbol="DismissCircle24" FontSize="14" Foreground="{DynamicResource DangerBrush}" />
+              <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="编辑" />
+            </StackPanel>
+            <StackPanel Margin="0,0,24,6" Orientation="Horizontal">
+              <ui:SymbolIcon Symbol="DismissCircle24" FontSize="14" Foreground="{DynamicResource DangerBrush}" />
+              <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="上传" />
+            </StackPanel>
+            <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
+              <ui:SymbolIcon Symbol="DismissCircle24" FontSize="14" Foreground="{DynamicResource DangerBrush}" />
+              <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="删除" />
+            </StackPanel>
+          </WrapPanel>
+
+          <Separator Margin="0,8,0,10" />
+
+          <!-- 当前知识与范围 -->
+          <Grid Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+              <Run Text="当前知识库：" />
+              <Run
+                FontWeight="SemiBold"
+                Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                Text="{Binding ViewModel.SelectedKbText, Mode=OneWay}" />
+            </TextBlock>
+          </Grid>
+
+          <TextBlock
+            Margin="0,0,0,8"
+            TextTrimming="CharacterEllipsis"
+            ToolTip="{Binding ViewModel.StoragePath}"
+            Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+            <Run Text="分享范围：" />
+            <Run Foreground="{DynamicResource TextFillColorPrimaryBrush}" Text="{Binding ViewModel.StoragePathText, Mode=OneWay}" />
+          </TextBlock>
+
+          <TextBlock
+            TextWrapping="Wrap"
+            FontSize="{StaticResource FontSizeCaption}"
+            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+            Text="安全说明：访问者只能读取分享范围内的文件，不能修改本机知识库。写接口由服务端拒绝，不只是隐藏按钮。" />
+        </StackPanel>
+      </Border>
+    </Grid>
+  </ScrollViewer>
 </Page>

@@ -6,47 +6,48 @@
   xmlns:local="clr-namespace:LLM_Wiki.Views.Pages"
   xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
   xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  xmlns:helpers="clr-namespace:LLM_Wiki.Helpers"
   Title="配置"
   d:DataContext="{d:DesignInstance local:ConfigPage, IsDesignTimeCreatable=False}"
-  d:DesignHeight="600"
-  d:DesignWidth="800"
   ui:Design.Background="{DynamicResource ApplicationBackgroundBrush}"
   ui:Design.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
   mc:Ignorable="d"
 >
-  <ScrollViewer>
-    <Grid Margin="{StaticResource PageContentMargin}" MaxWidth="900">
+  <Page.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    <helpers:InverseBoolConverter x:Key="InverseBool" />
+    <helpers:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis" />
+  </Page.Resources>
+
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <Grid Margin="{StaticResource PageContentMargin}" MaxWidth="1180">
       <Grid.RowDefinitions>
-        <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
 
-      <!-- 标题 -->
-      <TextBlock Grid.Row="0"
-                 Style="{StaticResource PageTitleText}"
-                 Text="配置" />
+      <!-- ============ 标题 ============ -->
+      <StackPanel Grid.Row="0" Margin="0,0,0,16">
+        <TextBlock Style="{StaticResource PageTitleText}" Text="配置" />
+        <TextBlock
+          Margin="0,-8,0,0"
+          Text="管理知识库的存储位置和 AI 协作约定。"
+          Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+      </StackPanel>
 
-      <!-- 存储路径配置 -->
-      <Border Grid.Row="1"
-              Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-              CornerRadius="8"
-              Padding="20"
-              Margin="0,0,0,16">
+      <!-- ============ 存储位置（设计文档 06§3） ============ -->
+      <Border Grid.Row="1" Style="{StaticResource CardBorder}" Margin="0,0,0,16">
         <StackPanel>
-          <TextBlock Style="{StaticResource SectionTitleText}" Text="存储路径" />
-          <TextBlock Text="知识库文件存储位置，可设为盘符路径或局域网共享（UNC）"
-                     Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                     Margin="0,0,0,12" />
+          <TextBlock Style="{StaticResource SectionTitleText}" Text="存储位置" />
+          <TextBlock
+            Margin="0,-6,0,10"
+            FontSize="{StaticResource FontSizeCaption}"
+            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+            Text="知识库根目录，可填绝对路径或局域网共享（UNC）。切换后所有页面读取新路径，旧目录不会自动搬移或删除。" />
 
           <Grid>
-            <Grid.RowDefinitions>
-              <RowDefinition Height="Auto" />
-              <RowDefinition Height="Auto" />
-              <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
@@ -54,100 +55,202 @@
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <!-- 当前路径 -->
-            <TextBlock Grid.Row="0" Grid.Column="0"
-                       Grid.ColumnSpan="4"
-                       Text="{Binding ViewModel.WikisDir, StringFormat='当前: {0}'}"
-                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                       Margin="0,0,0,8" />
-
-            <!-- 输入框行 -->
-            <ui:TextBox Grid.Row="1" Grid.Column="0"
-                        x:Name="WikisDirInput"
-                        Margin="0,0,8,0"
-                        Text="{Binding ViewModel.WikisDirInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                        TextChanged="OnWikisDirInputChanged"
-                        Background="{DynamicResource ApplicationBackgroundBrush}"
-                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                        BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}" />
-
-            <ui:Button Grid.Row="1" Grid.Column="1"
-                       Content="浏览"
-                       Click="OnBrowseClick"
-                       Margin="0,0,8,0"
-                       Icon="Folder24" />
-
-            <ui:Button Grid.Row="1" Grid.Column="2"
-                       Content="保存"
-                       Command="{Binding ViewModel.SaveWikisDirCommand}"
-                       IsEnabled="{Binding ViewModel.IsPathValid}"
-                       Margin="0,0,8,0"
-                       Icon="Save24" />
-
-            <ui:Button Grid.Row="1" Grid.Column="3"
-                       Content="恢复默认"
-                       Command="{Binding ViewModel.ResetWikisDirCommand}"
-                       Icon="ArrowCounterclockwise24" />
-
-            <!-- 错误提示 -->
-            <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="4"
-                       Text="{Binding ViewModel.PathErrorMessage}"
-                       Foreground="{DynamicResource TextFillColorDangerBrush}"
-                       Margin="0,4,0,0" />
+            <ui:TextBox
+              Grid.Column="0"
+              x:Name="WikisDirInput"
+              Margin="0,0,8,0"
+              PlaceholderText="如 D:\知识库"
+              Text="{Binding ViewModel.WikisDirInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+              TextChanged="OnWikisDirInputChanged" />
+            <ui:Button
+              Grid.Column="1"
+              Margin="0,0,8,0"
+              Content="浏览"
+              Icon="Folder24"
+              Click="OnBrowseClick" />
+            <ui:Button
+              Grid.Column="2"
+              Margin="0,0,8,0"
+              Appearance="Primary"
+              Content="保存"
+              Icon="Save24"
+              IsEnabled="{Binding ViewModel.IsPathValid}"
+              Command="{Binding ViewModel.SaveWikisDirCommand}" />
+            <ui:Button
+              Grid.Column="3"
+              Content="恢复默认"
+              Icon="ArrowCounterclockwise24"
+              Command="{Binding ViewModel.ResetWikisDirCommand}" />
           </Grid>
+
+          <!-- 路径状态：图标 + 文案双重表达（设计文档 07§7） -->
+          <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
+            <ui:SymbolIcon
+              FontSize="14"
+              VerticalAlignment="Center"
+              Symbol="CheckmarkCircle24"
+              Foreground="{DynamicResource SuccessBrush}"
+              Visibility="{Binding ViewModel.PathIsOk, Converter={StaticResource BoolToVis}}" />
+            <ui:SymbolIcon
+              FontSize="14"
+              VerticalAlignment="Center"
+              Symbol="Warning24"
+              Foreground="{DynamicResource WarningBrush}"
+              Visibility="{Binding ViewModel.PathIsOk, Converter={StaticResource InverseBoolToVis}}" />
+            <TextBlock
+              Margin="6,0,0,0"
+              VerticalAlignment="Center"
+              FontSize="{StaticResource FontSizeCaption}"
+              Text="{Binding ViewModel.PathStatusText, Mode=OneWay}"
+              Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+          </StackPanel>
+
+          <TextBlock
+            Margin="0,4,0,0"
+            FontSize="{StaticResource FontSizeCaption}"
+            Foreground="{DynamicResource DangerBrush}"
+            TextWrapping="Wrap"
+            Text="{Binding ViewModel.PathErrorMessage}" />
+
+          <TextBlock
+            Margin="0,8,0,0"
+            FontSize="{StaticResource FontSizeCaption}"
+            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+            TextTrimming="CharacterEllipsis"
+            ToolTip="{Binding ViewModel.WikisDir}"
+            Text="{Binding ViewModel.WikisDir, StringFormat='当前生效：{0}'}" />
         </StackPanel>
       </Border>
 
-      <!-- purpose.md 编辑 -->
-      <Border Grid.Row="2"
-              Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-              CornerRadius="8"
-              Padding="20"
-              Margin="0,0,0,16">
+      <!-- ============ 知识库约定：purpose / schema（设计文档 06§4） ============ -->
+      <Border Grid.Row="2" Style="{StaticResource CardBorder}">
         <StackPanel>
-          <TextBlock Style="{StaticResource SectionTitleText}" Text="purpose.md" />
-          <TextBlock Text="知识库目标 / 关键问题 / 研究范围"
-                     Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                     Margin="0,0,0,12" />
-          <ui:TextBox x:Name="PurposeEditor"
-                      MinHeight="120"
-                      Text="{Binding ViewModel.PurposeContent, Mode=TwoWay}"
-                      AcceptsReturn="True"
-                      TextWrapping="Wrap"
-                      VerticalScrollBarVisibility="Auto"
-                      Background="{DynamicResource ApplicationBackgroundBrush}"
-                      Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-          <ui:Button Content="保存"
-                     Command="{Binding ViewModel.SavePurposeCommand}"
-                     CommandParameter="{Binding ElementName=PurposeEditor, Path=Text}"
-                     Margin="0,8,0,0"
-                     Icon="Save24" />
-        </StackPanel>
-      </Border>
+          <TextBlock Style="{StaticResource SectionTitleText}" Text="知识库约定" />
+          <TextBlock
+            Margin="0,-6,0,10"
+            FontSize="{StaticResource FontSizeCaption}"
+            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+            Text="这两个文件决定 AI 如何理解并维护当前知识库。保存失败时编辑内容会保留。" />
 
-      <!-- schema.md 编辑（结构规则） -->
-      <Border Grid.Row="3"
-              Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-              CornerRadius="8"
-              Padding="20">
-        <StackPanel>
-          <TextBlock Style="{StaticResource SectionTitleText}" Text="schema.md" />
-          <TextBlock Text="结构规则（默认即可，一般不动）"
-                     Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                     Margin="0,0,0,12" />
-          <ui:TextBox x:Name="SchemaEditor"
-                      MinHeight="120"
-                      Text="{Binding ViewModel.SchemaContent, Mode=TwoWay}"
-                      AcceptsReturn="True"
-                      TextWrapping="Wrap"
-                      VerticalScrollBarVisibility="Auto"
-                      Background="{DynamicResource ApplicationBackgroundBrush}"
-                      Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-          <ui:Button Content="保存"
-                     Command="{Binding ViewModel.SaveSchemaCommand}"
-                     CommandParameter="{Binding ElementName=SchemaEditor, Path=Text}"
-                     Margin="0,8,0,0"
-                     Icon="Save24" />
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="16" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- purpose.md -->
+            <StackPanel Grid.Column="0">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock
+                  VerticalAlignment="Center"
+                  FontSize="{StaticResource FontSizeBody}"
+                  FontWeight="SemiBold"
+                  Text="purpose.md" />
+                <Border Margin="8,0,0,0" Padding="7,1" VerticalAlignment="Center" CornerRadius="4">
+                  <Border.Style>
+                    <Style TargetType="Border">
+                      <Setter Property="Background" Value="#33FCE100" />
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding ViewModel.PurposeExists}" Value="True">
+                          <Setter Property="Background" Value="#336CCB5F" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Border.Style>
+                  <TextBlock
+                    FontSize="11"
+                    Text="{Binding ViewModel.PurposeStatus}"
+                    Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                </Border>
+              </StackPanel>
+              <TextBlock
+                Margin="0,4,0,8"
+                FontSize="{StaticResource FontSizeCaption}"
+                Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                Text="定义知识库目标、范围和边界。" />
+
+              <ui:TextBox
+                x:Name="PurposeEditor"
+                MinHeight="220"
+                Text="{Binding ViewModel.PurposeContent, Mode=TwoWay}"
+                AcceptsReturn="True"
+                TextWrapping="Wrap"
+                VerticalScrollBarVisibility="Auto" />
+
+              <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                <ui:Button
+                  Appearance="Primary"
+                  Content="保存"
+                  Icon="Save24"
+                  Margin="0,0,8,0"
+                  Command="{Binding ViewModel.SavePurposeCommand}"
+                  CommandParameter="{Binding ElementName=PurposeEditor, Path=Text}" />
+                <ui:Button
+                  Content="创建默认模板"
+                  Appearance="Secondary"
+                  Icon="DocumentAdd24"
+                  Command="{Binding ViewModel.CreateDefaultPurposeCommand}"
+                  Visibility="{Binding ViewModel.PurposeExists, Converter={StaticResource InverseBoolToVis}}" />
+              </StackPanel>
+            </StackPanel>
+
+            <!-- schema.md -->
+            <StackPanel Grid.Column="2">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock
+                  VerticalAlignment="Center"
+                  FontSize="{StaticResource FontSizeBody}"
+                  FontWeight="SemiBold"
+                  Text="schema.md" />
+                <Border Margin="8,0,0,0" Padding="7,1" VerticalAlignment="Center" CornerRadius="4">
+                  <Border.Style>
+                    <Style TargetType="Border">
+                      <Setter Property="Background" Value="#33FCE100" />
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding ViewModel.SchemaExists}" Value="True">
+                          <Setter Property="Background" Value="#336CCB5F" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Border.Style>
+                  <TextBlock
+                    FontSize="11"
+                    Text="{Binding ViewModel.SchemaStatus}"
+                    Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                </Border>
+              </StackPanel>
+              <TextBlock
+                Margin="0,4,0,8"
+                FontSize="{StaticResource FontSizeCaption}"
+                Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                Text="定义实体、关系和内容结构规则。" />
+
+              <ui:TextBox
+                x:Name="SchemaEditor"
+                MinHeight="220"
+                Text="{Binding ViewModel.SchemaContent, Mode=TwoWay}"
+                AcceptsReturn="True"
+                TextWrapping="Wrap"
+                VerticalScrollBarVisibility="Auto" />
+
+              <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                <ui:Button
+                  Appearance="Primary"
+                  Content="保存"
+                  Icon="Save24"
+                  Margin="0,0,8,0"
+                  Command="{Binding ViewModel.SaveSchemaCommand}"
+                  CommandParameter="{Binding ElementName=SchemaEditor, Path=Text}" />
+                <ui:Button
+                  Content="创建默认模板"
+                  Appearance="Secondary"
+                  Icon="DocumentAdd24"
+                  Command="{Binding ViewModel.CreateDefaultSchemaCommand}"
+                  Visibility="{Binding ViewModel.SchemaExists, Converter={StaticResource InverseBoolToVis}}" />
+              </StackPanel>
+            </StackPanel>
+          </Grid>
         </StackPanel>
       </Border>
     </Grid>

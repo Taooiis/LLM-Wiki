@@ -44,6 +44,16 @@ namespace LLM_Wiki.Helpers
             => throw new NotSupportedException();
     }
 
+    /// <summary>bool 取反：用于"IsBusy 时禁用"这类 IsEnabled 绑定。</summary>
+    public class InverseBoolConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            => value is bool b && !b;
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => value is bool b && !b;
+    }
+
     /// <summary>待处理数 → 辅助文案：>0 提示重新 Ingest，=0 提示已同步（设计文档 01§3.3）。</summary>
     public class PendingHintConverter : IValueConverter
     {

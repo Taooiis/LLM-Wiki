@@ -147,7 +147,7 @@
           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
           TextTrimming="CharacterEllipsis"
           ToolTip="{Binding ViewModel.KbPath}"
-          Text="{Binding ViewModel.KbPath, StringFormat='当前库：{0}'}" />
+          Text="{Binding ViewModel.KbPathText, StringFormat='当前库：{0}'}" />
         <ui:Button
           Content="刷新工作流"
           Appearance="Secondary"
