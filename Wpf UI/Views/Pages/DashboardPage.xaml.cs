@@ -25,6 +25,12 @@ namespace LLM_Wiki.Views.Pages
             ViewModel.PropertyChanged += ViewModel_PropertyChanged;
 
             InitializeComponent();
+
+            // 页面晚于 VM 构造：SelectedKb 的首次赋值已发生过，主动补载当前库的文件列表
+            if (!string.IsNullOrWhiteSpace(ViewModel.SelectedKb))
+            {
+                ViewModel.LoadFiles(ViewModel.SelectedKb);
+            }
         }
 
         private async void OnDeleteClick(object sender, RoutedEventArgs e)
