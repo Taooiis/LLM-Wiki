@@ -32,16 +32,70 @@ namespace LLM_Wiki.ViewModels.Pages
             _navigationService = navigationService;
             _toastService = toastService;
 
+            // 文档工作区（指南阶段 2）：源文档页编辑/新建/预览统一走右侧工作区
+            Workspace = new DocumentWorkspaceViewModel(_fileBridge, _toastService)
+            {
+                NewFileDirectory = "raw/sources"
+            };
+            Workspace.DocumentSaved += OnWorkspaceDocumentSaved;
+
             _mainViewModel.PropertyChanged += MainViewModel_PropertyChanged;
 
             // 页面 VM 是懒解析单例：CurrentKb 的首次赋值可能早于本构造，订阅后必须拉一次现值
             LoadKb(_mainViewModel.CurrentKb);
         }
 
-        private void MainViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        /// <summary>右侧文档工作区（预览/编辑/只读/新建）。</summary>
+        public DocumentWorkspaceViewModel Workspace { get; }
+
+        /// <summary>工作区保存成功：刷新列表与待处理变更。</summary>
+        private void OnWorkspaceDocumentSaved()
+        {
+            LoadFiles(SelectedKb);
+            LoadChanges(SelectedKb);
+        }
+
+        /// <summary>
+        /// 选择文件：先经未保存保护，再加载预览（列表存裸文件名，源文档位于 raw/sources/ 下）。
+        /// </summary>
+        public async Task SelectFileAsync(string fileName)
+        {
+            if (string.IsNullOrWhiteSpace(SelectedKb) || string.IsNullOrWhiteSpace(fileName))
+            {
+                return;
+            }
+
+            if (!await Workspace.CanLeaveAsync())
+            {
+                return; // 用户选择继续编辑：不切换
+            }
+
+            SelectedFile = fileName;
+            Workspace.ShowPreview(SelectedKb, "raw/sources/" + fileName);
+        }
+
+        private bool _kbSwitchLocked;
+
+        private async void MainViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(MainWindowViewModel.CurrentKb))
             {
+                // 回滚引起的再入：直接加载目标库
+                if (_kbSwitchLocked)
+                {
+                    LoadKb(_mainViewModel.CurrentKb);
+                    return;
+                }
+
+                // 切库前未保存保护（指南阶段 2 验收项）；继续编辑则回滚全局库选择
+                if (!await Workspace.CanLeaveAsync())
+                {
+                    _kbSwitchLocked = true;
+                    _mainViewModel.CurrentKb = SelectedKb;
+                    _kbSwitchLocked = false;
+                    return;
+                }
+
                 LoadKb(_mainViewModel.CurrentKb);
             }
         }
@@ -56,9 +110,6 @@ namespace LLM_Wiki.ViewModels.Pages
         private string _selectedFile = "";
 
         [ObservableProperty]
-        private string _documentContent = "";
-
-        [ObservableProperty]
         private ObservableCollection<ChangeItem> _changes = new();
 
         public void LoadKb(string kb)
@@ -66,6 +117,7 @@ namespace LLM_Wiki.ViewModels.Pages
             SelectedKb = kb;
             LoadFiles(kb);
             LoadChanges(kb);
+            ResetWorkspace();
         }
 
         public void LoadFiles(string kb)
@@ -83,19 +135,10 @@ namespace LLM_Wiki.ViewModels.Pages
             }
         }
 
-        public void LoadFileContent(string kb, string file)
+        /// <summary>清空工作区（切库/无库时回到空态引导）。</summary>
+        public void ResetWorkspace()
         {
-            if (string.IsNullOrWhiteSpace(kb) || string.IsNullOrWhiteSpace(file))
-            {
-                DocumentContent = string.Empty;
-                SelectedFile = string.Empty;
-                return;
-            }
-
-            var error = "";
-            var content = _fileBridge.ReadText(kb, file, out error);
-            DocumentContent = content ?? string.Empty;
-            SelectedFile = file;
+            Workspace.ResetToEmpty();
         }
 
         public void LoadChanges(string kb)
@@ -123,25 +166,9 @@ namespace LLM_Wiki.ViewModels.Pages
             // 列表存的是文件名，源文档统一位于 raw/sources/ 下
             _fileBridge.Delete(SelectedKb, "raw/sources/" + fileName, out _);
             LoadFiles(SelectedKb);
-            DocumentContent = string.Empty;
             SelectedFile = string.Empty;
-        }
-
-        [RelayCommand]
-        private void SaveDocument(string content)
-        {
-            if (string.IsNullOrWhiteSpace(SelectedKb) || string.IsNullOrWhiteSpace(SelectedFile))
-            {
-                return;
-            }
-
-            _fileBridge.WriteText(SelectedKb, SelectedFile, content, out _);
-            LoadChanges(SelectedKb);
-        }
-
-        public bool SaveFile(string kb, string rel, string content, out string error)
-        {
-            return _fileBridge.WriteText(kb, rel, content, out error);
+            // 删除后工作区回空态
+            Workspace.ResetToEmpty();
         }
 
         [RelayCommand]

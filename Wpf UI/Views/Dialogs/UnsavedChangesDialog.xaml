@@ -1,0 +1,31 @@
+<ui:ContentDialog
+  x:Class="LLM_Wiki.Views.Dialogs.UnsavedChangesDialog"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  Title="保留本次修改？"
+  PrimaryButtonText="保存后离开"
+  SecondaryButtonText="放弃更改"
+  CloseButtonText="继续编辑"
+  DefaultButton="Primary"
+  mc:Ignorable="d"
+  d:DesignHeight="220"
+  d:DesignWidth="460">
+  <!-- 三按钮语义（指南 §11.4）：保存后离开=Primary，放弃更改=Secondary（危险），继续编辑=Close（默认 Esc） -->
+  <StackPanel Margin="0,8,0,4" MaxWidth="440">
+    <TextBlock
+      Text="当前文档还有未保存的更改。"
+      FontSize="{StaticResource FontSizeBody}"
+      Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+      TextWrapping="Wrap" />
+    <TextBlock
+      x:Name="DetailText"
+      Margin="0,8,0,0"
+      FontSize="{StaticResource FontSizeCaption}"
+      Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+      TextWrapping="Wrap"
+      Text="离开后，这些修改将不会写入知识库。" />
+  </StackPanel>
+</ui:ContentDialog>

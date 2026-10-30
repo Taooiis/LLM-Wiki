@@ -6,6 +6,7 @@
   xmlns:local="clr-namespace:LLM_Wiki.Views.Pages"
   xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
   xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  xmlns:controls="clr-namespace:LLM_Wiki.Controls"
   xmlns:dialogs="clr-namespace:LLM_Wiki.Views.Dialogs"
   Title="SourcePage"
   d:DataContext="{d:DesignInstance local:SourcePage, IsDesignTimeCreatable=False}"
@@ -17,7 +18,7 @@
   mc:Ignorable="d"
 >
   <Page.Resources>
-    <dialogs:EditorDialog x:Key="EditorDlg" />
+    <dialogs:UnsavedChangesDialog x:Key="UnsavedDlg" />
     <dialogs:ConfirmationDialog x:Key="ConfirmDlg" />
   </Page.Resources>
 
@@ -109,45 +110,11 @@
         </ui:ListView>
       </Grid>
 
-      <!-- 右侧：预览/编辑 -->
-      <Grid Grid.Column="1" Margin="8,0,0,0">
-        <Grid.RowDefinitions>
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-
-        <Grid Grid.Row="0" Margin="0,0,0,8">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-          </Grid.ColumnDefinitions>
-          <TextBlock
-            Grid.Column="0"
-            VerticalAlignment="Center"
-            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-            Text="{Binding ViewModel.SelectedFile, TargetNullValue='请选择文件', FallbackValue='请选择文件'}" />
-          <ui:Button
-            Grid.Column="1"
-            x:Name="EditButton"
-            Content="编辑"
-            Click="OnEditClick"
-            Margin="8,0,0,0"
-            Icon="Edit24"
-            IsEnabled="False" />
-        </Grid>
-
-        <ui:TextBox
-          x:Name="PreviewText"
-          Grid.Row="1"
-          TextWrapping="Wrap"
-          VerticalScrollBarVisibility="Auto"
-          VerticalAlignment="Stretch"
-          VerticalContentAlignment="Top"
-          Background="{DynamicResource ApplicationBackgroundBrush}"
-          Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-          BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
-          Padding="8" />
-      </Grid>
+      <!-- 右侧：文档工作区（预览/编辑/只读/新建，指南阶段 2） -->
+      <controls:DocumentWorkspace
+        Grid.Column="1"
+        Margin="8,0,0,0"
+        DataContext="{Binding ViewModel.Workspace}" />
     </Grid>
 
     <!-- 待处理变更区：内部滚动，避免撑爆页面 -->

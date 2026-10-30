@@ -1,11 +1,13 @@
 using System.Windows;
 using System.Windows.Controls;
 
+using LLM_Wiki.ViewModels;
 using LLM_Wiki.ViewModels.Pages;
 using LLM_Wiki.Views.Dialogs;
 
 using Wpf.Ui;
 using Wpf.Ui.Abstractions.Controls;
+using Wpf.Ui.Controls;
 
 namespace LLM_Wiki.Views.Pages
 {
@@ -13,8 +15,8 @@ namespace LLM_Wiki.Views.Pages
     {
         public SourceViewModel ViewModel { get; }
 
-        private readonly EditorDialog _editorDlg;
         private readonly ISnackbarService _snackbarService;
+        private readonly UnsavedChangesDialog _unsavedDlg;
 
         public SourcePage(SourceViewModel viewModel, ISnackbarService snackbarService)
         {
@@ -24,44 +26,25 @@ namespace LLM_Wiki.Views.Pages
 
             InitializeComponent();
 
-            _editorDlg = (EditorDialog)Resources["EditorDlg"];
-            _editorDlg.Saved += OnEditorSaved;
+            _unsavedDlg = (UnsavedChangesDialog)Resources["UnsavedDlg"];
+
+            // 工作区的未保存确认回调（指南 §11.4，不用 MessageBox）
+            ViewModel.Workspace.ConfirmUnsaved = async () =>
+                await _unsavedDlg.ShowChoiceAsync(System.Threading.CancellationToken.None);
         }
 
-        private void FileList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        /// <summary>选中文件：经未保存保护后加载到工作区预览。</summary>
+        private async void FileList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (sender is not ListBox list || list.SelectedItem is not string file)
             {
                 return;
             }
 
-            ViewModel.SelectedFile = file;
-            // 列表存的是裸文件名，源文档实际位于 raw/sources/ 下
-            ViewModel.LoadFileContent(ViewModel.SelectedKb, "raw/sources/" + file);
-            PreviewText.Text = ViewModel.DocumentContent;
-            EditButton.IsEnabled = true;
+            await ViewModel.SelectFileAsync(file);
         }
 
-        private void OnEditClick(object sender, RoutedEventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(ViewModel.SelectedKb) || string.IsNullOrWhiteSpace(ViewModel.SelectedFile))
-            {
-                return;
-            }
-
-            _editorDlg.DialogMode = EditorDialog.Mode.Exist;
-            _editorDlg.FileName = ViewModel.SelectedFile;
-            _editorDlg.FilePath = "raw/sources/" + ViewModel.SelectedFile;
-            _editorDlg.SetLoadedContent(ViewModel.DocumentContent);
-            _editorDlg.ShowAsync(System.Threading.CancellationToken.None);
-        }
-
-        private void OnUploadClick(object sender, RoutedEventArgs e)
-        {
-            ViewModel.UploadFileCommand.Execute(null);
-        }
-
-        /// <summary>新建文档：弹编辑器（New 模式），保存时由 OnEditorSaved 落盘。</summary>
+        /// <summary>新建文档：右侧工作区直接进入编辑（不再弹窗，指南 §6.4）。</summary>
         private void OnNewClick(object sender, RoutedEventArgs e)
         {
             if (string.IsNullOrWhiteSpace(ViewModel.SelectedKb))
@@ -70,11 +53,12 @@ namespace LLM_Wiki.Views.Pages
                 return;
             }
 
-            _editorDlg.DialogMode = EditorDialog.Mode.New;
-            _editorDlg.FileName = "";
-            _editorDlg.FilePath = "raw/sources/";
-            _editorDlg.SetLoadedContent("");
-            _editorDlg.ShowAsync(System.Threading.CancellationToken.None);
+            ViewModel.Workspace.EnterNewMode(ViewModel.SelectedKb);
+        }
+
+        private void OnUploadClick(object sender, RoutedEventArgs e)
+        {
+            ViewModel.UploadFileCommand.Execute(null);
         }
 
         /// <summary>删除当前选中的源文档（带确认）。</summary>
@@ -90,61 +74,14 @@ namespace LLM_Wiki.Views.Pages
             if (await confirm.ShowAsync($"确定要删除 \"{ViewModel.SelectedFile}\" 吗？\n此操作不可恢复。", "确认删除"))
             {
                 ViewModel.DeleteFileCommand.Execute(ViewModel.SelectedFile);
-                PreviewText.Text = "";
-                EditButton.IsEnabled = false;
             }
-        }
-
-        private void OnEditorSaved(string content)
-        {
-            if (string.IsNullOrWhiteSpace(ViewModel.SelectedKb))
-            {
-                return;
-            }
-
-            // New 模式：弹窗 OnButtonClick 已把 FilePath 设为 "raw/sources/文件名"（含补后缀）；
-            // Exist 模式：以当前选中文件落盘
-            var isNew = _editorDlg.DialogMode == EditorDialog.Mode.New;
-            var rel = isNew ? _editorDlg.FilePath : "raw/sources/" + ViewModel.SelectedFile;
-            if (string.IsNullOrWhiteSpace(rel) || rel == "raw/sources/")
-            {
-                ShowToast("文件名不能为空", false);
-                return;
-            }
-            var name = System.IO.Path.GetFileName(rel);
-
-            var error = "";
-            var ok = ViewModel.SaveFile(ViewModel.SelectedKb, rel, content, out error);
-            if (!ok)
-            {
-                ShowToast("保存失败：" + error, false);
-                return;
-            }
-
-            ViewModel.LoadFiles(ViewModel.SelectedKb);
-            ViewModel.DocumentContent = content;
-            PreviewText.Text = content;
-
-            if (isNew)
-            {
-                ViewModel.SelectedFile = name;
-                ShowToast("已创建：" + name + "，去工作流页重新 Ingest 该文档", true);
-            }
-            else
-            {
-                ShowToast("已保存：" + name + "，去工作流页重新 Ingest 该文档", true);
-            }
-
-            ViewModel.LoadChanges(ViewModel.SelectedKb);
-            // E4/E6：清除 dirty 标记
-            _editorDlg.ClearDirty();
         }
 
         private void ShowToast(string message, bool success)
         {
             var appearance = success
-                ? Wpf.Ui.Controls.ControlAppearance.Success
-                : Wpf.Ui.Controls.ControlAppearance.Danger;
+                ? ControlAppearance.Success
+                : ControlAppearance.Danger;
             _snackbarService.Show(success ? "成功" : "错误", message, appearance, null, TimeSpan.FromSeconds(2.6));
         }
     }
