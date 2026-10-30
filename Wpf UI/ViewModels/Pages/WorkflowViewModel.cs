@@ -24,6 +24,9 @@ namespace LLM_Wiki.ViewModels.Pages
             _fileBridge = fileBridge;
             _toastService = toastService;
             _mainViewModel.PropertyChanged += MainViewModel_PropertyChanged;
+
+            // 页面 VM 懒解析：CurrentKb 首值可能早于本构造，订阅后拉一次现值
+            OnKbChanged(_mainViewModel.CurrentKb);
         }
 
         private void MainViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

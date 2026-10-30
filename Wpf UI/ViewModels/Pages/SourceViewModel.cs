@@ -33,6 +33,9 @@ namespace LLM_Wiki.ViewModels.Pages
             _toastService = toastService;
 
             _mainViewModel.PropertyChanged += MainViewModel_PropertyChanged;
+
+            // 页面 VM 是懒解析单例：CurrentKb 的首次赋值可能早于本构造，订阅后必须拉一次现值
+            LoadKb(_mainViewModel.CurrentKb);
         }
 
         private void MainViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)

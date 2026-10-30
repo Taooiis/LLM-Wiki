@@ -15,10 +15,5 @@ namespace LLM_Wiki.Views.Pages
 
             InitializeComponent();
         }
-
-        public void OnNavigatedTo(string kb)
-        {
-            // WorkflowViewModel 通过 MainWindowViewModel.CurrentKb 自动响应
-        }
     }
 }

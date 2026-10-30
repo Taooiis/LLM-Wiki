@@ -15,10 +15,5 @@ namespace LLM_Wiki.Views.Pages
 
             InitializeComponent();
         }
-
-        public void OnNavigatedTo(string kb)
-        {
-            // ShareViewModel 不依赖当前 KB，无需处理
-        }
     }
 }

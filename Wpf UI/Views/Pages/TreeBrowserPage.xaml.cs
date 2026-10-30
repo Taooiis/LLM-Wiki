@@ -32,9 +32,5 @@ namespace LLM_Wiki.Views.Pages
             }
         }
 
-        public void OnNavigatedTo(string kb)
-        {
-            ViewModel.LoadTree(kb);
-        }
     }
 }

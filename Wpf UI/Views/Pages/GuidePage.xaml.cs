@@ -15,10 +15,5 @@ namespace LLM_Wiki.Views.Pages
 
             InitializeComponent();
         }
-
-        public void OnNavigatedTo(string kb)
-        {
-            // 指南页不依赖知识库
-        }
     }
 }

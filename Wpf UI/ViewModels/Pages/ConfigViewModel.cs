@@ -28,6 +28,9 @@ namespace LLM_Wiki.ViewModels.Pages
 
             _mainViewModel.PropertyChanged += MainViewModel_PropertyChanged;
 
+            // 页面 VM 懒解析：CurrentKb 首值可能早于本构造，订阅后拉一次现值
+            LoadKb(_mainViewModel.CurrentKb);
+
             WikisDir = _configService.WikisDir;
             WikisDirInput = _configService.WikisDir;
         }

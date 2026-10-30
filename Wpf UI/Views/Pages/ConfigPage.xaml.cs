@@ -48,10 +48,5 @@ namespace LLM_Wiki.Views.Pages
                 ViewModel.ValidateWikisDir();
             }
         }
-
-        public void OnNavigatedTo(string kb)
-        {
-            ViewModel.LoadKb(kb);
-        }
     }
 }

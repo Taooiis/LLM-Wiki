@@ -98,6 +98,10 @@ namespace LLM_Wiki.ViewModels.Pages
 
         public void LoadKbs()
         {
+            // Clear 会让 KbList 的 TwoWay 绑定把 SelectedKb 写成 null，进而清零 CurrentKb：
+            // 先记住原选中，重填后显式恢复（否则改存储路径/删库后全页掉回未选态）
+            var prev = SelectedKb;
+
             Kbs.Clear();
             foreach (var kb in _kbService.ListKbs())
             {
@@ -105,11 +109,10 @@ namespace LLM_Wiki.ViewModels.Pages
             }
             ApplyKbFilter();
 
-            // 选中失效（如存储路径变更后原库不在新目录）：回退到首个库或清空
-            if (!string.IsNullOrEmpty(SelectedKb) && !Kbs.Contains(SelectedKb))
-            {
-                SelectedKb = Kbs.Count > 0 ? Kbs[0] : "";
-            }
+            var target = !string.IsNullOrEmpty(prev) && Kbs.Contains(prev)
+                ? prev
+                : Kbs.Count > 0 ? Kbs[0] : "";
+            SelectedKb = target;
         }
 
         public void LoadFiles(string kb)
@@ -151,7 +154,12 @@ namespace LLM_Wiki.ViewModels.Pages
                 return;
             }
 
-            _fileBridge.WriteText(SelectedKb, SelectedFile, content, out _);
+            var error = "";
+            if (!_fileBridge.WriteText(SelectedKb, SelectedFile, content, out error))
+            {
+                _toastService.ShowError("保存失败：" + error);
+                return;
+            }
             _toastService.ShowSuccess("已保存");
         }
 
@@ -178,10 +186,12 @@ namespace LLM_Wiki.ViewModels.Pages
                 return;
             }
 
+            var existed = _kbService.ListKbs().Contains(name);
             LoadKbs();
             // 建库成功后自动选中新库（对齐 Demo），并随 OnSelectedKbChanged 联动 CurrentKb
             SelectedKb = name;
-            _toastService.ShowSuccess("已创建知识库：" + name);
+            // CreateKb 幂等（重名=补骨架，数据无损）：如实区分"新建"与"选中已有"，避免用户把内容误写进旧库
+            _toastService.ShowSuccess(existed ? "库已存在，已为你选中：" + name : "已创建知识库：" + name);
         }
 
         [RelayCommand]
