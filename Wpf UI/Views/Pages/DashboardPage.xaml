@@ -29,10 +29,15 @@
         <RowDefinition Height="*" />
       </Grid.RowDefinitions>
 
-      <!-- 标题：统一引用全局样式 -->
-      <TextBlock Grid.Row="0"
-                 Style="{StaticResource PageTitleText}"
-                 Text="知识库" />
+      <!-- 标题 + 当前库完整路径 -->
+      <StackPanel Grid.Row="0">
+        <TextBlock Style="{StaticResource PageTitleText}"
+                   Text="知识库" />
+        <TextBlock Margin="0,-8,0,16"
+                   Text="{Binding ViewModel.CurrentKbPath}"
+                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                   TextTrimming="CharacterEllipsis" />
+      </StackPanel>
 
       <!-- 工具栏 -->
       <Grid Grid.Row="1">

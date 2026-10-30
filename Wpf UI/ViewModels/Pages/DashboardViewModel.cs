@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 using LLM_Wiki.Services;
+using LLM_Wiki.ViewModels.Windows;
 
 using Markdig;
 
@@ -14,13 +15,20 @@ namespace LLM_Wiki.ViewModels.Pages
         private readonly KbService _kbService;
         private readonly FileBridge _fileBridge;
         private readonly ToastService _toastService;
+        private readonly MainWindowViewModel _main;
 
-        public DashboardViewModel(KbService kbService, FileBridge fileBridge, ToastService toastService)
+        public DashboardViewModel(KbService kbService, FileBridge fileBridge, ToastService toastService, MainWindowViewModel mainViewModel)
         {
             _kbService = kbService;
             _fileBridge = fileBridge;
             _toastService = toastService;
+            _main = mainViewModel;
             LoadKbs();
+            // 启动即选中首个库（对齐 Demo 默认选中行为），各页面随 CurrentKb 联动刷新
+            if (Kbs.Count > 0 && string.IsNullOrEmpty(SelectedKb))
+            {
+                SelectedKb = Kbs[0];
+            }
         }
 
         [ObservableProperty]
@@ -40,6 +48,17 @@ namespace LLM_Wiki.ViewModels.Pages
 
         [ObservableProperty]
         private string _searchText = "";
+
+        /// <summary>当前库根目录完整路径（显示用，对齐 Demo 顶部路径行）。</summary>
+        [ObservableProperty]
+        private string _currentKbPath = "";
+
+        /// <summary>选中库变化：写入全局 CurrentKb（其他页面据此刷新）并更新路径显示。</summary>
+        partial void OnSelectedKbChanged(string value)
+        {
+            _main.CurrentKb = value ?? "";
+            CurrentKbPath = string.IsNullOrWhiteSpace(value) ? "" : _fileBridge.KbRoot(value);
+        }
 
         public void LoadKbs()
         {
@@ -157,6 +176,8 @@ namespace LLM_Wiki.ViewModels.Pages
 
             _kbService.CreateKb(name);
             LoadKbs();
+            // 建库成功后自动选中新库（对齐 Demo），并随 OnSelectedKbChanged 联动 CurrentKb
+            SelectedKb = name;
         }
 
         [RelayCommand]

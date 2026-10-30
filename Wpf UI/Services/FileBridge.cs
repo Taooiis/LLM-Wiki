@@ -17,6 +17,9 @@ public class FileBridge(string wikisDir)
 {
     private static readonly char[] Separators = ['\\', '/'];
 
+    /// <summary>库根目录完整路径（显示与跨页共享用；Task 6 起根目录来源切到 ConfigService）。</summary>
+    public string KbRoot(string kb) => Path.GetFullPath(Path.Combine(wikisDir, kb));
+
     /// <summary>递归目录树：目录在前按名排序；跳过点号开头与 node_modules；wiki 区只认 md/txt，raw/original 下原件全认（spec 02 §4）。</summary>
     public TreeItem[] Tree(string kb) => TreeDir(Path.Combine(wikisDir, kb), 0, inOriginal: false);
 
