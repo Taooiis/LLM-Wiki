@@ -180,10 +180,25 @@ namespace LLM_Wiki.ViewModels.Pages
                 return;
             }
 
-            _kbService.CreateKb(name);
+            try
+            {
+                _kbService.CreateKb(name);
+            }
+            catch (ArgumentException)
+            {
+                _toastService.ShowError("知识库名只允许中文、英文、数字、下划线、中划线");
+                return;
+            }
+            catch (Exception ex)
+            {
+                _toastService.ShowError("建库失败：" + ex.Message);
+                return;
+            }
+
             LoadKbs();
             // 建库成功后自动选中新库（对齐 Demo），并随 OnSelectedKbChanged 联动 CurrentKb
             SelectedKb = name;
+            _toastService.ShowSuccess("已创建知识库：" + name);
         }
 
         [RelayCommand]

@@ -267,8 +267,23 @@ namespace LLM_Wiki.ViewModels.Pages
         }
     }
 
-    public record ChangeItem(string File, string Action, string Time, string Hash)
+    /// <summary>待处理变更条目；IsSelected 可通知（列表滚动回收后勾选不丢）。</summary>
+    public partial class ChangeItem : ObservableObject
     {
-        public bool IsSelected { get; set; }
+        public string File { get; }
+        public string Action { get; }
+        public string Time { get; }
+        public string Hash { get; }
+
+        [ObservableProperty]
+        private bool _isSelected;
+
+        public ChangeItem(string file, string action, string time, string hash)
+        {
+            File = file;
+            Action = action;
+            Time = time;
+            Hash = hash;
+        }
     }
 }

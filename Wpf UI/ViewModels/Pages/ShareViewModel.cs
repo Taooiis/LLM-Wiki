@@ -64,6 +64,20 @@ namespace LLM_Wiki.ViewModels.Pages
         }
 
         [RelayCommand]
+        private void ToggleShare()
+        {
+            // 单一开关入口：按当前状态启动或停止（替代原先非法的三元 Command 绑定）
+            if (_shareService.Running)
+            {
+                StopShareCommand.Execute(null);
+            }
+            else
+            {
+                StartShareCommand.Execute(null);
+            }
+        }
+
+        [RelayCommand]
         private void StartShare()
         {
             if (_shareService.Running) return;

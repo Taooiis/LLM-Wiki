@@ -108,7 +108,18 @@ namespace LLM_Wiki
         /// </summary>
         private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
         {
-            // For more info see https://docs.microsoft.com/en-us/dotnet/api/system.windows.application.dispatcherunhandledexception?view=windowsdesktop-6.0
+            // 记录到日志目录后再标记已处理，避免默认崩溃对话框，同时不留静默失败
+            try
+            {
+                var dir = System.IO.Path.Combine(AppContext.BaseDirectory, "logs");
+                System.IO.Directory.CreateDirectory(dir);
+                System.IO.File.AppendAllText(
+                    System.IO.Path.Combine(dir, "crash.log"),
+                    $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {e.Exception}\n\n");
+            }
+            catch { /* 日志失败不阻塞退出 */ }
+
+            e.Handled = true;
         }
     }
 }
