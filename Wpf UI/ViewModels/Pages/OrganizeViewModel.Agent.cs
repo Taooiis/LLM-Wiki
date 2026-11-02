@@ -10,7 +10,7 @@ namespace LLM_Wiki.ViewModels.Pages;
 
 public partial class OrganizeViewModel
 {
-    public ObservableCollection<string> AgentOptions { get; } = ["本机工具：Codex CLI", "本机工具：OpenCode CLI", "WorkBuddy 桌面（复制任务）", "手动复制"];
+    public ObservableCollection<string> AgentOptions { get; } = ["本机工具：Codex CLI", "本机工具：OpenCode CLI", "手动复制"];
 
     [ObservableProperty] private string _selectedAgentOption = "手动复制";
     [ObservableProperty] private bool _isAgentRunning;
@@ -29,7 +29,6 @@ public partial class OrganizeViewModel
     {
         get
         {
-            if (SelectedAgentOption.StartsWith("WorkBuddy", StringComparison.Ordinal)) return "复制 WorkBuddy 任务";
             if (!IsLocalMode || !AgentReady) return IsMcpTransport ? "复制任务说明" : "复制整理指令";
             return ActiveTab switch
             {

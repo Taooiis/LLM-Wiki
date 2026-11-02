@@ -105,7 +105,15 @@ public partial class ConnectionsViewModel : ObservableObject
         : "默认关闭、默认只读。服务开启不等于任务已发送，连接成功不等于整理完成。";
     public string TokenVisibilityText => TokensVisible ? "隐藏令牌" : "显示令牌";
     public string McpWriteButtonText => McpWriteEnabled ? "切回只读" : "开启写入";
-    public string McpLanText => McpAllowLan ? "当前：允许局域网访问" : "当前：仅本机回环";
+    public string McpLanText => McpAllowLan
+        ? (McpRunning ? "当前：允许局域网访问" : "当前：允许局域网访问（启动服务后生效）")
+        : "当前：仅本机回环";
+    public string McpLanHint => McpRunning
+        ? "局域网地址（客户端连接以下地址，仍需携带令牌）"
+        : "局域网地址（启动 MCP 服务后生效，仍需携带令牌）";
+    public string McpClientConfigTitle => McpAllowLan
+        ? "客户端配置（局域网 HTTP）"
+        : "客户端配置（HTTP remote + stdio）";
     public string McpClientConfigDisplay => MaskTokens(McpClientConfig);
 
     partial void OnSelectedKbChanged(string value)
@@ -192,7 +200,7 @@ public partial class ConnectionsViewModel : ObservableObject
         McpAllowLan = _mcp.AllowLan;
         McpEndpoint = _mcp.Running ? _mcp.LocalEndpoint : "";
         McpLanEndpoints = new ObservableCollection<string>(_mcp.LanEndpoints());
-        McpClientConfig = _mcp.ClientConfigJson();
+        McpClientConfig = _mcp.ClientConfigJson(SelectedKb);
         McpReadTokenDisplay = TokensVisible ? _mcp.Token : Mask(_mcp.Token);
         McpWriteTokenDisplay = TokensVisible ? _mcp.WriteToken : Mask(_mcp.WriteToken);
         RecentCalls = new ObservableCollection<McpCallRecord>(_mcp.RecentCalls);
@@ -204,6 +212,8 @@ public partial class ConnectionsViewModel : ObservableObject
         OnPropertyChanged(nameof(McpWriteButtonText));
         OnPropertyChanged(nameof(McpClientConfigDisplay));
         OnPropertyChanged(nameof(McpLanText));
+        OnPropertyChanged(nameof(McpLanHint));
+        OnPropertyChanged(nameof(McpClientConfigTitle));
         OnPropertyChanged(nameof(McpStatusHint));
         OnPropertyChanged(nameof(McpBoundElsewhere));
         OnPropertyChanged(nameof(ShareBoundElsewhere));
@@ -254,7 +264,7 @@ public partial class ConnectionsViewModel : ObservableObject
     private bool CanStopMcp() => McpRunning && !McpBusy;
     private bool CanReplaceMcpRange() => McpBoundElsewhere && !McpBusy;
     private bool CanToggleMcpWrite() => McpRunning && !McpBusy;
-    private bool CanToggleMcpLan() => !McpBusy;
+    private bool CanToggleMcpLan() => !McpBusy && (McpRunning || HasKb);
     private bool CanRotateTokens() => McpRunning;
     private bool CanUseTokens() => McpRunning;
     private bool CanCopyMcpConfig() => !string.IsNullOrEmpty(McpClientConfig);
@@ -472,8 +482,8 @@ public partial class ConnectionsViewModel : ObservableObject
     private async Task ToggleMcpLanAsync()
     {
         var target = !McpAllowLan;
-        if (target && McpRunning && ConfirmEnableLan != null
-            && !await ConfirmEnableLan(_mcp.BoundKb))
+        var kb = McpRunning ? _mcp.BoundKb : _main.CurrentKb;
+        if (target && ConfirmEnableLan != null && !await ConfirmEnableLan(kb))
             return;
         McpBusy = true;
         try

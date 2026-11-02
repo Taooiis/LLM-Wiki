@@ -13,33 +13,28 @@ public interface ILocalAgentAdapter
 public static class AgentTools
 {
     public const string OpenCode = "opencode-cli";
-    public const string WorkBuddy = "workbuddy-desktop";
     public static bool IsCli(string id) => id is CodexCliAdapter.AdapterId or OpenCode;
     public static string Name(string id) => id switch
     {
         OpenCode => "OpenCode CLI",
-        WorkBuddy => "WorkBuddy 桌面",
         _ => "Codex CLI"
     };
     public static ILocalAgentAdapter Adapter(string id) => id switch
     {
         CodexCliAdapter.AdapterId => new CodexCliAdapter(),
         OpenCode => new OpenCodeCliAdapter(),
-        _ => throw new InvalidOperationException("该桌面工具使用 MCP/复制任务接入，不支持 CLI 自动执行。")
+        _ => throw new InvalidOperationException("该工具不支持 CLI 自动执行。")
     };
     public static string? FindExecutable(string id)
     {
         if (id == CodexCliAdapter.AdapterId) return CodexCliAdapter.FindExecutable();
-        var file = id == OpenCode ? "opencode.exe" : "WorkBuddy.exe";
         var dirs = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
             .Concat(new[]
             {
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".opencode", "bin"),
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin"),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "WorkBuddy"),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "workbuddy"),
             });
-        return dirs.Where(d => !string.IsNullOrWhiteSpace(d)).Select(d => Path.Combine(d.Trim().Trim('"'), file)).FirstOrDefault(File.Exists);
+        return dirs.Where(d => !string.IsNullOrWhiteSpace(d)).Select(d => Path.Combine(d.Trim().Trim('"'), "opencode.exe")).FirstOrDefault(File.Exists);
     }
 }
 

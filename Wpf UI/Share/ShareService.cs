@@ -403,10 +403,10 @@ public class ShareService(ConfigService config)
             _ => "application/octet-stream",
         };
 
-    /// <summary>浏览树只含资料、知识和规则文件；不包含隐藏状态与操作日志。</summary>
-    private static TreeItem[] BuildBoundTree(string root)
+    /// <summary>浏览树只含源文档（raw/sources）：按 2026-11-02 决定，分享范围不再包含 wiki 知识与 purpose/schema。</summary>
+    private static TreeItem[] BuildBoundTree(string kbRoot)
     {
-        return BuildDir(root, root, 0);
+        return BuildDir(Path.Combine(kbRoot, "raw", "sources"), kbRoot, 0);
     }
 
     private static TreeItem[] BuildDir(string dir, string root, int depth)
@@ -440,11 +440,8 @@ public class ShareService(ConfigService config)
     }
 
     private static bool AllowedShareFile(string rel, string name)
-        => (rel.StartsWith("raw/sources/", StringComparison.OrdinalIgnoreCase) && SourceRules.IsSupported(name))
-           || (rel.StartsWith("wiki/", StringComparison.OrdinalIgnoreCase) && SourceRules.IsText(name)
-               && !name.Equals("log.md", StringComparison.OrdinalIgnoreCase))
-           || rel.Equals("purpose.md", StringComparison.OrdinalIgnoreCase)
-           || rel.Equals("schema.md", StringComparison.OrdinalIgnoreCase);
+        => rel.StartsWith("raw/sources/", StringComparison.OrdinalIgnoreCase)
+           && SourceRules.IsSupported(name);
 
     private static async Task<string> ReadShareUiAsync()
     {

@@ -343,7 +343,7 @@ public sealed class McpService
 
     public string[] LanEndpoints()
     {
-        if (!Running || !AllowLan) return [];
+        if (!AllowLan) return [];
         var list = new List<string>();
         try
         {
@@ -365,10 +365,14 @@ public sealed class McpService
         return $"{t[..4]}••••••••{t[^4..]}";
     }
 
-    /// <summary>客户端配置：一个有效的 JSON，包含 remote HTTP 与 stdio 两个条目。写入档额外带独立写令牌头。</summary>
-    public string ClientConfigJson()
+    /// <summary>客户端配置：本机档含 remote HTTP 与 stdio；局域网档只含 remote HTTP。写入档额外带独立写令牌头。</summary>
+    public string ClientConfigJson(string? currentKb = null)
     {
-        var endpoint = Running ? LocalEndpoint : $"http://127.0.0.1:{DefaultPort}/mcp";
+        // 开放局域网后配置携带真实 LAN 地址（否则其他设备连不上）；仅本机档保持回环
+        var loopback = $"http://127.0.0.1:{DefaultPort}/mcp";
+        var endpoint = AllowLan
+            ? LanEndpoints().FirstOrDefault() ?? loopback
+            : Running ? LocalEndpoint : loopback;
         var headers = new JsonObject
         {
             ["Authorization"] = $"Bearer {_token}",
@@ -386,24 +390,31 @@ public sealed class McpService
             ["headers"] = headers,
         };
 
-        var exe = Path.Combine(AppContext.BaseDirectory, "LlmWiki.McpStdio.exe");
-        var stdio = new JsonObject
+        var servers = new JsonObject
         {
-            ["command"] = exe,
-            ["args"] = new JsonArray
-            {
-                "--kb",
-                string.IsNullOrWhiteSpace(BoundKb) ? Context.CurrentKb : BoundKb,
-            },
+            ["llm-wiki"] = http,
         };
+
+        // 局域网客户端无法启动本机 stdio 进程，局域网档只给 HTTP 条目。
+        if (!AllowLan)
+        {
+            var kb = !string.IsNullOrWhiteSpace(BoundKb)
+                ? BoundKb
+                : !string.IsNullOrWhiteSpace(currentKb) ? currentKb : Context.CurrentKb;
+            servers["llm-wiki-stdio"] = new JsonObject
+            {
+                ["command"] = Path.Combine(AppContext.BaseDirectory, "LlmWiki.McpStdio.exe"),
+                ["args"] = new JsonArray
+                {
+                    "--kb",
+                    kb,
+                },
+            };
+        }
 
         var root = new JsonObject
         {
-            ["mcpServers"] = new JsonObject
-            {
-                ["llm-wiki"] = http,
-                ["llm-wiki-stdio"] = stdio,
-            },
+            ["mcpServers"] = servers,
         };
         return root.ToJsonString(new JsonSerializerOptions
         {

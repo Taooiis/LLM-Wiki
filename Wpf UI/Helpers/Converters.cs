@@ -2,6 +2,8 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 
+using Wpf.Ui.Controls;
+
 namespace LLM_Wiki.Helpers
 {
     /// <summary>数值 > 0 → true。用于待处理数高亮等条件样式。</summary>
@@ -49,6 +51,16 @@ namespace LLM_Wiki.Helpers
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
             => value is bool b && b ? Visibility.Visible : Visibility.Collapsed;
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
+    /// <summary>ContentDialog 默认按钮判断：DefaultButton 与 ConverterParameter 相同则为 true。</summary>
+    public class ContentDialogButtonEnumToBoolConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            => value is ContentDialogButton button && parameter is ContentDialogButton target && button == target;
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => throw new NotSupportedException();

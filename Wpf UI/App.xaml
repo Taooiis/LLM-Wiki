@@ -30,6 +30,7 @@
       <sys:Double x:Key="FontSizeCaption">12</sys:Double>
 
       <helpers:BoolToVisibilityConverter x:Key="BoolToVis" />
+      <helpers:ContentDialogButtonEnumToBoolConverter x:Key="ContentDialogButtonEnumToBoolConverter" />
       <helpers:InverseBoolToVisibilityConverter x:Key="InvBoolToVis" />
       <helpers:GreaterThanZeroToVisibilityConverter x:Key="CountToVis" />
       <helpers:CountToEmptyVisibilityConverter x:Key="CountToEmptyVis" />
@@ -350,6 +351,7 @@
                           x:Name="SecondaryButton"
                           Grid.Column="0"
                           HorizontalAlignment="Stretch"
+                          Foreground="{DynamicResource ButtonForeground}"
                           Appearance="{TemplateBinding SecondaryButtonAppearance}"
                           Command="{Binding RelativeSource={RelativeSource AncestorType={x:Type ui:ContentDialog}}, Mode=OneTime, Path=TemplateButtonCommand}"
                           CommandParameter="{x:Static ui:ContentDialogButton.Secondary}"
@@ -362,6 +364,7 @@
                           x:Name="CloseButton"
                           Grid.Column="2"
                           HorizontalAlignment="Stretch"
+                          Foreground="{DynamicResource ButtonForeground}"
                           Appearance="{TemplateBinding CloseButtonAppearance}"
                           Command="{Binding RelativeSource={RelativeSource AncestorType={x:Type ui:ContentDialog}}, Mode=OneTime, Path=TemplateButtonCommand}"
                           CommandParameter="{x:Static ui:ContentDialogButton.Close}"
@@ -373,6 +376,7 @@
                           x:Name="PrimaryButton"
                           Grid.Column="4"
                           HorizontalAlignment="Stretch"
+                          Foreground="{DynamicResource AccentButtonForeground}"
                           Appearance="{TemplateBinding PrimaryButtonAppearance}"
                           Command="{Binding RelativeSource={RelativeSource AncestorType={x:Type ui:ContentDialog}}, Mode=OneTime, Path=TemplateButtonCommand}"
                           CommandParameter="{x:Static ui:ContentDialogButton.Primary}"

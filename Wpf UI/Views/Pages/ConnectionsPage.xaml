@@ -107,16 +107,15 @@
       <TabItem Header="AI 工具" AutomationProperties.Name="AI 工具页签">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
           <StackPanel Margin="12">
-            <Border Padding="16" CornerRadius="10" Background="{DynamicResource CardSurfaceBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1">
-              <StackPanel>
-                <TextBlock FontSize="18" FontWeight="SemiBold" Text="本机执行工具" />
-                <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" Text="{Binding ViewModel.AgentIntegrationHint}" />
-                <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="{Binding ViewModel.AgentReadyText}" />
-                <StackPanel Orientation="Horizontal" Margin="0,10,0,0" Visibility="{Binding ViewModel.IsWorkBuddyTool, Converter={StaticResource BoolToVis}}">
-                  <ui:Button Content="打开 WorkBuddy" Command="{Binding ViewModel.OpenWorkBuddyCommand}" Margin="0,0,8,0" />
-                  <ui:Button Content="复制 MCP 连接配置" Command="{Binding ViewModel.CopyMcpConfigCommand}" />
-                  <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="在 WorkBuddy 添加 MCP；整理页复制任务，在桌面执行后返回核对。" TextWrapping="Wrap" />
+            <ui:CardExpander Padding="16" Background="{DynamicResource CardSurfaceBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1" IsExpanded="True" AutomationProperties.Name="本机执行工具">
+              <ui:CardExpander.Header>
+                <StackPanel>
+                  <TextBlock FontSize="18" FontWeight="SemiBold" Text="本机执行工具" />
+                  <TextBlock Margin="0,4,0,0" FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="{Binding ViewModel.AgentReadyText}" />
                 </StackPanel>
+              </ui:CardExpander.Header>
+              <StackPanel>
+                <TextBlock Margin="0,2,0,0" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" Text="{Binding ViewModel.AgentIntegrationHint}" />
                 <Grid Margin="0,12,0,0">
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="3*" />
@@ -178,9 +177,9 @@
                           <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="文件访问" />
-                        <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{Binding ViewModel.AgentAccessText}" Foreground="{DynamicResource SecondaryTextBrush}" />
+                        <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="文件访问" Foreground="{DynamicResource SecondaryTextBrush}" />
                       </Grid>
-                      <StackPanel Margin="0,2,0,10" Visibility="{Binding ViewModel.IsCliTool, Converter={StaticResource BoolToVis}}">
+                      <StackPanel Margin="0,2,0,10">
                         <TextBlock Text="权限" Margin="0,0,0,6" />
                         <StackPanel Orientation="Horizontal">
                           <RadioButton Content="只读" IsChecked="{Binding ViewModel.AgentAllowWrite, Converter={StaticResource InverseBool}, Mode=OneWay}" Click="OnAgentReadOnlyClick" Margin="0,0,18,0" />
@@ -189,8 +188,8 @@
                         <TextBlock Margin="0,4,0,0" FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="文件访问权限由操作系统和外部工具共同约束，不能强制仅限 wiki/。" TextWrapping="Wrap" />
                       </StackPanel>
                       <StackPanel Orientation="Horizontal">
-                        <ui:Button Content="{Binding ViewModel.AgentDetectText}" Command="{Binding ViewModel.DetectAgentCommand}" ToolTipService.ToolTip="运行所选程序的 --version 与 exec --help，并查询外部登录状态" AutomationProperties.Name="检测安装与登录" Margin="0,0,8,0" />
-                        <ui:Button Content="验证实际执行" Visibility="{Binding ViewModel.IsCliTool, Converter={StaticResource BoolToVis}}" Command="{Binding ViewModel.ProbeAgentCommand}" ToolTipService.ToolTip="在隔离临时目录做真实非交互测试；会使用已有账号和额度" AutomationProperties.Name="验证实际执行" Margin="0,0,8,0" />
+                        <ui:Button Content="检测安装与登录" Command="{Binding ViewModel.DetectAgentCommand}" ToolTipService.ToolTip="运行所选程序的 --version 与 exec --help，并查询外部登录状态" AutomationProperties.Name="检测安装与登录" Margin="0,0,8,0" />
+                        <ui:Button Content="验证实际执行" Command="{Binding ViewModel.ProbeAgentCommand}" ToolTipService.ToolTip="在隔离临时目录做真实非交互测试；会使用已有账号和额度" AutomationProperties.Name="验证实际执行" Margin="0,0,8,0" />
                         <ui:Button Content="保存并使用" Appearance="Primary" Command="{Binding ViewModel.SaveAgentCommand}" ToolTipService.ToolTip="保存配置；只有所需能力实际通过才成为本机就绪" AutomationProperties.Name="保存并使用本机工具配置" />
                       </StackPanel>
                       <TextBlock Margin="0,6,0,0" Text="{Binding ViewModel.AgentError}" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" />
@@ -271,7 +270,7 @@
                   </Border>
                 </Grid>
               </StackPanel>
-            </Border>
+            </ui:CardExpander>
             <ui:CardExpander Margin="0,10,0,0" Padding="16" Background="{DynamicResource CardSurfaceBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1" Header="手动使用说明" IsExpanded="False">
               <StackPanel>
                 <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" Text="到整理页复制完整任务，在能访问该目录的外部 AI 中执行。库身份、规则入口、范围和边界已自动组合，不需要先单独复制接入说明。" />
@@ -295,6 +294,20 @@
                   <ui:Button Content="{Binding ViewModel.McpWriteButtonText}" Command="{Binding ViewModel.ToggleMcpWriteCommand}" Visibility="{Binding ViewModel.McpRunning, Converter={StaticResource BoolToVis}}" ToolTipService.ToolTip="在只读与写入档之间切换；开启写入需要一次明确确认" AutomationProperties.Name="切换 MCP 写入档" />
                   <ui:ProgressRing Width="18" Height="18" Margin="8,0,0,0" IsIndeterminate="True" Visibility="{Binding ViewModel.McpBusy, Converter={StaticResource BoolToVis}}" />
                 </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                  <ui:Button Content="切换局域网监听" Command="{Binding ViewModel.ToggleMcpLanCommand}" ToolTipService.ToolTip="开启或关闭局域网监听；开启需确认，仅限可信网络，客户端仍需令牌" AutomationProperties.Name="切换 MCP 局域网监听" />
+                  <TextBlock VerticalAlignment="Center" Margin="8,0,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="{Binding ViewModel.McpLanText}" />
+                </StackPanel>
+                <StackPanel Margin="0,4" Visibility="{Binding ViewModel.McpLanEndpoints.Count, Converter={StaticResource CountToVis}}">
+                  <TextBlock Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="{Binding ViewModel.McpLanHint}" />
+                  <ItemsControl Margin="0,2,0,0" ItemsSource="{Binding ViewModel.McpLanEndpoints}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Margin="0,1" FontFamily="Consolas" Text="{Binding}" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
                 <StackPanel Visibility="{Binding ViewModel.McpRunning, Converter={StaticResource BoolToVis}}" Margin="0,12,0,0">
                   <Grid Margin="0,4">
                     <Grid.ColumnDefinitions>
@@ -312,20 +325,6 @@
                     <TextBlock Grid.Column="0" Text="本机端点" />
                     <TextBlock Grid.Column="1" FontFamily="Consolas" Text="{Binding ViewModel.McpEndpoint}" />
                   </Grid>
-                  <StackPanel Orientation="Horizontal" Margin="0,4">
-                    <ui:Button Content="切换局域网监听" Command="{Binding ViewModel.ToggleMcpLanCommand}" ToolTipService.ToolTip="开启或关闭局域网监听；开启需确认，仅限可信网络，客户端仍需令牌" AutomationProperties.Name="切换 MCP 局域网监听" />
-                    <TextBlock VerticalAlignment="Center" Margin="8,0,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="{Binding ViewModel.McpLanText}" />
-                  </StackPanel>
-                  <StackPanel Margin="0,4" Visibility="{Binding ViewModel.McpLanEndpoints.Count, Converter={StaticResource CountToVis}}">
-                    <TextBlock Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="局域网地址（客户端连接以下地址，仍需携带令牌）" />
-                    <ItemsControl Margin="0,2,0,0" ItemsSource="{Binding ViewModel.McpLanEndpoints}">
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                          <TextBlock Margin="0,1" FontFamily="Consolas" Text="{Binding}" />
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                  </StackPanel>
                   <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="写入仅限本库 wiki/ 下的文本文件；禁止资料、规则、日志和删除。重启应用后恢复只读。" />
                   <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="{Binding ViewModel.McpStatusHint}" />
                   <Expander Margin="0,8,0,0" Header="最近受控调用" IsExpanded="True" Visibility="{Binding ViewModel.RecentCalls.Count, Converter={StaticResource CountToVis}}">
@@ -372,7 +371,7 @@
                   </Grid>
                   <ui:Button Margin="0,6,0,0" HorizontalAlignment="Left" Content="{Binding ViewModel.TokenVisibilityText}" IsEnabled="{Binding ViewModel.McpRunning}" Command="{Binding ViewModel.ToggleTokensCommand}" ToolTipService.ToolTip="在掩码与明文之间切换令牌显示" AutomationProperties.Name="显示或隐藏令牌" />
                 </StackPanel>
-                <TextBlock Margin="0,10,0,0" FontWeight="SemiBold" Text="客户端配置（HTTP remote + stdio）" />
+                <TextBlock Margin="0,10,0,0" FontWeight="SemiBold" Text="{Binding ViewModel.McpClientConfigTitle}" />
                 <TextBox MaxHeight="200" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="{StaticResource FontSizeCaption}" Text="{Binding ViewModel.McpClientConfigDisplay, Mode=OneWay}" />
                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                   <ui:Button Content="复制客户端配置" Command="{Binding ViewModel.CopyMcpConfigCommand}" Margin="0,0,8,0" ToolTipService.ToolTip="复制客户端 JSON 配置（令牌已掩码，复制的是原文）" AutomationProperties.Name="复制 MCP 客户端配置" />

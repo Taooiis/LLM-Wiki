@@ -11,21 +11,15 @@ public partial class ConnectionsViewModel
 {
     public Func<Task<bool>>? ConfirmAgentWrite { get; set; }
 
-    public ObservableCollection<string> AgentToolTypes { get; } = ["Codex CLI", "OpenCode CLI", "WorkBuddy 桌面"];
+    public ObservableCollection<string> AgentToolTypes { get; } = ["Codex CLI", "OpenCode CLI"];
     [ObservableProperty] private string _selectedAgentTool = "Codex CLI";
     private readonly Dictionary<string, AgentProfile> _agentDrafts = new();
-    private static string ToolId(string? name) => name switch { "OpenCode CLI" => AgentTools.OpenCode, "WorkBuddy 桌面" => AgentTools.WorkBuddy, _ => CodexCliAdapter.AdapterId };
+    private static string ToolId(string? name) => name == "OpenCode CLI" ? AgentTools.OpenCode : CodexCliAdapter.AdapterId;
     public string AgentAdapterId => ToolId(SelectedAgentTool);
-    public bool IsWorkBuddyTool => AgentAdapterId == AgentTools.WorkBuddy;
-    public bool IsCliTool => !IsWorkBuddyTool;
-    public string AgentExecutableName => AgentAdapterId switch { AgentTools.OpenCode => "opencode.exe", AgentTools.WorkBuddy => "WorkBuddy.exe", _ => "codex.exe" };
+    public string AgentExecutableName => AgentAdapterId == AgentTools.OpenCode ? "opencode.exe" : "codex.exe";
     public string AgentConfigTitle => SelectedAgentTool + " 配置";
-    public string AgentDetectText => IsWorkBuddyTool ? "检测桌面程序" : "检测安装与登录";
-    public string AgentAccessText => IsWorkBuddyTool ? "MCP / 文件访问（在 WorkBuddy 内授权）" : "文件访问";
     public string AgentPathHint => "选择本机 " + AgentExecutableName;
-    public string AgentIntegrationHint => IsWorkBuddyTool
-        ? "WorkBuddy 桌面通过 MCP 或复制任务执行；打开程序不表示任务已提交。官方自动对话 API 需要平台应用审核与 OAuth 授权。"
-        : "CLI 自动接收完整任务，账号与模型由外部工具管理；先检测，再验证实际执行。";
+    public string AgentIntegrationHint => "CLI 自动接收完整任务，账号与模型由外部工具管理；先检测，再验证实际执行。";
     partial void OnSelectedAgentToolChanged(string? oldValue, string newValue)
     {
         if (_loadingAgentProfile) return;
@@ -41,17 +35,6 @@ public partial class ConnectionsViewModel
         profile.AllowWorkspaceWrite = AgentAllowWrite; profile.LastCheckedAt = AgentLastVerifiedAt;
         return profile;
     }
-    [RelayCommand]
-    private void OpenWorkBuddy()
-    {
-        var path = IsWorkBuddyTool ? AgentPath : _agent.LoadProfile(AgentTools.WorkBuddy).ExecutablePath;
-        if (!System.IO.File.Exists(path) || !path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-        { AgentError = "请先选择 WorkBuddy 桌面程序路径。"; return; }
-        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); }
-        catch (Exception e) { AgentError = "打开 WorkBuddy 失败：" + e.Message; }
-    }
-
-
     public ObservableCollection<AgentCheckRow> AgentChecks { get; } = [];
     public ObservableCollection<AgentFormatRow> AgentFormats { get; } = [];
 
@@ -100,10 +83,10 @@ public partial class ConnectionsViewModel
         DismissAgentCandidateCommand.NotifyCanExecuteChanged();
     }
 
-    public bool AgentReady => IsCliTool && AgentDetected && AgentLoggedIn && AgentExecutionVerified
+    public bool AgentReady => AgentDetected && AgentLoggedIn && AgentExecutionVerified
                               && !string.IsNullOrWhiteSpace(AgentPath) && System.IO.File.Exists(AgentPath);
     public string AgentPermissionText => AgentAllowWrite ? "允许当前库目录写操作" : "只读";
-    public string AgentReadyText => IsWorkBuddyTool ? "WorkBuddy 桌面接入 · MCP / 复制任务" : AgentReady ? "本机工具已就绪：" + SelectedAgentTool : "本机工具未就绪";
+    public string AgentReadyText => AgentReady ? "本机工具已就绪：" + SelectedAgentTool : "本机工具未就绪";
 
     private void OnAgentChanged()
     {
@@ -130,8 +113,8 @@ public partial class ConnectionsViewModel
             AgentDetected = p.Detected;
             AgentLoggedIn = p.LoggedIn;
             AgentExecutionVerified = p.ExecutionVerified;
-            AgentAllowWrite = IsWorkBuddyTool ? false : p.AllowWorkspaceWrite;
-            AgentStatusText = IsWorkBuddyTool ? "在 WorkBuddy 内执行后，回整理页核对" : SelectedAgentTool + (p.Ready ? " 已就绪" : " 未就绪");
+            AgentAllowWrite = p.AllowWorkspaceWrite;
+            AgentStatusText = SelectedAgentTool + (p.Ready ? " 已就绪" : " 未就绪");
             // 档案里的验证结果对应档案中的路径；档案未记录验证时间时诚实显示“—”。
             _lastVerifiedPath = p.ExecutionVerified ? p.ExecutablePath : "";
             AgentLastVerifiedAt = p.ExecutionVerified && !string.IsNullOrWhiteSpace(p.LastCheckedAt)
@@ -140,19 +123,13 @@ public partial class ConnectionsViewModel
             if (AgentChecks.Count == 0)
             {
                 AgentChecks.Add(new AgentCheckRow("安装", p.Detected ? "已检测" : "未验证", p.Detected ? "已有检测记录" : "请选择 " + AgentExecutableName + " 后检测"));
-                if (IsWorkBuddyTool)
-                    AgentChecks.Add(new AgentCheckRow("接入方式", "桌面执行", "登录、MCP授权和任务执行在 WorkBuddy 内完成；本应用不自动提交桌面对话"));
-                else
-                {
-                    AgentChecks.Add(new AgentCheckRow("登录", p.LoggedIn ? "已检测" : "未验证", p.LoggedIn ? "外部登录状态已记录" : "请在所选工具中完成登录/模型配置"));
-                    AgentChecks.Add(new AgentCheckRow("非交互执行", p.ExecutionVerified ? "验证通过" : "未验证", p.ExecutionVerified ? "实际执行探测通过" : "请在连接页验证实际执行"));
-                }
+                AgentChecks.Add(new AgentCheckRow("登录", p.LoggedIn ? "已检测" : "未验证", p.LoggedIn ? "外部登录状态已记录" : "请在所选工具中完成登录/模型配置"));
+                AgentChecks.Add(new AgentCheckRow("非交互执行", p.ExecutionVerified ? "验证通过" : "未验证", p.ExecutionVerified ? "实际执行探测通过" : "请在连接页验证实际执行"));
             }
             RebuildAgentFormats();
             OnPropertyChanged(nameof(SelectedAgentTool));
-            OnPropertyChanged(nameof(IsWorkBuddyTool)); OnPropertyChanged(nameof(IsCliTool));
-            OnPropertyChanged(nameof(AgentConfigTitle)); OnPropertyChanged(nameof(AgentPathHint)); OnPropertyChanged(nameof(AgentDetectText));
-            OnPropertyChanged(nameof(AgentIntegrationHint)); OnPropertyChanged(nameof(AgentAccessText));
+            OnPropertyChanged(nameof(AgentConfigTitle)); OnPropertyChanged(nameof(AgentPathHint));
+            OnPropertyChanged(nameof(AgentIntegrationHint));
             OnPropertyChanged(nameof(AgentReady));
             OnPropertyChanged(nameof(AgentReadyText));
             OnPropertyChanged(nameof(AgentPermissionText));
@@ -172,7 +149,7 @@ public partial class ConnectionsViewModel
     private void RebuildAgentFormats()
     {
         AgentFormats.Clear();
-        var verified = IsCliTool && AgentExecutionVerified;
+        var verified = AgentExecutionVerified;
         var lastVerified = verified ? AgentLastVerifiedAt : "—";
         AgentFormats.Add(new AgentFormatRow("TXT（纯文本）", "文件访问",
             verified ? "已验证" : "未验证",
@@ -204,7 +181,7 @@ public partial class ConnectionsViewModel
     private bool CanBrowseAgentPath() => !AgentBusy;
     private bool CanAutoFindAgent() => !AgentBusy;
     private bool CanDetectAgent() => !AgentBusy && !string.IsNullOrWhiteSpace(AgentPath);
-    private bool CanProbeAgent() => !AgentBusy && IsCliTool && AgentDetected && (AgentLoggedIn || AgentAdapterId == AgentTools.OpenCode);
+    private bool CanProbeAgent() => !AgentBusy && AgentDetected && (AgentLoggedIn || AgentAdapterId == AgentTools.OpenCode);
     private bool CanSaveAgent() => !AgentBusy && !_agent.IsRunning;
     private bool CanApplyAgentCandidate() => !string.IsNullOrWhiteSpace(AgentPendingPath);
 
@@ -276,7 +253,7 @@ public partial class ConnectionsViewModel
         if (AgentBusy) return;
         if (string.IsNullOrWhiteSpace(AgentPath))
         {
-            AgentError = "请先选择 codex.exe";
+            AgentError = "请先选择 " + AgentExecutableName;
             return;
         }
         AgentBusy = true;
@@ -284,15 +261,6 @@ public partial class ConnectionsViewModel
         AgentChecks.Clear();
         try
         {
-            if (IsWorkBuddyTool)
-            {
-                AgentDetected = System.IO.File.Exists(AgentPath) && AgentPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
-                if (AgentDetected) _lastVerifiedPath = AgentPath;
-                AgentLoggedIn = false; AgentExecutionVerified = false;
-                AgentChecks.Add(new AgentCheckRow("桌面程序", AgentDetected ? "已检测" : "未通过", "仅检测程序存在，登录与任务状态请在 WorkBuddy 内确认"));
-                AgentStatusText = "桌面接入：配置 MCP 或复制任务后在 WorkBuddy 执行";
-                return;
-            }
             var result = await _agent.DetectAsync(AgentPath, CancellationToken.None, AgentAdapterId);
             foreach (var check in result.Checks)
                 AgentChecks.Add(new AgentCheckRow(check.Label, check.Status, check.Detail));
@@ -375,7 +343,7 @@ public partial class ConnectionsViewModel
         profile.LastCheckedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
         _agent.SaveProfile(profile);
         AgentError = "";
-        _toast.ShowSuccess(IsWorkBuddyTool ? "WorkBuddy 桌面程序配置已保存；任务在 WorkBuddy 内执行" : AgentReady ? "本机工具配置已保存：" + SelectedAgentTool + " 已就绪" : "配置已保存，但尚未通过全部验证");
+        _toast.ShowSuccess(AgentReady ? "本机工具配置已保存：" + SelectedAgentTool + " 已就绪" : "配置已保存，但尚未通过全部验证");
     }
 
     [RelayCommand]
@@ -392,7 +360,7 @@ public partial class ConnectionsViewModel
     [RelayCommand]
     private void OpenCodexHelp() => _toast.Show(
         SelectedAgentTool,
-        "请在所选工具自己的界面完成登录和模型配置；应用不读取认证文件。OpenCode 可使用 opencode auth login；WorkBuddy 请在桌面内登录。");
+        "请在所选工具自己的界面完成登录和模型配置；应用不读取认证文件。OpenCode 可使用 opencode auth login。");
 }
 
 public sealed record AgentCheckRow(string Label, string Status, string Detail)

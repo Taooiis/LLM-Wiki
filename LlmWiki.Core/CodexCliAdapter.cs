@@ -41,13 +41,16 @@ public sealed class AgentProfileStore
         try
         {
             var legacy = PathFor();
-            var file = adapterId == null ? legacy : System.IO.Path.Combine(System.IO.Path.GetDirectoryName(legacy)!, "agent-profile." + (adapterId switch { AgentTools.OpenCode => AgentTools.OpenCode, AgentTools.WorkBuddy => AgentTools.WorkBuddy, _ => CodexCliAdapter.AdapterId }) + ".json");
+            var file = adapterId == null ? legacy : System.IO.Path.Combine(System.IO.Path.GetDirectoryName(legacy)!, "agent-profile." + (adapterId == AgentTools.OpenCode ? AgentTools.OpenCode : CodexCliAdapter.AdapterId) + ".json");
             if (adapterId != null && !File.Exists(file))
             {
                 var previous = File.Exists(legacy) ? StateJson.Load<AgentProfile>(legacy) : null;
                 return previous?.AdapterId == adapterId ? previous : new AgentProfile { AdapterId = adapterId };
             }
-            return File.Exists(file) ? StateJson.Load<AgentProfile>(file) ?? new AgentProfile { AdapterId = adapterId ?? CodexCliAdapter.AdapterId } : new AgentProfile { AdapterId = adapterId ?? CodexCliAdapter.AdapterId };
+            var loaded = File.Exists(file) ? StateJson.Load<AgentProfile>(file) : null;
+            return loaded != null && AgentTools.IsCli(loaded.AdapterId)
+                ? loaded
+                : new AgentProfile { AdapterId = adapterId ?? CodexCliAdapter.AdapterId };
         }
         catch
         {
@@ -59,7 +62,7 @@ public sealed class AgentProfileStore
     {
         var path = PathFor();
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
-        var id = profile.AdapterId switch { AgentTools.OpenCode => AgentTools.OpenCode, AgentTools.WorkBuddy => AgentTools.WorkBuddy, _ => CodexCliAdapter.AdapterId };
+        var id = profile.AdapterId == AgentTools.OpenCode ? AgentTools.OpenCode : CodexCliAdapter.AdapterId;
         StateJson.Save(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(path)!, "agent-profile." + id + ".json"), profile);
         StateJson.Save(path, profile);
     }
