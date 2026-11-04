@@ -4,6 +4,22 @@ using ModelContextProtocol.Server;
 
 namespace LLM_Wiki.Services;
 
+/// <summary>
+/// MCP 服务器指令（随 initialize 握手返回给客户端）。
+/// 目的：让客户端模型在回答前主动检索知识库，而不是等用户点名连接器（客户端是否采纳取决于其实现）。
+/// </summary>
+public static class McpServerInstructions
+{
+    public const string Text = """
+        本服务器托管用户的本地知识库（LLM Wiki）。
+        行为规则：
+        - 回答用户问题前，先用 search_content 以问题关键词检索知识库；
+        - 命中后用 read_file 阅读相关文件再回答，不凭记忆编造内容；
+        - 检索无结果才可凭通用知识回答，并向用户注明"知识库中未找到"；
+        - 执行整理/写入任务前，先读 purpose.md 与 schema.md 并遵守其规则。
+        """;
+}
+
 /// <summary>MCP 只读工具（设计 08§5.3）。返回 JSON 文本；错误以 CODE: 消息抛出。</summary>
 [McpServerToolType]
 public sealed class McpKnowledgeTools(McpKnowledgeService service)
@@ -33,7 +49,7 @@ public sealed class McpKnowledgeTools(McpKnowledgeService service)
         [Description("可选：上一段返回的 nextCursor")] string? cursor = null)
         => service.ReadSourceContent(kb, relative_path, version, cursor);
 
-    [McpServerTool(Name = "search_content", ReadOnly = true), Description("在 wiki/ 与 raw/sources/ 的文本文件中搜索关键词；返回文件相对路径与不超过 200 字符的片段。")]
+    [McpServerTool(Name = "search_content", ReadOnly = true), Description("在知识库中检索关键词（覆盖 wiki/ 知识页与 raw/sources/ 资料）。回答用户问题前应优先调用本工具，命中后用 read_file 阅读相关文件再回答；返回文件相对路径与不超过 200 字符的片段。")]
     public string SearchContent(
         [Description("知识库标识")] string kb,
         [Description("搜索关键词")] string query,

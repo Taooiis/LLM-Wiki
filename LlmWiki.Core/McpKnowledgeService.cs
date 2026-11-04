@@ -43,7 +43,11 @@ public sealed class McpKnowledgeService(
         var list = string.IsNullOrWhiteSpace(kb)
             ? Array.Empty<object>()
             : [new { id = kb, name = kb, current = true }];
-        return JsonSerializer.Serialize(new { knowledge_bases = list }, JsonOptions);
+        // 通用行为注入：工具返回直接进入客户端模型上下文，不依赖客户端实现 ServerInstructions。
+        const string hint = "回答用户问题前，先用 search_content 以问题关键词检索本知识库；"
+            + "命中后用 read_file 阅读相关文件再回答，不凭记忆编造；"
+            + "检索无结果才可凭通用知识回答，并注明\"知识库中未找到\"。";
+        return JsonSerializer.Serialize(new { knowledge_bases = list, hint }, JsonOptions);
     }
 
     public string ListTree(string? kb, string? relativeDir)
@@ -208,8 +212,12 @@ public sealed class McpKnowledgeService(
             }
         }
 
+        // 有命中提示阅读全文，无命中提示换词或如实说明；两者都进模型上下文，客户端无需任何特殊实现。
+        var hint = matches.Count > 0
+            ? $"命中 {matches.Count} 处；用 read_file 阅读相关文件的完整内容后再回答，不要只凭片段下结论。"
+            : "知识库中未找到该关键词；可换关键词重试，或凭通用知识回答并向用户注明\"知识库中未找到\"。";
         return JsonSerializer.Serialize(
-            new { kb, query, limit = effectiveLimit, matches = matches.ToArray(), scanned_files = scanned },
+            new { kb, query, limit = effectiveLimit, matches = matches.ToArray(), scanned_files = scanned, hint },
             JsonOptions);
     }
 

@@ -202,7 +202,7 @@ public sealed class McpService
             builder.Services.AddSingleton(Policy);
             builder.Services.AddSingleton(Context);
             builder.Services.AddSingleton<McpKnowledgeService>();
-            builder.Services.AddMcpServer()
+            builder.Services.AddMcpServer(options => options.ServerInstructions = McpServerInstructions.Text)
                 .WithHttpTransport()
                 .WithTools<McpKnowledgeTools>()
                 .WithPrompts<McpKnowledgePrompts>()
@@ -456,9 +456,22 @@ public sealed class McpService
     {
         if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri)) return false;
         if (uri.Port != Port) return false;
-        return uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+        
+        // 总是允许本地回环地址
+        if (uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
             || uri.Host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase)
-            || uri.Host.Equals("[::1]", StringComparison.OrdinalIgnoreCase);
+            || uri.Host.Equals("[::1]", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        
+        // 当 AllowLan 为 true 时，允许局域网 IP 地址
+        if (AllowLan && IPAddress.TryParse(uri.Host, out var ip) && !IPAddress.IsLoopback(ip))
+        {
+            return true;
+        }
+        
+        return false;
     }
 
     private void RaiseChanged()

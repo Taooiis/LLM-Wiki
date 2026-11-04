@@ -92,7 +92,7 @@ internal static class Program
         builder.Services.AddSingleton(context);
         builder.Services.AddSingleton<McpKnowledgeService>();
         builder.Services
-            .AddMcpServer()
+            .AddMcpServer(options => options.ServerInstructions = McpServerInstructions.Text)
             .WithStdioServerTransport()
             .WithTools<McpKnowledgeTools>()
             .WithPrompts<McpKnowledgePrompts>()
