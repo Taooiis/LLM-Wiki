@@ -1,14 +1,12 @@
 ﻿; Inno Setup 6 脚本 — LLM Wiki 安装包（WPF UI 版）
 ; 用法：ISCC LlmWiki.iss
-;
-; 全 WPF 化版本：无 WebView2 运行时依赖，仅 .NET 10.0 桌面运行时（随自包含发布）
 
 #define MyAppName = "LLM Wiki"
 #ifndef MyAppVersion
   #define MyAppVersion = "1.0.0"
 #endif
-#define MyAppPublisher = "LLM Wiki Project"
-#define MyAppURL = "https://github.com/nashsu/llm_wiki"
+#define MyAppPublisher = "小周他在想办法"
+#define MyAppURL = "https://github.com/Taooiis/LLM-Wiki"
 #define MyAppExeName = "LLM Wiki.exe"
 #define MyAppIcon = "..\wpfui-icon.ico"
 #define MyBuildDir = "..\bin\Release\net10.0-windows\publish"
