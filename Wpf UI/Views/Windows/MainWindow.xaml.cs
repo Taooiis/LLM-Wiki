@@ -1,8 +1,11 @@
 using System.ComponentModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 
+using H.NotifyIcon;
 using LLM_Wiki.Services;
 using LLM_Wiki.ViewModels;
 using LLM_Wiki.ViewModels.Windows;
@@ -51,7 +54,25 @@ public partial class MainWindow : INavigationWindow
         ViewModel.ConfirmExit = ConfirmExitAsync;
 
         Closing += OnWindowClosing;
-        // 托盘图标在 XAML 中声明；这里显式创建（关闭效率模式，避免整个进程降为 ecoQoS）
+        // 托盘图标：优先使用内嵌的 ICO；若不存在则动态生成「书本」图标
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "tray.ico");
+        if (File.Exists(iconPath))
+        {
+            var icon = new System.Drawing.Icon(iconPath);
+            TrayIcon.Icon = icon;
+            TrayIcon.UpdateIcon(icon);
+        }
+        else
+        {
+            // 动态生成图标：蓝底白色书本符号
+            TrayIcon.IconSource = new GeneratedIconSource
+            {
+                Text = "?",
+                Foreground = Brushes.White,
+                Background = Brushes.Blue
+            };
+        }
+        // 显式创建托盘图标（关闭效率模式）
         TrayIcon.ForceCreate(false);
 
         _statusTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
@@ -287,7 +308,8 @@ public partial class MainWindow : INavigationWindow
             return;
         }
         _closeConfirmed = true;
-        Close();
+        // 退出时调用 Shutdown 而非 Close，避免 Closing 事件递归
+        Application.Current?.Shutdown();
     }
 
     /// <summary>从托盘恢复主窗；先前置再取消置顶，确保窗口确实回到前台。</summary>

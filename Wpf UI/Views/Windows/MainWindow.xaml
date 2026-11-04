@@ -229,7 +229,7 @@
       x:Name="TrayIcon"
       Grid.Row="0"
       Grid.RowSpan="4"
-      IconSource="pack://application:,,,/Assets/tray-32.png"
+      IconSource="pack://application:,,,/Assets/wpfui-icon-256.png"
       NoLeftClickDelay="True"
       ToolTipText="LLM Wiki"
       TrayLeftMouseDoubleClick="OnTrayDoubleClick">

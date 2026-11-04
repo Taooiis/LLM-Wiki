@@ -10,9 +10,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
-  <!-- 托盘使用 WPF 原生 H.NotifyIcon：菜单跟随 WPF-UI 主题，事件在 WPF UI 线程派发 -->
-
+  <!-- 托盘图标：随 exe 输出目录 -->
   <ItemGroup>
+    <Content Include="tray.ico" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="wpfui-icon.ico" />
   </ItemGroup>
 
@@ -21,7 +21,6 @@
     <ProjectReference Include="..\LlmWiki.McpStdio\LlmWiki.McpStdio.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
-  <!-- stdio MCP 可执行文件随桌面端输出，客户端配置片段里的路径才能直接使用 -->
   <Target Name="CopyMcpStdio" AfterTargets="Build">
     <ItemGroup>
       <McpStdioFiles Include="..\LlmWiki.McpStdio\bin\$(Configuration)\net10.0\**\*" />
@@ -41,23 +40,20 @@
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
   </ItemGroup>
 
-  <!-- Kestrel 只读分享服务（spec 03 §3） -->
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <Content Include="wwwroot-share\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Remove="Assets\wpfui-icon-256.png" />
-    <None Remove="Assets\wpfui-icon-1024.png" />
-  </ItemGroup>
-
+  <!-- 资源文件：只嵌入 PNG，用于页面等 -->
   <ItemGroup>
     <Resource Include="Assets\wpfui-icon-256.png" />
     <Resource Include="Assets\wpfui-icon-1024.png" />
-    <!-- 托盘专用小尺寸：避免 256px 缩到 16/24px 时发虚 -->
-    <Resource Include="Assets\tray-32.png" />
-    <Resource Include="Assets\tray-48.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Assets\wpfui-icon-256.png" />
+    <None Remove="Assets\wpfui-icon-1024.png" />
   </ItemGroup>
 
 </Project>
