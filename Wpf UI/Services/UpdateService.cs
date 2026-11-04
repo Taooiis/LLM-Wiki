@@ -18,7 +18,7 @@ namespace LLM_Wiki.Services;
 public class UpdateService
 {
     private readonly ToastService _toastService;
-    // GitHub Releases JSON 接口（默认仓库为 nashsu/llm_wiki 镜像）
+    // GitHub Releases JSON 接口（默认仓库为 Taooiis/LLM-Wiki）
     private readonly string _releasesUrl;
     private readonly string _currentVersion;
     private readonly string _downloadUrlBase;
@@ -26,9 +26,9 @@ public class UpdateService
     public UpdateService(ToastService toastService, string? releasesUrl = null, string? downloadUrlBase = null)
     {
         _toastService = toastService;
-        _releasesUrl = releasesUrl ?? "https://api.github.com/repos/nashsu/llm_wiki/releases/latest";
+        _releasesUrl = releasesUrl ?? "https://api.github.com/repos/Taooiis/LLM-Wiki/releases/latest";
         _currentVersion = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "0.0.0";
-        _downloadUrlBase = downloadUrlBase ?? "https://github.com/nashsu/llm_wiki/releases/latest";
+        _downloadUrlBase = downloadUrlBase ?? "https://github.com/Taooiis/LLM-Wiki/releases";
     }
 
     /// <summary>
