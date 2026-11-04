@@ -302,19 +302,34 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    public async Task<bool> DeleteCurrentKbAsync()
+    /// <summary>
+    /// 删除指定知识库。删除当前库时走完整保护（未保存草稿 / 运行中任务），
+    /// 删除其他库只停止绑定它的服务；删除当前库后自动切到剩余第一个库，避免留下失效上下文。
+    /// </summary>
+    public async Task<bool> DeleteKbAsync(string name, bool showToast = true)
     {
-        if (!HasKb) return false;
-        if (_agent.IsRunning)
+        if (string.IsNullOrWhiteSpace(name)) return false;
+        var isCurrent = string.Equals(CurrentKb, name, StringComparison.Ordinal);
+
+        if (isCurrent)
         {
-            _toast.ShowWarning("本机任务仍在运行；请先到整理页结束或取消任务，再删除知识库。");
-            return false;
+            if (_agent.IsRunning)
+            {
+                _toast.ShowWarning("本机任务仍在运行；请先到整理页结束或取消任务，再删除知识库。");
+                return false;
+            }
+            if (!await _unsaved.CanLeaveAsync()) return false;
         }
-        if (!await _unsaved.CanLeaveAsync()) return false;
-        var name = CurrentKb;
+
+        // 绑定到此库的分享 / MCP 必须先停：服务仍在运行时删除会让它指向已消失的目录。
         if (_share.Running && _share.BoundKb.Equals(name, StringComparison.OrdinalIgnoreCase))
         {
             _share.Stop();
+            if (_share.Running)
+            {
+                _toast.ShowError("浏览分享服务停止失败，未删除知识库：" + name);
+                return false;
+            }
         }
         if (_mcp.Running && _mcp.BoundKb.Equals(name, StringComparison.OrdinalIgnoreCase))
         {
@@ -324,15 +339,18 @@ public partial class MainWindowViewModel : ObservableObject
                 return false;
             }
         }
+
         try
         {
             _kbService.DeleteKb(name);
             ReloadKbs();
-            var next = Kbs.FirstOrDefault() ?? "";
-            CurrentKb = "";
-            SetCurrentKb(next);
-            _navigation.Navigate(typeof(KnowledgePage));
-            _toast.ShowSuccess("知识库已永久删除：" + name);
+            if (isCurrent)
+            {
+                CurrentKb = "";
+                SetCurrentKb(Kbs.FirstOrDefault() ?? "");
+                _navigation.Navigate(typeof(KnowledgePage));
+            }
+            if (showToast) _toast.ShowSuccess("知识库已永久删除：" + name);
             return true;
         }
         catch (Exception e)
@@ -341,6 +359,9 @@ public partial class MainWindowViewModel : ObservableObject
             return false;
         }
     }
+
+    public Task<bool> DeleteCurrentKbAsync()
+        => HasKb ? DeleteKbAsync(CurrentKb) : Task.FromResult(false);
 
     /// <summary>帮助/页内链接跳转：先处理全局未保存草稿。</summary>
     public async Task<bool> NavigateWithGuardAsync(string pageKey)

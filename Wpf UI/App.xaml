@@ -251,6 +251,10 @@
         故“留在此处”必须占用 Close 槽位，Esc 才等价于不丢内容。
       -->
       <Style BasedOn="{StaticResource {x:Type ui:ContentDialog}}" TargetType="{x:Type ui:ContentDialog}">
+        <!--  弹框主体使用不透明卡片色，避免默认半透明背景透出下层内容  -->
+        <Setter Property="Background" Value="{DynamicResource CardSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource StrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Template">
           <Setter.Value>
             <ControlTemplate TargetType="{x:Type ui:ContentDialog}">
@@ -282,7 +286,8 @@
                       <RowDefinition Height="*" />
                       <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <Border Background="{DynamicResource ContentDialogTopOverlay}" CornerRadius="{StaticResource DialogOverlayCornerRadius}" />
+                    <!--  圆角裁切层：不再叠加半透明高光，保持主体背景完全不透  -->
+                    <Border Background="Transparent" CornerRadius="{StaticResource DialogOverlayCornerRadius}" />
                     <Grid
                       Grid.Row="0"
                       Margin="24,10"

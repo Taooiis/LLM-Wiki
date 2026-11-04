@@ -3,6 +3,7 @@ using System.Windows.Controls;
 
 using LLM_Wiki.ViewModels.Pages;
 using LLM_Wiki.Views.Dialogs;
+using LLM_Wiki.Views.Windows;
 
 namespace LLM_Wiki.Views.Pages;
 
@@ -22,7 +23,9 @@ public partial class KbSettingsPage
         ViewModel.ConfirmUnsaved = async () => await _unsavedDlg.ShowChoiceAsync(null, CancellationToken.None);
         ViewModel.ConfirmReplaceDraft = ConfirmReplaceDraftAsync;
         ViewModel.ConfirmLoadDiskVersion = ConfirmLoadDiskVersionAsync;
-        ViewModel.ConfirmDeleteLibrary = ConfirmDeleteLibraryAsync;
+        ViewModel.ConfirmDeleteKb = ConfirmDeleteKbAsync;
+        // 页面是单例：每次进入时同步一次列表，避免其他地方建库/删库后停留在旧快照
+        Loaded += (_, _) => ViewModel.RefreshKbRows();
         ViewModel.MarkVisited();
     }
 
@@ -45,15 +48,28 @@ public partial class KbSettingsPage
         true,
         520);
 
-    /// <summary>D07 永久删除知识库（05§8.2）：640 宽危险确认，detail 列删除范围与服务停止说明；初焦在取消侧。</summary>
-    private Task<bool> ConfirmDeleteLibraryAsync() => _confirmDlg.ShowAsync(
-        $"知识库：{ViewModel.SelectedKb}\n完整路径：{ViewModel.KbPath}",
-        "永久删除知识库",
-        "永久删除此知识库",
-        "取消",
-        true,
-        640,
-        "资料、知识、任务状态、库内回收站将一并删除，无法通过本应用恢复。\n将先停止绑定此库的浏览分享与 MCP 服务；停止失败则不删除。");
+    /// <summary>D07 永久删除知识库（05§8.2）：640 宽危险确认，支持批量；detail 列删除范围与服务停止说明；初焦在取消侧。</summary>
+    private Task<bool> ConfirmDeleteKbAsync(IReadOnlyList<string> names)
+    {
+        var title = names.Count == 1 ? "永久删除知识库" : $"永久删除 {names.Count} 个知识库";
+        var message = names.Count == 1
+            ? $"知识库：{names[0]}"
+            : "将删除以下知识库：\n" + string.Join("\n", names.Select(n => "· " + n));
+        return _confirmDlg.ShowAsync(
+            message,
+            title,
+            names.Count == 1 ? "永久删除此知识库" : "永久删除所选知识库",
+            "取消",
+            true,
+            640,
+            "资料、知识、任务状态、库内回收站将一并删除，无法通过本应用恢复。\n将先停止绑定这些库的浏览分享与 MCP 服务；停止失败则不删除。");
+    }
+
+    /// <summary>新建知识库：复用主窗口对话框，成功后会切库并刷新管理列表。</summary>
+    private async void OnCreateKb(object sender, RoutedEventArgs e)
+    {
+        if (Window.GetWindow(this) is MainWindow window) await window.ShowCreateKbAsync();
+    }
 
     private void OnRulesSizeChanged(object sender, SizeChangedEventArgs e)
     {

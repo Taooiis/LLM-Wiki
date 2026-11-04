@@ -74,46 +74,82 @@
       <TabItem Header="基本信息">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
           <StackPanel Margin="12" MaxWidth="860" HorizontalAlignment="Left">
-            <Border Padding="16" CornerRadius="8" Background="{DynamicResource CardSurfaceBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1">
+            <!--  知识库管理：列表勾选 + 批量删除，替代原先藏在“危险操作”里的单库删除  -->
+            <Border Padding="16" Background="{DynamicResource CardSurfaceBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1" CornerRadius="8">
               <StackPanel>
-                <TextBlock FontSize="18" FontWeight="SemiBold" Text="{Binding ViewModel.SelectedKb}" />
-                <TextBlock Margin="0,6,0,0" FontFamily="Consolas" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" Text="{Binding ViewModel.KbPath}" />
-                <TextBlock Margin="0,4,0,0" Text="{Binding ViewModel.DirectoryStatus}" Foreground="{DynamicResource SecondaryTextBrush}" />
-                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                  <ui:Button Content="打开文件夹" Icon="FolderOpen24" Command="{Binding ViewModel.OpenFolderCommand}" Margin="0,0,8,0" />
-                  <ui:Button Content="复制路径" Icon="Copy24" Command="{Binding ViewModel.CopyPathCommand}" />
+                <Grid>
+                  <TextBlock VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Text="知识库管理" />
+                  <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                    <ui:Button Content="全选 / 取消全选" Command="{Binding ViewModel.ToggleSelectAllCommand}" Margin="0,0,8,0" />
+                    <ui:Button Appearance="Primary" Click="OnCreateKb" Content="新建知识库" Icon="Add24" />
+                  </StackPanel>
+                </Grid>
+                <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="勾选一个或多个知识库后批量删除；删除不可恢复。删除当前库前需先保存或放弃草稿。" TextWrapping="Wrap" />
+
+                <ItemsControl Margin="0,12,0,0" ItemsSource="{Binding ViewModel.KbRows}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border Margin="0,0,0,6" Padding="12,8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1" CornerRadius="6">
+                        <Grid>
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                          </Grid.ColumnDefinitions>
+                          <CheckBox Grid.Column="0" VerticalAlignment="Center" IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                          <StackPanel Grid.Column="1" Margin="6,0,0,0" VerticalAlignment="Center" Orientation="Horizontal">
+                            <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding Name}" />
+                            <Border Margin="8,0,0,0" Padding="6,1" VerticalAlignment="Center" Background="{DynamicResource AccentFillColorDefaultBrush}" CornerRadius="4" Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVis}}">
+                              <TextBlock FontSize="11" Foreground="White" Text="当前" />
+                            </Border>
+                          </StackPanel>
+                          <ui:Button
+                            Grid.Column="2"
+                            Margin="0,0,8,0"
+                            Command="{Binding DataContext.ViewModel.SwitchKbCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                            CommandParameter="{Binding}"
+                            Content="切换"
+                            IsEnabled="{Binding IsNotCurrent}" />
+                          <ui:Button
+                            Grid.Column="3"
+                            Command="{Binding DataContext.ViewModel.DeleteKbRowCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                            CommandParameter="{Binding}"
+                            Content="删除" />
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="还没有知识库，点击右上角“新建知识库”开始。" TextWrapping="Wrap" Visibility="{Binding ViewModel.KbRows.Count, Converter={StaticResource CountToEmptyVis}}" />
+
+                <ui:InfoBar
+                  Margin="0,10,0,0"
+                  IsClosable="False"
+                  IsOpen="{Binding ViewModel.DeleteBlockedByDraft, Mode=OneWay}"
+                  Message="“目标与结构”页签中存在未保存的草稿；请先保存或放弃更改，再删除当前知识库。"
+                  Severity="Warning"
+                  Title="请先处理未保存的更改" />
+
+                <StackPanel Margin="0,10,0,0" HorizontalAlignment="Right" Orientation="Horizontal">
+                  <TextBlock Margin="0,0,10,0" VerticalAlignment="Center" Foreground="{DynamicResource SecondaryTextBrush}" Text="{Binding ViewModel.SelectionSummary}" />
+                  <ui:Button Appearance="Danger" Command="{Binding ViewModel.DeleteSelectedKbsCommand}" Content="删除所选" />
                 </StackPanel>
               </StackPanel>
             </Border>
 
-            <Expander Margin="0,16,0,0" Header="危险操作">
-              <Border Padding="16" CornerRadius="8" Background="{DynamicResource CardSurfaceBrush}" BorderBrush="{DynamicResource DangerBrush}" BorderThickness="1">
-                <StackPanel>
-                  <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource DangerBrush}" Text="永久删除此知识库" />
-                  <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" Text="将永久删除全部资料、知识文件、任务状态和库内回收站，无法通过本应用恢复。删除前需停止绑定服务并确认没有未保存编辑。" />
-                  <TextBlock Margin="0,8,0,0" FontFamily="Consolas" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" Text="{Binding ViewModel.KbPath, StringFormat='完整路径：{0}'}" />
-                  <TextBlock Margin="0,10,0,0" Text="{Binding ViewModel.SelectedKb, StringFormat='请输入库名以确认：{0}'}" />
-                  <ui:TextBox
-                    Margin="0,6,0,0"
-                    Width="320"
-                    HorizontalAlignment="Left"
-                    PlaceholderText="{Binding ViewModel.SelectedKb}"
-                    Text="{Binding ViewModel.DeleteConfirmText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                  <ui:InfoBar
-                    Margin="0,10,0,0"
-                    IsClosable="False"
-                    IsOpen="{Binding ViewModel.DeleteBlockedByDraft, Mode=OneWay}"
-                    Message="“目标与结构”页签中存在未保存的草稿；请先保存或放弃更改，再删除知识库。"
-                    Severity="Warning"
-                    Title="请先处理未保存的更改" />
-                  <ui:Button
-                    Margin="0,10,0,0"
-                    HorizontalAlignment="Left"
-                    Content="永久删除此知识库"
-                    Command="{Binding ViewModel.DeleteLibraryCommand}" />
+            <Border Margin="0,16,0,0" Padding="16" Background="{DynamicResource CardSurfaceBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1" CornerRadius="8">
+              <StackPanel>
+                <TextBlock FontSize="18" FontWeight="SemiBold" Text="{Binding ViewModel.SelectedKb}" />
+                <TextBlock Margin="0,6,0,0" FontFamily="Consolas" Foreground="{DynamicResource SecondaryTextBrush}" Text="{Binding ViewModel.KbPath}" TextWrapping="Wrap" />
+                <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource SecondaryTextBrush}" Text="{Binding ViewModel.DirectoryStatus}" />
+                <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                  <ui:Button Margin="0,0,8,0" Command="{Binding ViewModel.OpenFolderCommand}" Content="打开文件夹" Icon="FolderOpen24" />
+                  <ui:Button Command="{Binding ViewModel.CopyPathCommand}" Content="复制路径" Icon="Copy24" />
                 </StackPanel>
-              </Border>
-            </Expander>
+              </StackPanel>
+            </Border>
           </StackPanel>
         </ScrollViewer>
       </TabItem>

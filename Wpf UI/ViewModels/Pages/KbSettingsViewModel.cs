@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 
@@ -5,7 +6,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 using LLM_Wiki.Services;
-using LLM_Wiki.Share;
 using LLM_Wiki.ViewModels.Windows;
 
 namespace LLM_Wiki.ViewModels.Pages;
@@ -22,7 +22,6 @@ public partial class KbSettingsViewModel : ObservableObject, IUnsavedChangesGuar
     private readonly ReviewService _reviews;
     private readonly UnsavedChangesCoordinator _unsaved;
     private readonly ToastService _toast;
-    private readonly ShareService _share;
 
     private string _purposeBase = "";
     private string _schemaBase = "";
@@ -34,21 +33,20 @@ public partial class KbSettingsViewModel : ObservableObject, IUnsavedChangesGuar
         RuleService rules,
         ReviewService reviews,
         UnsavedChangesCoordinator unsaved,
-        ToastService toast,
-        ShareService share)
+        ToastService toast)
     {
         _main = main;
         _rules = rules;
         _reviews = reviews;
         _unsaved = unsaved;
         _toast = toast;
-        _share = share;
         _unsaved.Register("kb-settings", this);
         // D13 退出保护：登记“直接保存”与“放弃草稿”委托（放弃 = 磁盘重读，见 DiscardChanges）。
         _unsaved.RegisterSaver("kb-settings", SaveAllAsync);
         _unsaved.RegisterDiscarder("kb-settings", DiscardChanges);
         _main.PropertyChanged += OnMainPropertyChanged;
         LoadKb(_main.CurrentKb);
+        RefreshKbRows();
     }
 
     public Func<Task<UnsavedChoice>>? ConfirmUnsaved { get; set; }
@@ -59,8 +57,8 @@ public partial class KbSettingsViewModel : ObservableObject, IUnsavedChangesGuar
     /// <summary>D04 磁盘版本冲突：确认“载入磁盘版本”（danger，初焦取消）。</summary>
     public Func<string, Task<bool>>? ConfirmLoadDiskVersion { get; set; }
 
-    /// <summary>D07 永久删除知识库：640 宽危险确认框。</summary>
-    public Func<Task<bool>>? ConfirmDeleteLibrary { get; set; }
+    /// <summary>D07 永久删除知识库：参数为待删除库名列表（批量勾选删除复用同一确认框）。</summary>
+    public Func<IReadOnlyList<string>, Task<bool>>? ConfirmDeleteKb { get; set; }
 
     [ObservableProperty] private string _selectedKb = "";
     [ObservableProperty] private string _kbPath = "";
@@ -90,7 +88,8 @@ public partial class KbSettingsViewModel : ObservableObject, IUnsavedChangesGuar
     /// <summary>D07 阻断：存在未保存草稿时，危险区就地 InfoBar 提示，不弹确认框（05§8.2）。</summary>
     [ObservableProperty] private bool _deleteBlockedByDraft;
 
-    [ObservableProperty] private string _deleteConfirmText = "";
+    /// <summary>知识库管理列表：每行可勾选，支持批量删除；当前库带标记。</summary>
+    public ObservableCollection<KbRowViewModel> KbRows { get; } = [];
 
     public bool HasKb => _main.HasKb;
     public bool PurposeDirty => PurposeDraft != _purposeBase;
@@ -98,9 +97,14 @@ public partial class KbSettingsViewModel : ObservableObject, IUnsavedChangesGuar
     public bool HasUnsavedChanges => PurposeDirty || SchemaDirty;
     public bool HasPurposeError => PurposeError.Length > 0;
     public bool HasSchemaError => SchemaError.Length > 0;
-    public bool CanDelete => !string.IsNullOrWhiteSpace(DeleteConfirmText)
-                             && DeleteConfirmText.Trim().Equals(SelectedKb, StringComparison.Ordinal);
     public string DirectoryStatus => DirectoryOk ? "目录可访问" : "目录不可访问";
+
+    /// <summary>勾选数量与批量删除按钮的可用性/提示文案。</summary>
+    public int SelectedKbCount => KbRows.Count(r => r.IsSelected);
+    public bool HasKbSelection => SelectedKbCount > 0;
+    public string SelectionSummary => SelectedKbCount == 0
+        ? "勾选要删除的知识库"
+        : $"已勾选 {SelectedKbCount} 个知识库";
 
     /// <summary>状态徽章语义（05§2）：Conflict/Failed/Saving/Dirty/Missing/Unchanged，驱动小圆点语义色。</summary>
     public string PurposeState => PurposeConflict ? "Conflict"
@@ -120,13 +124,15 @@ public partial class KbSettingsViewModel : ObservableObject, IUnsavedChangesGuar
     private void OnMainPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MainWindowViewModel.CurrentKb)) LoadKb(_main.CurrentKb);
+        // 建库/删库后主列表整体替换，同步刷新管理列表
+        else if (e.PropertyName == nameof(MainWindowViewModel.Kbs)) RefreshKbRows();
     }
 
     public void LoadKb(string kb)
     {
         SelectedKb = kb;
-        DeleteConfirmText = "";
         DeleteBlockedByDraft = false;
+        UpdateCurrentMarkers();
         OnPropertyChanged(nameof(HasKb));
         if (string.IsNullOrWhiteSpace(kb) || !_main.HasKb)
         {
@@ -250,13 +256,7 @@ public partial class KbSettingsViewModel : ObservableObject, IUnsavedChangesGuar
 
     partial void OnSchemaBusyChanged(bool value) => RefreshSchemaStatus();
 
-    partial void OnDirectoryOkChanged(bool value)
-    {
-        OnPropertyChanged(nameof(DirectoryStatus));
-        DeleteLibraryCommand.NotifyCanExecuteChanged();
-    }
-
-    partial void OnDeleteConfirmTextChanged(string value) => DeleteLibraryCommand.NotifyCanExecuteChanged();
+    partial void OnDirectoryOkChanged(bool value) => OnPropertyChanged(nameof(DirectoryStatus));
 
     private void RefreshPurposeStatus()
     {
@@ -272,7 +272,6 @@ public partial class KbSettingsViewModel : ObservableObject, IUnsavedChangesGuar
 
     private bool CanSavePurpose() => PurposeDirty && !PurposeBusy;
     private bool CanSaveSchema() => SchemaDirty && !SchemaBusy;
-    private bool CanDeleteLibrary() => HasKb && DirectoryOk && CanDelete;
 
     [RelayCommand(CanExecute = nameof(CanSavePurpose))]
     private async Task SavePurposeAsync()
@@ -461,32 +460,108 @@ public partial class KbSettingsViewModel : ObservableObject, IUnsavedChangesGuar
         return lines.Length > head.Length ? summary + "\n……" : summary;
     }
 
-    /// <summary>D07（05§8.2）：先检查草稿（就地 InfoBar，不弹框），再走 640 宽危险确认；随后停止检查共享服务并删除。</summary>
-    [RelayCommand(CanExecute = nameof(CanDeleteLibrary))]
-    private async Task DeleteLibraryAsync()
+    /// <summary>
+    /// 同步管理列表：勾选状态按库名保留，当前库标记跟随 SelectedKb。
+    /// 主列表整体替换（建库/删库）后调用。
+    /// </summary>
+    public void RefreshKbRows()
     {
-        if (!HasKb) return;
-        if (HasUnsavedChanges)
+        var selected = KbRows.Where(r => r.IsSelected).Select(r => r.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        KbRows.Clear();
+        foreach (var name in _main.Kbs)
+        {
+            KbRows.Add(new KbRowViewModel(name, OnKbSelectionChanged)
+            {
+                IsCurrent = string.Equals(name, SelectedKb, StringComparison.Ordinal),
+                IsSelected = selected.Contains(name),
+            });
+        }
+        NotifySelectionChanged();
+    }
+
+    /// <summary>切换当前库后同步列表里的“当前”标记（不重建集合，避免闪动）。</summary>
+    private void UpdateCurrentMarkers()
+    {
+        foreach (var row in KbRows)
+            row.IsCurrent = string.Equals(row.Name, SelectedKb, StringComparison.Ordinal);
+    }
+
+    private void OnKbSelectionChanged() => NotifySelectionChanged();
+
+    private void NotifySelectionChanged()
+    {
+        OnPropertyChanged(nameof(SelectedKbCount));
+        OnPropertyChanged(nameof(HasKbSelection));
+        OnPropertyChanged(nameof(SelectionSummary));
+        DeleteSelectedKbsCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>列表行「切换」：与其他入口共用未保存草稿保护。</summary>
+    [RelayCommand]
+    private async Task SwitchKbAsync(KbRowViewModel? row)
+    {
+        if (row == null || row.IsCurrent) return;
+        await _main.SwitchKbAsync(row.Name);
+    }
+
+    /// <summary>全选 / 取消全选。</summary>
+    [RelayCommand]
+    private void ToggleSelectAll()
+    {
+        // 已全选时变成全不选，否则一次选中全部
+        var selectAll = !KbRows.All(r => r.IsSelected);
+        foreach (var row in KbRows) row.IsSelected = selectAll;
+    }
+
+    /// <summary>列表行「删除」：单库删除，复用批量删除的确认与草稿保护。</summary>
+    [RelayCommand]
+    private Task DeleteKbRowAsync(KbRowViewModel? row)
+        => row == null ? Task.CompletedTask : DeleteKbsAsync([row.Name]);
+
+    /// <summary>勾选后批量删除。</summary>
+    [RelayCommand(CanExecute = nameof(CanDeleteSelected))]
+    private Task DeleteSelectedKbsAsync()
+        => DeleteKbsAsync(KbRows.Where(r => r.IsSelected).Select(r => r.Name).ToList());
+
+    private bool CanDeleteSelected() => HasKbSelection;
+
+    /// <summary>
+    /// 删除一组知识库：涉及当前库时先做草稿阻断（就地 InfoBar，不弹框），
+    /// 再统一确认一次；逐个删除使单个失败不影响其余库，最后汇总结果。
+    /// </summary>
+    private async Task DeleteKbsAsync(IReadOnlyList<string> names)
+    {
+        if (names.Count == 0) return;
+
+        if (names.Contains(SelectedKb, StringComparer.Ordinal) && HasUnsavedChanges)
         {
             DeleteBlockedByDraft = true;
             return;
         }
         DeleteBlockedByDraft = false;
-        if (ConfirmDeleteLibrary != null && !await ConfirmDeleteLibrary()) return;
 
-        // 共享服务停止检查：绑定本库的浏览分享必须先停；停止后仍在运行则拒绝删除。
-        // （ShareService.Stop() 无返回值且内部吞异常，只能核对 Running 状态；真实失败信号待后续改 ShareService。）
-        if (_share.Running && _share.BoundKb.Equals(SelectedKb, StringComparison.OrdinalIgnoreCase))
+        if (ConfirmDeleteKb != null && !await ConfirmDeleteKb(names)) return;
+
+        var failed = new List<string>();
+        foreach (var name in names)
         {
-            _share.Stop();
-            if (_share.Running)
-            {
-                _toast.ShowError("浏览分享服务停止失败，未删除知识库");
-                return;
-            }
+            // 逐个调用：主视图负责停服务、切库；失败项收集后统一提示
+            if (!await _main.DeleteKbAsync(name, showToast: false)) failed.Add(name);
         }
 
-        if (await _main.DeleteCurrentKbAsync()) DeleteConfirmText = "";
+        RefreshKbRows();
+        if (failed.Count == 0)
+        {
+            _toast.ShowSuccess(names.Count == 1
+                ? "知识库已永久删除：" + names[0]
+                : $"已删除 {names.Count} 个知识库");
+        }
+        else
+        {
+            _toast.ShowError("以下知识库未删除：" + string.Join("、", failed));
+        }
     }
 
     [RelayCommand]
@@ -539,4 +614,30 @@ public partial class KbSettingsViewModel : ObservableObject, IUnsavedChangesGuar
     }
 
     public void MarkVisited() => _main.RememberPage("kbsettings");
+}
+
+/// <summary>
+/// 知识库管理列表的一行：名称、是否当前库、是否勾选待删除。
+/// 勾选变化通过回调通知父 ViewModel 刷新批量删除按钮状态。
+/// </summary>
+public partial class KbRowViewModel : ObservableObject
+{
+    private readonly Action _onSelectionChanged;
+
+    public KbRowViewModel(string name, Action onSelectionChanged)
+    {
+        Name = name;
+        _onSelectionChanged = onSelectionChanged;
+    }
+
+    public string Name { get; }
+
+    [ObservableProperty] private bool _isCurrent;
+    [ObservableProperty] private bool _isSelected;
+
+    /// <summary>当前库禁用“切换”按钮。</summary>
+    public bool IsNotCurrent => !IsCurrent;
+
+    partial void OnIsCurrentChanged(bool value) => OnPropertyChanged(nameof(IsNotCurrent));
+    partial void OnIsSelectedChanged(bool value) => _onSelectionChanged();
 }
