@@ -57,6 +57,7 @@ public partial class App
 
             services.AddSingleton<ISnackbarService, SnackbarService>();
             services.AddSingleton<ToastService>();
+            services.AddSingleton<NotificationService>();
             services.AddSingleton<UpdateService>();
 
             services.AddSingleton<KnowledgePage>();

@@ -18,15 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LlmWiki.Core\LlmWiki.Core.csproj" />
-    <ProjectReference Include="..\LlmWiki.McpStdio\LlmWiki.McpStdio.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
-
-  <Target Name="CopyMcpStdio" AfterTargets="Build">
-    <ItemGroup>
-      <McpStdioFiles Include="..\LlmWiki.McpStdio\bin\$(Configuration)\net10.0\**\*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(McpStdioFiles)" DestinationFolder="$(OutDir)%(RecursiveDir)" SkipUnchangedFiles="true" />
-  </Target>
 
   <ItemGroup>
     <PackageReference Include="H.NotifyIcon.Wpf" Version="2.4.1" />

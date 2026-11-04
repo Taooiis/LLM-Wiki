@@ -140,15 +140,13 @@ public sealed class PromptComposer(ConfigService config, SourceService sources, 
         return sb.ToString();
     }
 
-    /// <summary>高级入口单独查看/复制库说明；日常任务已自动携带，不必先复制。</summary>
+    /// <summary>高级入口单独查看/复制库说明；内容固定长度（不含文件清单），可放进外部 AI 的自定义指令。</summary>
     public string ComposeBoundary(string kb, string? localPath, string transport = "file")
     {
-        var paths = new KbPaths(Path.Combine(config.WikisDir, kb));
         var sb = new StringBuilder();
         sb.AppendLine("# 知识库说明：" + kb);
         sb.AppendLine();
         sb.AppendLine("## 身份与访问");
-        sb.AppendLine("- 知识库：" + kb);
         sb.AppendLine("- 访问方式：" + (transport == "mcp" ? "MCP 连接（逻辑资源）" : "文件直接访问"));
         if (transport != "mcp" && !string.IsNullOrWhiteSpace(localPath))
             sb.AppendLine("- 库根目录：" + localPath);
@@ -158,6 +156,7 @@ public sealed class PromptComposer(ConfigService config, SourceService sources, 
         sb.AppendLine("## 目录约定");
         sb.AppendLine("- raw/sources/：原始资料，保持源格式（md/txt/docx/xlsx），只读，不转 Markdown。");
         sb.AppendLine("- wiki/：知识页；entities 实体、concepts 概念、sources 资料摘要、queries 问题分析、synthesis 综合分析、comparisons 对比。");
+        sb.AppendLine("- wiki/index.md：全部知识页的链接与摘要总目录，找页面先读它。");
         sb.AppendLine("- purpose.md 与 schema.md：目标与组织规则，执行任务前必须读取。");
         sb.AppendLine("- .changes.json、.llmwiki/：应用内部状态，不读取、不修改、不声称可用于完成任务。");
         sb.AppendLine();
@@ -167,11 +166,6 @@ public sealed class PromptComposer(ConfigService config, SourceService sources, 
         sb.AppendLine("- 不把 docx/xlsx 转成 Markdown 落盘；读取失败或内容截断必须报告。");
         sb.AppendLine("- 人工修订过的知识页需要保留人工内容；覆盖前列出拟修改项。");
         sb.AppendLine("- 不自行清除待整理记录；任务是否完成由用户核对后确认。");
-        sb.AppendLine();
-        sb.AppendLine("## 知识文件");
-        var files = new List<string>();
-        WalkWiki(paths.Wiki, paths.Root, files, 200);
-        sb.AppendLine(files.Count == 0 ? "（尚无知识页）" : string.Join("\n", files.Select(f => "- " + f)));
         return sb.ToString();
     }
 
@@ -332,25 +326,4 @@ public sealed class PromptComposer(ConfigService config, SourceService sources, 
 
     private static string ShortHash(string? hash)
         => string.IsNullOrEmpty(hash) ? "" : hash.Length > 12 ? hash[..12] : hash;
-
-    private static void WalkWiki(string dir, string kbRoot, List<string> list, int cap)
-    {
-        if (!Directory.Exists(dir) || list.Count >= cap) return;
-        try
-        {
-            foreach (var file in Directory.EnumerateFiles(dir))
-            {
-                if (list.Count >= cap) return;
-                var name = Path.GetFileName(file);
-                if (!SourceRules.IsText(name) || name.Equals("log.md", StringComparison.OrdinalIgnoreCase)) continue;
-                list.Add(Path.GetRelativePath(kbRoot, file).Replace('\\', '/'));
-            }
-            foreach (var sub in Directory.EnumerateDirectories(dir))
-            {
-                if (Path.GetFileName(sub).StartsWith('.')) continue;
-                WalkWiki(sub, kbRoot, list, cap);
-            }
-        }
-        catch { }
-    }
 }

@@ -10,7 +10,8 @@ namespace LLM_Wiki.ViewModels.Pages;
 
 public partial class OrganizeViewModel
 {
-    public ObservableCollection<string> AgentOptions { get; } = ["本机工具：Codex CLI", "本机工具：OpenCode CLI", "手动复制"];
+    /// <summary>下拉项来自注册表（AgentTools.Tools），UI 不写死任何具体工具。</summary>
+    public ObservableCollection<string> AgentOptions { get; } = [.. AgentTools.Tools.Select(t => "本机工具：" + t.DisplayName), "手动复制"];
 
     [ObservableProperty] private string _selectedAgentOption = "手动复制";
     [ObservableProperty] private bool _isAgentRunning;
@@ -29,24 +30,24 @@ public partial class OrganizeViewModel
     {
         get
         {
+            if (IsAgentRunning) return "运行中…";
             if (!IsLocalMode || !AgentReady) return IsMcpTransport ? "复制任务说明" : "复制整理指令";
             return ActiveTab switch
             {
-                1 => "开始分析",
-                2 => "开始检查",
+                1 => "开始检查",
                 _ => "开始整理",
             };
         }
     }
 
-    /// <summary>MCP 模式只允许“复制任务说明”，本机开始按钮禁用（03§5 L60）。</summary>
-    public bool PrimaryActionEnabled => IsLocalMode && AgentReady ? (CanCopy && !IsMcpTransport) : CanCopy;
+    /// <summary>MCP 模式只允许“复制任务说明”，本机开始按钮禁用（03§5 L60）；运行中同样禁用。</summary>
+    public bool PrimaryActionEnabled => !IsAgentRunning && (IsLocalMode && AgentReady ? (CanCopy && !IsMcpTransport) : CanCopy);
 
     partial void OnSelectedAgentOptionChanged(string value)
     {
         if (value.StartsWith("本机工具", StringComparison.Ordinal) && !_agent.IsRunning)
         {
-            var id = value.Contains("OpenCode", StringComparison.Ordinal) ? AgentTools.OpenCode : CodexCliAdapter.AdapterId;
+            var id = AgentTools.IdOf(value["本机工具：".Length..]);
             if (_agent.Profile.AdapterId != id) _agent.SelectProfile(id);
         }
         OnPropertyChanged(nameof(IsLocalMode));
@@ -86,6 +87,28 @@ public partial class OrganizeViewModel
             SelectedAgentOption = "本机工具：" + AgentTools.Name(_agent.Profile.AdapterId);
     }
 
+    private System.Windows.Threading.DispatcherTimer? _runTimer;
+    private DateTime _runStartedAt;
+
+    /// <summary>运行反馈计时器：OpenCode 冷启动与模型响应间有数十秒静默期，逐秒计时让"正在运行"可感知。</summary>
+    private void StartRunFeedback()
+    {
+        _runStartedAt = DateTime.Now;
+        if (_runTimer == null)
+        {
+            _runTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _runTimer.Tick += (_, _) =>
+            {
+                if (!_agent.IsRunning) { _runTimer.Stop(); return; }
+                var seconds = (int)(DateTime.Now - _runStartedAt).TotalSeconds;
+                TaskStatusText = $"运行中 · OpenCode 正在处理 · 已等待 {seconds} 秒（首次启动与模型响应可能较慢，输出面板有进展摘要）";
+            };
+        }
+        _runTimer.Start();
+    }
+
+    private void StopRunFeedback() => _runTimer?.Stop();
+
     private void OnAgentFinished(AgentAttempt attempt)
     {
         var dispatcher = System.Windows.Application.Current?.Dispatcher;
@@ -96,6 +119,7 @@ public partial class OrganizeViewModel
     private void FinishAgent(AgentAttempt attempt)
     {
         RefreshAgentState();
+        StopRunFeedback();
         IsAgentRunning = false;
         AgentCanForce = false;
         TaskStatusText = attempt.Detail ?? "外部程序已结束，请核对结果";
@@ -130,6 +154,15 @@ public partial class OrganizeViewModel
 
     private void StartLocal()
     {
+        // 点开始时默认刷新待整理清单：本次任务必须看到刚放进库的文件，不消费上次扫描的缓存；已勾选项保持勾选
+        var checkedFiles = PendingRows.Where(r => r.IsSelected).Select(r => r.Change.File).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(SelectedKb))
+        {
+            _scanner.Scan(SelectedKb, recordChanges: true);
+            ReloadPending();
+            foreach (var row in PendingRows.Where(r => checkedFiles.Contains(r.Change.File)))
+                row.IsSelected = true;
+        }
         if (!ValidateBeforeCreate()) return;
         if (IsMcpTransport)
         {
@@ -177,7 +210,8 @@ public partial class OrganizeViewModel
         AgentOutput = "";
         AgentOutputTruncated = false;
         OnPropertyChanged(nameof(AgentOutputTruncated));
-        TaskStatusText = "运行中 · 正在等待工具响应";
+        TaskStatusText = "运行中 · OpenCode 正在处理（首次启动与模型响应可能较慢）";
+        StartRunFeedback();
         _toast.ShowSuccess("已启动 " + AgentTools.Name(_agent.Profile.AdapterId) + "，任务已自动传入");
     }
 

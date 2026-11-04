@@ -72,20 +72,6 @@ public sealed class ReviewService(ConfigService config)
         StateJson.Save(Paths(kb).Reviews, state);
     }
 
-    public void MarkManualRevision(string kb, string rel, string hash)
-    {
-        var state = Load(kb);
-        var normalized = ChangeService.Normalize(rel);
-        state.ManualReviews.RemoveAll(m => ChangeService.Normalize(m.RelPath) == normalized);
-        state.ManualReviews.Add(new ManualReview
-        {
-            RelPath = normalized,
-            Hash = hash,
-            At = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-        });
-        StateJson.Save(Paths(kb).Reviews, state);
-    }
-
     public bool IsManualProtected(string kb, string rel, string currentHash)
     {
         var normalized = ChangeService.Normalize(rel);

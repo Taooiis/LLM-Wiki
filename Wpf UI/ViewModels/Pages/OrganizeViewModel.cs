@@ -12,7 +12,7 @@ using LLM_Wiki.ViewModels.Windows;
 namespace LLM_Wiki.ViewModels.Pages;
 
 /// <summary>
-/// 整理页：更新知识 / 提问分析 / 检查维护三类任务，共用任务快照、指令组合与结果核对。
+/// 整理页：更新知识 / 检查维护两类任务，共用任务快照、指令组合与结果核对。
 /// 复制不是执行完成；只有用户勾选并比较版本后才移除待整理记录。
 /// </summary>
 public partial class OrganizeViewModel : ObservableObject
@@ -67,17 +67,14 @@ public partial class OrganizeViewModel : ObservableObject
     public ObservableCollection<OrganizeTask> RecentTasks { get; } = [];
 
     public ObservableCollection<string> ScopeOptions { get; } = ["待整理变更", "所选资料", "全部资料"];
-    public ObservableCollection<string> AskTypes { get; } = ["回答问题", "对比主题"];
     public ObservableCollection<string> CheckTypes { get; } = ["检查知识质量", "处理已删除资料的引用"];
     public ObservableCollection<string> TransportOptions { get; } = ["文件直接访问", "MCP 连接"];
 
     [ObservableProperty] private string _selectedKb = "";
     [ObservableProperty] private int _activeTab;
     [ObservableProperty] private string _scope = "待整理变更";
-    [ObservableProperty] private string _askType = "回答问题";
     [ObservableProperty] private string _checkType = "检查知识质量";
     [ObservableProperty] private string _transport = "文件直接访问";
-    [ObservableProperty] private string _questionInput = "";
     [ObservableProperty] private int _pendingCount;
     [ObservableProperty] private string _pendingSummary = "";
     [ObservableProperty] private int _allSourcesCount;
@@ -94,6 +91,10 @@ public partial class OrganizeViewModel : ObservableObject
     [ObservableProperty] private string _mcpHint = "";
     [ObservableProperty] private bool _agentEndedNotice;
     [ObservableProperty] private bool _confirmShowStale;
+    /// <summary>右栏“本次执行摘要”卡展开状态；“收起摘要”按钮控制。</summary>
+    [ObservableProperty] private bool _isSummaryExpanded = true;
+    /// <summary>左栏“本次知识变化”展开状态；检测到变化时自动展开，用户可手动收起。</summary>
+    [ObservableProperty] private bool _isWikiChangesExpanded;
 
     public bool HasKb => _main.HasKb;
     public bool IsReviewMode => CurrentTask != null && CurrentTask.State is TaskState.NeedsReview or TaskState.PartiallyConfirmed;
@@ -122,8 +123,7 @@ public partial class OrganizeViewModel : ObservableObject
     public string TaskAttemptText => CurrentTask?.LastAttemptStatus ?? "尚无本机执行记录";
     public string TaskAttemptStatus => CurrentTask?.LastAttemptStatus ?? _agent.StatusText;
     public bool IsUpdateTab => ActiveTab == 0;
-    public bool IsAskTab => ActiveTab == 1;
-    public bool IsCheckTab => ActiveTab == 2;
+    public bool IsCheckTab => ActiveTab == 1;
     public bool IsScopePending => Scope == "待整理变更";
     public bool IsScopeSelected => Scope == "所选资料";
     public bool IsScopeAll => Scope == "全部资料";
@@ -180,8 +180,7 @@ public partial class OrganizeViewModel : ObservableObject
             "全部资料" => AllSourcesCount > 0,
             _ => false,
         },
-        1 => !string.IsNullOrWhiteSpace(QuestionInput),
-        2 => CheckType == "检查知识质量" || PendingRows.Any(r => r.Change.Action == "删除"),
+        1 => CheckType == "检查知识质量" || PendingRows.Any(r => r.Change.Action == "删除"),
         _ => false,
     };
 
@@ -320,7 +319,6 @@ public partial class OrganizeViewModel : ObservableObject
     partial void OnActiveTabChanged(int value)
     {
         OnPropertyChanged(nameof(IsUpdateTab));
-        OnPropertyChanged(nameof(IsAskTab));
         OnPropertyChanged(nameof(IsCheckTab));
         OnPropertyChanged(nameof(PrimaryActionText));
         NotifyCopyState();
@@ -337,7 +335,6 @@ public partial class OrganizeViewModel : ObservableObject
         NotifyCopyState();
     }
 
-    partial void OnQuestionInputChanged(string value) => NotifyCopyState();
     partial void OnCheckTypeChanged(string value) => NotifyCopyState();
     partial void OnTransportChanged(string value)
     {
@@ -513,12 +510,7 @@ public partial class OrganizeViewModel : ObservableObject
                 return false;
             }
         }
-        if (ActiveTab == 1 && string.IsNullOrWhiteSpace(QuestionInput))
-        {
-            _toast.ShowWarning(AskType == "回答问题" ? "请填写你想了解的问题" : "请填写想比较的主题");
-            return false;
-        }
-        if (ActiveTab == 2 && CheckType == "处理已删除资料的引用" && !PendingRows.Any(r => r.Change.Action == "删除"))
+        if (ActiveTab == 1 && CheckType == "处理已删除资料的引用" && !PendingRows.Any(r => r.Change.Action == "删除"))
         {
             _toast.ShowWarning("当前没有已删除资料的引用需要处理");
             return false;
@@ -545,8 +537,6 @@ public partial class OrganizeViewModel : ObservableObject
                 return _tasks.CreateUpdateTask(SelectedKb, scope, selected, transport);
             }
             case 1:
-                return _tasks.CreateAskTask(SelectedKb, AskType == "对比主题" ? TaskProtocol.Compare : TaskProtocol.Query, QuestionInput, transport);
-            case 2:
                 return _tasks.CreateCheckTask(SelectedKb, CheckType == "处理已删除资料的引用" ? TaskProtocol.Clean : TaskProtocol.Lint, transport);
             default:
                 return null;
@@ -626,6 +616,10 @@ public partial class OrganizeViewModel : ObservableObject
         LoadWikiChanges(CurrentTask);
         ShowResult = true;
         NotifyReviewState();
+        // 明确反馈：变化列表在左栏核对区，右栏按钮点击后必须给结论
+        _toast.Show("查看本次变化", WikiChanges.Count == 0
+            ? "没有检测到知识文件变化"
+            : $"检测到 {WikiChanges.Count} 项知识文件变化，已在左侧“本次知识变化”展开");
     }
 
     private void LoadWikiChanges(OrganizeTask task)
@@ -761,11 +755,9 @@ public partial class OrganizeViewModel : ObservableObject
         ShowResult = true;
         ActiveTab = CurrentTask.Kind switch
         {
-            TaskKind.Ask => 1,
-            TaskKind.Check => 2,
+            TaskKind.Check => 1,
             _ => 0,
         };
-        if (CurrentTask.Kind == TaskKind.Ask) QuestionInput = CurrentTask.Input;
         _toast.ShowSuccess("已恢复任务，可继续核对");
     }
 
@@ -798,8 +790,7 @@ public partial class OrganizeViewModel : ObservableObject
         ShowResult = true;
         ActiveTab = CurrentTask.Kind switch
         {
-            TaskKind.Ask => 1,
-            TaskKind.Check => 2,
+            TaskKind.Check => 1,
             _ => 0,
         };
         NotifyReviewState();
@@ -855,7 +846,8 @@ public partial class OrganizeViewModel : ObservableObject
     private void HidePreview() => ShowPreview = false;
 
     [RelayCommand]
-    private void HideResult() => ShowResult = false;
+    /// <summary>“收起摘要”：收起右栏执行摘要卡（核对态下 ShowResult 不控制任何可见元素）。</summary>
+    private void HideResult() => IsSummaryExpanded = false;
 
     [RelayCommand]
     private void AcknowledgeRules()

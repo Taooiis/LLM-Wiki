@@ -16,7 +16,7 @@ public enum DocumentRole { None, Source, Knowledge }
 
 /// <summary>
 /// 资料/知识共用的文档工作区：预览、编辑、只读、新建。
-/// 保存时带磁盘版本校验；保存失败留在编辑并保留草稿；知识默认只读，手动修订需显式进入。
+/// 保存时带磁盘版本校验；保存失败留在编辑并保留草稿；wiki 页面一律只读（由 AI 维护）。
 /// </summary>
 public partial class DocumentWorkspaceViewModel : ObservableObject, IUnsavedChangesGuard
 {
@@ -67,7 +67,6 @@ public partial class DocumentWorkspaceViewModel : ObservableObject, IUnsavedChan
 
     public bool HasUnsavedChanges => Mode == WorkspaceMode.Editing && SaveState == WorkspaceSaveState.Dirty;
     public bool IsDirty => SaveState == WorkspaceSaveState.Dirty;
-    public bool IsKnowledgeRevision => Mode == WorkspaceMode.Editing && Role == DocumentRole.Knowledge;
     public string CurrentVersion => _diskHash;
     public Visibility ChromeVisibility => HideChrome ? Visibility.Collapsed : Visibility.Visible;
 
@@ -83,16 +82,17 @@ public partial class DocumentWorkspaceViewModel : ObservableObject, IUnsavedChan
         ? Visibility.Visible : Visibility.Collapsed;
     public Visibility IsEditingContentVisible => Mode == WorkspaceMode.Editing ? Visibility.Visible : Visibility.Collapsed;
     public Visibility IsReadOnlyMode => Mode == WorkspaceMode.ReadOnly ? Visibility.Visible : Visibility.Collapsed;
-    public Visibility IsPreviewEditable => Mode == WorkspaceMode.Preview && Role == DocumentRole.Source && CanEdit && !IsNewDocument ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility IsPreviewEditable => Mode == WorkspaceMode.Preview && Role == DocumentRole.Source && CanEdit && !IsNewDocument && !EditSuppressed ? Visibility.Visible : Visibility.Collapsed;
     public Visibility IsNewDocumentVisible => Mode == WorkspaceMode.Editing && IsNewDocument ? Visibility.Visible : Visibility.Collapsed;
     public Visibility HasSaveError => Mode == WorkspaceMode.Editing && SaveState == WorkspaceSaveState.Failed ? Visibility.Visible : Visibility.Collapsed;
     public Visibility ShowSaveBar => Mode == WorkspaceMode.Editing ? Visibility.Visible : Visibility.Collapsed;
 
     public bool IsSourceDocument => Role == DocumentRole.Source;
 
-    public bool CanEdit => Role == DocumentRole.Source
-                           || (Role == DocumentRole.Knowledge && CurrentRelativePath.EndsWith(".md", StringComparison.OrdinalIgnoreCase)
-                               && !CurrentRelativePath.Equals("wiki/log.md", StringComparison.OrdinalIgnoreCase));
+    /// <summary>知识页只读边界：打开的源文档仅预览，不提供编辑入口（编辑请到资料页）。</summary>
+    public bool EditSuppressed { get; set; }
+
+    public bool CanEdit => Role == DocumentRole.Source;
 
     public string SaveStateText => (Mode == WorkspaceMode.Preview && Role == DocumentRole.Knowledge)
         || (Mode == WorkspaceMode.ReadOnly && Role == DocumentRole.Source)
@@ -162,7 +162,6 @@ public partial class DocumentWorkspaceViewModel : ObservableObject, IUnsavedChan
         OnPropertyChanged(nameof(CanEdit));
         OnPropertyChanged(nameof(PathBreadcrumb));
         OnPropertyChanged(nameof(FileTypeLabel));
-        OnPropertyChanged(nameof(IsKnowledgeRevision));
         OnPropertyChanged(nameof(IsSourceDocument));
         OnPropertyChanged(nameof(IsDirty));
         OnPropertyChanged(nameof(CurrentVersion));
@@ -333,17 +332,6 @@ public partial class DocumentWorkspaceViewModel : ObservableObject, IUnsavedChan
         HideChrome = true;
     }
 
-    /// <summary>高级入口“手动修订知识…”：显式进入编辑，普通工具栏不出现编辑按钮。</summary>
-    public bool BeginKnowledgeRevision()
-    {
-        if (Role != DocumentRole.Knowledge || Mode != WorkspaceMode.Preview || !CanEdit) return false;
-        EditorContent = PreviewContent;
-        _savedContent = PreviewContent;
-        Mode = WorkspaceMode.Editing;
-        SaveState = WorkspaceSaveState.Saved;
-        return true;
-    }
-
     [RelayCommand]
     private void EnterEditMode()
     {
@@ -435,24 +423,6 @@ public partial class DocumentWorkspaceViewModel : ObservableObject, IUnsavedChan
         }
 
         SaveState = WorkspaceSaveState.Saving;
-        if (Role == DocumentRole.Knowledge)
-        {
-            var result = _knowledge.SaveManualRevision(_kb, CurrentRelativePath, EditorContent, _diskHash);
-            if (!result.Success)
-            {
-                SaveState = WorkspaceSaveState.Failed;
-                SaveErrorMessage = result.Message;
-                return false;
-            }
-            _diskHash = result.Hash;
-            _savedContent = EditorContent;
-            PreviewContent = EditorContent;
-            SaveState = WorkspaceSaveState.Saved;
-            SavePendingWarning = "";
-            _toast.ShowSuccess($"{CurrentFileName} 已保存");
-            return true;
-        }
-
         var save = _sources.SaveText(_kb, CurrentRelativePath, EditorContent, _diskHash);
         if (!save.Success)
         {
@@ -567,14 +537,7 @@ public partial class DocumentWorkspaceViewModel : ObservableObject, IUnsavedChan
     private async Task LoadDiskVersionAsync()
     {
         if (ConfirmLoadDiskVersion != null && !await ConfirmLoadDiskVersion()) return;
-        if (Role == DocumentRole.Knowledge)
-        {
-            OpenKnowledgePage(_kb, CurrentRelativePath);
-        }
-        else
-        {
-            OpenSourceText(_kb, CurrentRelativePath);
-        }
+        OpenSourceText(_kb, CurrentRelativePath);
         _toast.ShowWarning("已载入磁盘版本，未保存草稿已丢弃。");
     }
 

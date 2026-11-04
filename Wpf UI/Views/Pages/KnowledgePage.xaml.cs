@@ -12,7 +12,6 @@ namespace LLM_Wiki.Views.Pages;
 public partial class KnowledgePage
 {
     public KnowledgeViewModel ViewModel { get; }
-    private readonly UnsavedChangesDialog _unsavedDlg;
     private readonly ConfirmationDialog _confirmDlg;
 
     public KnowledgePage(KnowledgeViewModel viewModel)
@@ -20,9 +19,7 @@ public partial class KnowledgePage
         ViewModel = viewModel;
         DataContext = this;
         InitializeComponent();
-        _unsavedDlg = (UnsavedChangesDialog)Resources["UnsavedDlg"];
         _confirmDlg = (ConfirmationDialog)Resources["ConfirmDlg"];
-        ViewModel.Workspace.ConfirmUnsaved = async () => await _unsavedDlg.ShowChoiceAsync(string.IsNullOrEmpty(ViewModel.Workspace.CurrentRelativePath) ? null : new[] { ViewModel.Workspace.CurrentRelativePath }, CancellationToken.None);
         ViewModel.ConfirmClearProtection = async relPath =>
         {
             var version = ViewModel.Workspace.CurrentVersion;
@@ -32,14 +29,6 @@ public partial class KnowledgePage
                 "允许后续任务修改此知识页？",
                 "解除当前版本保护");
         };
-        // D04 磁盘版本冲突：“载入磁盘版本”丢弃草稿前需显式确认（初焦在“返回编辑”）
-        ViewModel.Workspace.ConfirmLoadDiskVersion = () => _confirmDlg.ShowAsync(
-            "磁盘上的知识文件已有新版本。载入磁盘版本会丢弃当前未保存的手动修订草稿。",
-            "磁盘版本冲突",
-            "载入磁盘版本",
-            "返回编辑",
-            danger: true,
-            dialogWidth: 520);
         ViewModel.MarkVisited();
     }
 
@@ -98,10 +87,6 @@ public partial class KnowledgePage
     private void OnMoreClick(object sender, RoutedEventArgs e)
     {
         var menu = new ContextMenu { PlacementTarget = sender as FrameworkElement, Placement = PlacementMode.Bottom };
-        var manual = new MenuItem { Header = "手动修订知识…", IsEnabled = ViewModel.HasCurrentPage && !ViewModel.IsManualEditing };
-        manual.Click += (_, _) => ViewModel.BeginManualRevisionCommand.Execute(null);
-        menu.Items.Add(manual);
-
         var clear = new MenuItem
         {
             Header = "解除本页人工修订保护…",
@@ -128,24 +113,6 @@ public partial class KnowledgePage
         {
             TreeFilterBox.Focus();
             e.Handled = true;
-        }
-        else if (e.Key == System.Windows.Input.Key.S && System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Control)
-        {
-            // 00§6 Ctrl+S 保存编辑：页面级隧道事件，焦点不在编辑框时同样生效（SaveAsync 内部自校验编辑态/保存中）
-            if (ViewModel.Workspace.Mode == WorkspaceMode.Editing)
-            {
-                _ = ViewModel.Workspace.SaveAsync();
-                e.Handled = true;
-            }
-        }
-        else if (e.Key == System.Windows.Input.Key.Escape)
-        {
-            // 00§6 Esc 先处理未保存：编辑中交由既有 D02 保护流程（留在此处/保存/放弃），不直接丢草稿
-            if (ViewModel.Workspace.Mode == WorkspaceMode.Editing)
-            {
-                _ = ViewModel.Workspace.CancelEditCommand.ExecuteAsync(null);
-                e.Handled = true;
-            }
         }
         else if (e.Key == System.Windows.Input.Key.F5)
         {

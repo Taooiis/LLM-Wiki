@@ -26,11 +26,15 @@ public class ConfigService
         Theme = GetString("theme") is "Light" ? "Light" : "Dark";
         LastKb = GetString("lastKb");
         LastPages = ReadLastPages();
+        KnowledgeShowHidden = GetBool("knowledgeShowHidden");
     }
 
     public string WikisDir { get; private set; }
     public string Theme { get; private set; }
     public string LastKb { get; private set; }
+
+    /// <summary>知识页是否显示结构文件（wiki 目录树）；默认只显示源文档。</summary>
+    public bool KnowledgeShowHidden { get; private set; }
 
     /// <summary>每个库上次访问的页面（知识/资料/整理），用于恢复。</summary>
     public Dictionary<string, string> LastPages { get; }
@@ -61,6 +65,14 @@ public class ConfigService
     {
         LastKb = kb ?? "";
         _root["lastKb"] = LastKb;
+        Save(out _);
+    }
+
+    /// <summary>记忆知识页“显示结构文件”开关（应用级 UI 偏好，与库无关）。</summary>
+    public void SetKnowledgeShowHidden(bool value)
+    {
+        KnowledgeShowHidden = value;
+        _root["knowledgeShowHidden"] = value;
         Save(out _);
     }
 
@@ -168,6 +180,12 @@ public class ConfigService
     {
         try { return _root[key]?.GetValue<string>() ?? ""; }
         catch { return ""; }
+    }
+
+    private bool GetBool(string key)
+    {
+        try { return _root[key]?.GetValue<bool>() ?? false; }
+        catch { return false; }
     }
 
     private Dictionary<string, string> ReadLastPages()

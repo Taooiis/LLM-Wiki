@@ -31,7 +31,7 @@ public static class McpErrorCodes
 
 /// <summary>
 /// MCP 访问策略：路径校验、读写禁区、大小上限集中在此（设计 08§6），
-/// HTTP 与 stdio 两种传输共用，不依赖客户端传参可信度。
+/// 所有 MCP 传输共用，不依赖客户端传参可信度。
 /// </summary>
 public sealed class McpAccessPolicy(ConfigService config)
 {
@@ -49,7 +49,7 @@ public sealed class McpAccessPolicy(ConfigService config)
 
     private volatile int _mode;
 
-    /// <summary>HTTP/stdio 会话绑定的授权库；空表示尚未绑定，不授权任何库。</summary>
+    /// <summary>MCP 会话绑定的授权库；空表示尚未绑定，不授权任何库。</summary>
     public string AuthorizedKb { get; set; } = "";
 
     public McpMode Mode
@@ -304,7 +304,7 @@ public sealed class McpAccessPolicy(ConfigService config)
     public static string ToDisplayPath(string path) => path.Replace('\\', '/');
 }
 
-/// <summary>MCP 服务端上下文：当前知识库由桌面端联动，stdio 端为启动时选定的库（设计 08§12）。</summary>
+/// <summary>MCP 服务端上下文：当前知识库由桌面端联动（设计 08§12）。</summary>
 public sealed class McpServerContext
 {
     private volatile string _currentKb = "";

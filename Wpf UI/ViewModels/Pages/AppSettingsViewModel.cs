@@ -219,7 +219,7 @@ public partial class AppSettingsViewModel : ObservableObject
         if (wasMcp) impacts.Add($"HTTP MCP（{_mcp.BoundKb}）");
         var impactText = impacts.Count == 0
             ? "当前没有运行中的绑定服务。"
-            : "将停止：" + string.Join("、", impacts) + "；独立 stdio MCP 需到外部客户端停用或重启，本应用不能代为停止。";
+            : "将停止：" + string.Join("、", impacts) + "。";
         var resolved = PathGuard.ResolveWikisDir(WikisDirInput, AppContext.BaseDirectory) ?? WikisDirInput;
         // D11：只有目标目录确实不存在时才说明“会在应用后创建”。
         var targetExists = Directory.Exists(resolved);

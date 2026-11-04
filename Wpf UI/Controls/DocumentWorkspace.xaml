@@ -211,13 +211,6 @@
               Visibility="{Binding ChromeVisibility}">
               <Run Text="UTF-8" /><Run Text=" · " /><Run Text="{Binding FileTypeLabel, Mode=OneWay}" />
             </TextBlock>
-            <TextBlock
-              Margin="0,4,0,0"
-              FontSize="{StaticResource FontSizeCaption}"
-              Foreground="{DynamicResource WarningBrush}"
-              TextWrapping="Wrap"
-              Text="手动修改不会更新源资料；后续整理需核对人工内容，MCP 命中此版本会拒绝静默覆盖。"
-              Visibility="{Binding IsKnowledgeRevision, Converter={StaticResource BoolToVis}}" />
             <!-- “文件已保存，变更记录未完成”：持久提醒，保留到补记解决（00§9.7） -->
             <ui:InfoBar
               Margin="0,6,0,0"

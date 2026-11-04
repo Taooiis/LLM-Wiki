@@ -116,23 +116,6 @@
         </StackPanel>
       </TabItem>
 
-      <TabItem Header="提问分析">
-        <StackPanel Margin="12,10,12,10">
-          <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-            <TextBlock VerticalAlignment="Center" Text="类型" Margin="0,0,8,0" />
-            <ComboBox MinWidth="160" MinHeight="32" ItemsSource="{Binding ViewModel.AskTypes}" SelectedItem="{Binding ViewModel.AskType, Mode=TwoWay}" />
-          </StackPanel>
-          <ui:TextBox
-            Height="70"
-            AcceptsReturn="True"
-            PlaceholderText="输入问题或对比主题，例如：这些资料的主要分歧是什么？"
-            Text="{Binding ViewModel.QuestionInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-            TextWrapping="Wrap"
-            VerticalContentAlignment="Top" />
-          <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="回答会在外部 AI 工具中生成，本应用不内置聊天；问题必填。" />
-        </StackPanel>
-      </TabItem>
-
       <TabItem Header="检查维护">
         <StackPanel Margin="12,10,12,10">
           <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
@@ -443,10 +426,10 @@
       <!-- 右：本次任务 + 执行摘要 -->
       <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
         <StackPanel>
-          <Border Padding="16" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1" CornerRadius="8">
+          <Expander Margin="0,0,0,10" Padding="16" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1" Header="本次任务" IsExpanded="True">
             <StackPanel>
               <Grid Margin="0,0,0,12">
-                <TextBlock FontSize="18" FontWeight="SemiBold" Text="本次任务" />
+                <TextBlock FontSize="18" FontWeight="SemiBold" Text="本次任务" Visibility="Collapsed" />
                 <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
                   <TextBlock Margin="0,0,6,0" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="执行入口" />
                   <ComboBox MinWidth="140" MinHeight="30" ItemsSource="{Binding ViewModel.AgentOptions}" SelectedItem="{Binding ViewModel.SelectedAgentOption, Mode=TwoWay}" ToolTip="本机执行或复制指令" />
@@ -568,8 +551,7 @@
                 CornerRadius="8"
                 Visibility="{Binding ViewModel.HasTask, Converter={StaticResource BoolToVis}}">
                 <StackPanel>
-                  <TextBlock TextWrapping="Wrap" Text="本应用无法确认外部 AI 是否完成，请查看结果后再确认处理。" />
-                  <TextBlock Margin="0,2,0,0" FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="进程结束或复制成功都不代表全部资料已处理。" />
+                  <TextBlock TextWrapping="Wrap" Text="进程结束或复制成功都不代表全部资料已处理；结束后以输出面板中的 AI 报告与知识文件变化为准，请核对后再确认处理。" />
                 </StackPanel>
               </Border>
 
@@ -588,19 +570,19 @@
                 </StackPanel>
               </Expander>
             </StackPanel>
-          </Border>
+          </Expander>
 
-          <!-- 执行摘要（核对态） -->
-          <Border
-            Margin="0,10,0,0"
+          <!-- 执行摘要（核对态，可展开收起） -->
+          <Expander
+            Margin="0,0,0,10"
             Padding="16"
             Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
             BorderBrush="{DynamicResource StrokeBrush}"
             BorderThickness="1"
-            CornerRadius="8"
+            Header="本次执行摘要"
+            IsExpanded="{Binding ViewModel.IsSummaryExpanded, Mode=TwoWay}"
             Visibility="{Binding ViewModel.IsReviewMode, Converter={StaticResource BoolToVis}}">
             <StackPanel>
-              <TextBlock FontSize="18" FontWeight="SemiBold" Text="本次执行摘要" />
               <TextBlock Margin="0,4,0,8" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Text="以下是任务准备以来检测到的文件变化，可能包含其他程序的修改，不代表均由本次 AI 产生。" />
 
               <Grid Margin="0,2">
@@ -637,10 +619,10 @@
               <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource SuccessBrush}" Text="{Binding ViewModel.LastConfirmMessage}" TextWrapping="Wrap" />
               <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
                 <ui:Button Content="查看本次变化" Command="{Binding ViewModel.ViewChangesCommand}" Margin="0,0,8,0" />
-                <ui:Button Content="收起结果" Command="{Binding ViewModel.HideResultCommand}" />
+                <ui:Button Content="收起摘要" Command="{Binding ViewModel.HideResultCommand}" />
               </StackPanel>
             </StackPanel>
-          </Border>
+          </Expander>
 
           <!-- 未完成任务 -->
           <Expander Margin="0,10,0,0" Header="未完成任务 / 最近任务" IsExpanded="{Binding ViewModel.HasActiveTasks, Mode=OneWay}">

@@ -4,8 +4,8 @@ using System.Text.RegularExpressions;
 
 namespace LLM_Wiki.Services;
 
-/// <summary>知识页服务：wiki/ 目录树、默认页、空知识判定、链接解析与高级手动修订。</summary>
-public sealed partial class KnowledgeService(ConfigService config, ReviewService reviews, SourceService sources)
+/// <summary>知识页服务：wiki/ 目录树、默认页、空知识判定与链接解析。</summary>
+public sealed partial class KnowledgeService(ConfigService config, SourceService sources)
 {
     private static readonly Dictionary<string, string> CategoryAliases = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -152,40 +152,6 @@ public sealed partial class KnowledgeService(ConfigService config, ReviewService
         catch { return false; }
     }
 
-    /// <summary>高级手动修订：只允许 wiki/ 下 md/txt，日志只读；版本不一致拒绝覆盖。</summary>
-    public ManualRevisionResult SaveManualRevision(string kb, string rel, string content, string? expectedHash)
-    {
-        var paths = Paths(kb);
-        var normalized = ChangeService.Normalize(rel);
-        if (!normalized.StartsWith("wiki/", StringComparison.OrdinalIgnoreCase)
-            || !SourceRules.IsText(normalized)
-            || normalized.Equals("wiki/log.md", StringComparison.OrdinalIgnoreCase))
-            return new ManualRevisionResult(false, "", "此文件不允许手动修订");
-
-        var full = Path.Combine(paths.Root, normalized.Replace('/', Path.DirectorySeparatorChar));
-        if (!File.Exists(full)) return new ManualRevisionResult(false, "", "页面不存在");
-
-        var current = HashUtil.Sha256(full);
-        if (!string.IsNullOrEmpty(expectedHash)
-            && !string.Equals(current, expectedHash, StringComparison.OrdinalIgnoreCase))
-            return new ManualRevisionResult(false, current, "文件已被其他程序修改，请查看磁盘版本后重试");
-
-        try
-        {
-            var tmp = full + ".tmp-" + Guid.NewGuid().ToString("N");
-            File.WriteAllText(tmp, content, new System.Text.UTF8Encoding(false));
-            File.Move(tmp, full, overwrite: true);
-            var hash = HashUtil.Sha256(full);
-            reviews.MarkManualRevision(kb, normalized, hash);
-            LogWriter.Append(config.WikisDir, kb, $"- {LogWriter.Now} 手动修订知识：{normalized}");
-            return new ManualRevisionResult(true, hash, "");
-        }
-        catch (Exception e)
-        {
-            return new ManualRevisionResult(false, current, "保存失败：" + e.Message);
-        }
-    }
-
     /// <summary>解析 [[页面名]]：唯一命中返回路径，多候选返回候选，缺失返回空。</summary>
     public LinkTarget ResolveWikiLink(string kb, string fromRel, string target)
     {
@@ -239,8 +205,6 @@ public sealed record KnowledgeState(KnowledgeStateKind Kind, bool HasSources);
 public sealed record KnowledgeNode(string Name, string RelPath, bool IsFolder, string DisplayName, IReadOnlyList<KnowledgeNode> Children, long Size);
 
 public sealed record LinkTarget(string Resolved, IReadOnlyList<string> Candidates);
-
-public sealed record ManualRevisionResult(bool Success, string Hash, string Message);
 
 public sealed class KbMeta
 {

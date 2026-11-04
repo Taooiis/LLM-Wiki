@@ -9,7 +9,7 @@ using ModelContextProtocol;
 namespace LLM_Wiki.Services;
 
 /// <summary>
-/// MCP 能力实现：HTTP 与 stdio 共用授权、路径和版本规则。
+/// MCP 能力实现：授权、路径和版本规则由 McpAccessPolicy 统一约束。
 /// 只读工具不依赖客户端先调用 boundary；写入必须显式授权并带版本前置条件。
 /// </summary>
 public sealed class McpKnowledgeService(

@@ -19,7 +19,6 @@
   PreviewKeyDown="OnPagePreviewKeyDown"
   mc:Ignorable="d">
   <Page.Resources>
-    <dialogs:UnsavedChangesDialog x:Key="UnsavedDlg" />
     <dialogs:ConfirmationDialog x:Key="ConfirmDlg" />
     <HierarchicalDataTemplate DataType="{x:Type vm:KnowledgeTreeNode}" ItemsSource="{Binding VisibleChildren}">
       <StackPanel Orientation="Horizontal">
@@ -88,13 +87,6 @@
             Visibility="{Binding ViewModel.HasCurrentPage, Converter={StaticResource BoolToVis}}">
             <TextBlock FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding ViewModel.ReadOnlyBadge}" />
           </Border>
-          <TextBlock
-            Margin="12,0,0,0"
-            VerticalAlignment="Center"
-            FontSize="{StaticResource FontSizeCaption}"
-            Foreground="{DynamicResource WarningBrush}"
-            Text="{Binding ViewModel.Workspace.SaveStateText}"
-            Visibility="{Binding ViewModel.IsManualEditing, Converter={StaticResource BoolToVis}}" />
         </StackPanel>
         <TextBlock
           Margin="0,4,0,0"
@@ -106,14 +98,6 @@
       </StackPanel>
 
       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
-        <StackPanel
-          Margin="0,0,8,0"
-          Orientation="Horizontal"
-          Visibility="{Binding ViewModel.IsManualEditing, Converter={StaticResource BoolToVis}}">
-          <ui:Button Content="取消" Command="{Binding ViewModel.Workspace.CancelEditCommand}" Margin="0,0,8,0" />
-          <ui:Button Content="保存 (Ctrl+S)" Appearance="Primary" Command="{Binding ViewModel.Workspace.SaveCommand}" Margin="0,0,8,0" />
-          <ui:Button Content="完成编辑" Command="{Binding ViewModel.Workspace.CompleteEditingCommand}" Margin="0,0,8,0" />
-        </StackPanel>
         <ui:Button
           Content="目录"
           Icon="TextBulletListLtr24"
@@ -188,6 +172,7 @@
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />
           <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
           <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <TextBlock
@@ -197,17 +182,24 @@
           FontWeight="SemiBold"
           Foreground="{DynamicResource ItemTextBrush}"
           Text="知识目录" />
-        <ui:TextBox
-          x:Name="TreeFilterBox"
+        <!-- 只看源文档（默认）/ 显示 LLM 生成的知识结构；偏好随应用配置记忆 -->
+        <ui:ToggleSwitch
           Grid.Row="1"
           Margin="0,0,0,8"
+          Content="显示结构文件"
+          IsChecked="{Binding ViewModel.ShowHiddenFiles, Mode=TwoWay}"
+          ToolTip="显示 LLM 生成的知识结构（实体、概念、资料摘要等 wiki 目录）；关闭时只显示源文档" />
+        <ui:TextBox
+          x:Name="TreeFilterBox"
+          Grid.Row="2"
+          Margin="0,0,0,8"
           Icon="Search24"
-          PlaceholderText="筛选知识文件名…"
+          PlaceholderText="筛选文件名…"
           Text="{Binding ViewModel.SearchKeyword, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
         <!-- 大树异步/虚拟化，不外包 ScrollViewer 破坏虚拟化（01§5） -->
         <TreeView
           x:Name="KnowledgeTree"
-          Grid.Row="2"
+          Grid.Row="3"
           Background="Transparent"
           BorderThickness="0"
           ItemContainerStyle="{StaticResource ProjectTreeItem}"
@@ -225,7 +217,7 @@
         </TreeView>
         <!-- 过滤无结果：提示 + 清空筛选入口（01§5） -->
         <StackPanel
-          Grid.Row="2"
+          Grid.Row="3"
           Margin="8,12,8,0"
           HorizontalAlignment="Center"
           Visibility="{Binding ViewModel.TreeItems.Count, Converter={StaticResource CountToEmptyVis}}">
@@ -421,13 +413,13 @@
         </Grid>
       </Border>
 
-      <!-- 空知识 / 无库引导：有资料显示“去整理”，无资料只显示“去资料页”（01§5.1） -->
+      <!-- 空知识 / 无库引导：有资料显示“去整理”，无资料只显示“去资料页”（01§5.1）；点开文件后让位正文 -->
       <Border
         Grid.Row="4"
         Grid.Column="2"
         Grid.ColumnSpan="3"
         Background="{DynamicResource ContentSurfaceBrush}"
-        Visibility="{Binding ViewModel.ShowEmpty, Converter={StaticResource BoolToVis}}">
+        Visibility="{Binding ViewModel.ShowEmptyOverlay, Converter={StaticResource BoolToVis}}">
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="460">
           <TextBlock HorizontalAlignment="Center" FontSize="22" FontWeight="SemiBold" Text="{Binding ViewModel.EmptyTitle}" TextAlignment="Center" TextWrapping="Wrap" />
           <TextBlock Margin="0,8,0,0" TextAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding ViewModel.EmptyDescription}" />

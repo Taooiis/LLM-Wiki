@@ -83,13 +83,33 @@
         </Grid>
       </ui:TitleBar.Header>
       <ui:TitleBar.TrailingContent>
-        <ui:Button
-          Margin="0,0,8,0"
-          Content="帮助"
-          Icon="QuestionCircle24"
-          Click="OnHelpClick"
-          Appearance="Secondary"
-          ToolTip="使用帮助" />
+        <StackPanel Orientation="Horizontal">
+          <ui:Button
+            x:Name="NotifyBell"
+            Margin="0,0,8,0"
+            Appearance="Transparent"
+            Click="OnNotifyBellClick"
+            ToolTip="通知中心">
+            <Grid>
+              <ui:SymbolIcon Symbol="Alert24" FontSize="18" />
+              <Border
+                x:Name="NotifyBadge"
+                HorizontalAlignment="Right" VerticalAlignment="Top"
+                MinWidth="16" Height="16" CornerRadius="8"
+                Background="{DynamicResource SystemFillColorCriticalBrush}"
+                Visibility="Collapsed">
+                <TextBlock x:Name="NotifyBadgeText" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="10" FontWeight="Bold" Foreground="White" />
+              </Border>
+            </Grid>
+          </ui:Button>
+          <ui:Button
+            Margin="0,0,8,0"
+            Content="帮助"
+            Icon="QuestionCircle24"
+            Click="OnHelpClick"
+            Appearance="Secondary"
+            ToolTip="使用帮助" />
+        </StackPanel>
       </ui:TitleBar.TrailingContent>
     </ui:TitleBar>
 
@@ -220,6 +240,92 @@
     </Grid>
 
     <ui:ContentDialogHost x:Name="RootDialogHost" Grid.Row="0" Grid.RowSpan="4" />
+
+    <!-- 通知中心面板：右上角铃铛下拉，近 3 天消息，按时间倒序 -->
+    <Popup
+      x:Name="NotifyPopup"
+      PlacementTarget="{Binding ElementName=NotifyBell}"
+      Placement="Bottom"
+      StaysOpen="False"
+      AllowsTransparency="True"
+      PopupAnimation="Fade">
+      <Border
+        Width="400" MaxHeight="480"
+        Margin="8"
+        Padding="12"
+        CornerRadius="10"
+        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+        BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
+        BorderThickness="1">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+          <Grid Grid.Row="0" Margin="0,0,0,8">
+            <TextBlock VerticalAlignment="Center" FontSize="15" FontWeight="SemiBold" Text="通知中心（近 3 天）" />
+            <ui:Button HorizontalAlignment="Right" Content="全部已读" Appearance="Transparent" Click="OnNotifyMarkAllReadClick" />
+          </Grid>
+          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+              <TextBlock x:Name="NotifyEmptyHint" Margin="0,16" HorizontalAlignment="Center" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="暂无通知" Visibility="Collapsed" />
+              <ItemsControl x:Name="NotifyList">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border
+                      Margin="0,0,0,6" Padding="10,8"
+                      CornerRadius="6"
+                      Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                      BorderBrush="{DynamicResource StrokeFillColorDefaultBrush}"
+                      BorderThickness="1">
+                      <StackPanel>
+                        <Grid>
+                          <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,6,0">
+                              <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                  <Setter Property="Fill" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                                  <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Level}" Value="success">
+                                      <Setter Property="Fill" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Level}" Value="warning">
+                                      <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Level}" Value="error">
+                                      <Setter Property="Fill" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                    </DataTrigger>
+                                  </Style.Triggers>
+                                </Style>
+                              </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding Title}" TextTrimming="CharacterEllipsis" MaxWidth="270" />
+                            <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource SystemFillColorCautionBrush}" Text="未读">
+                              <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                  <Setter Property="Visibility" Value="Collapsed" />
+                                  <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsRead}" Value="False">
+                                      <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                  </Style.Triggers>
+                                </Style>
+                              </TextBlock.Style>
+                            </TextBlock>
+                          </StackPanel>
+                          <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="{Binding Time, StringFormat='MM-dd HH:mm:ss'}" />
+                        </Grid>
+                        <TextBlock Margin="14,3,0,0" FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding Detail}" TextWrapping="Wrap" />
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </ScrollViewer>
+        </Grid>
+      </Border>
+    </Popup>
 
     <!--
       系统托盘：XAML 声明可让右键菜单继承 WPF-UI 的 ContextMenu/MenuItem 样式，

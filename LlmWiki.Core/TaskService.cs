@@ -84,15 +84,6 @@ public sealed class TaskService(
         return SaveAndReuse(kb, task);
     }
 
-    public OrganizeTask CreateAskTask(string kb, string subKind, string input, string? transport = "file")
-    {
-        var task = NewTask(kb, TaskKind.Ask, TaskScope.Selected, subKind, transport);
-        task.Input = input.Trim();
-        task.WikiBaseline = [.. WikiSnapshot(kb)];
-        task.Prompt = prompts.ComposeAsk(task, transport ?? "file");
-        return SaveAndReuse(kb, task);
-    }
-
     public OrganizeTask CreateCheckTask(string kb, string subKind, string? transport = "file")
     {
         var task = NewTask(kb, TaskKind.Check, TaskScope.Selected, subKind, transport);

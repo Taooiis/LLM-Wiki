@@ -11,8 +11,8 @@ using LLM_Wiki.ViewModels.Windows;
 namespace LLM_Wiki.ViewModels.Pages;
 
 /// <summary>
-/// 知识页：中文分类目录 + 只读阅读 + 来源/链接跳转 + 高级手动修订。
-/// 默认打开 index.md，缺失回退 overview.md；初始模板骨架视为尚未整理。
+/// 知识页：默认只看源文档（raw/sources），开关显示 LLM 生成的知识结构（wiki 树）。
+/// 全页只读：wiki 由 AI 维护，源文档编辑去资料页。默认打开 index.md，缺失回退 overview.md。
 /// </summary>
 public partial class KnowledgeViewModel : ObservableObject
 {
@@ -21,7 +21,7 @@ public partial class KnowledgeViewModel : ObservableObject
     private readonly SourceService _sources;
     private readonly ScanService _scanner;
     private readonly ReviewService _reviews;
-    private readonly UnsavedChangesCoordinator _unsaved;
+    private readonly ConfigService _config;
     private readonly ToastService _toast;
 
     private readonly List<KnowledgeTreeNode> _roots = [];
@@ -38,7 +38,7 @@ public partial class KnowledgeViewModel : ObservableObject
         SourceService sources,
         ScanService scanner,
         ReviewService reviews,
-        UnsavedChangesCoordinator unsaved,
+        ConfigService config,
         SourcePreviewService preview,
         ToastService toast)
     {
@@ -47,16 +47,18 @@ public partial class KnowledgeViewModel : ObservableObject
         _sources = sources;
         _scanner = scanner;
         _reviews = reviews;
-        _unsaved = unsaved;
+        _config = config;
         _toast = toast;
 
-        Workspace = new DocumentWorkspaceViewModel(sources, knowledge, preview, toast);
-        _unsaved.Register("knowledge-workspace", Workspace);
-        _unsaved.RegisterSaver("knowledge-workspace", Workspace.TrySaveAsync);
-        _unsaved.RegisterDiscarder("knowledge-workspace", Workspace.DiscardDraft);
+        Workspace = new DocumentWorkspaceViewModel(sources, knowledge, preview, toast)
+        {
+            // 知识页只读边界：源文档在此仅预览，不出现编辑按钮
+            EditSuppressed = true,
+        };
         Workspace.PropertyChanged += OnWorkspacePropertyChanged;
         _main.PropertyChanged += OnMainPropertyChanged;
         _main.OpenRequested += OnOpenRequested;
+        _showHiddenFiles = config.KnowledgeShowHidden;
         LoadKb(_main.CurrentKb);
     }
 
@@ -81,6 +83,9 @@ public partial class KnowledgeViewModel : ObservableObject
     [ObservableProperty] private int _pendingCount;
     [ObservableProperty] private bool _isLoading;
 
+    /// <summary>目录栏开关：显示 LLM 生成的知识结构（wiki 目录树）；关闭时只看源文档。应用级偏好。</summary>
+    [ObservableProperty] private bool _showHiddenFiles;
+
     /// <summary>知识空态按钮：库有资料才显示“去整理”，无资料只显示“去资料页”（01§5.1）。</summary>
     [ObservableProperty] private bool _emptyHasSources;
 
@@ -102,9 +107,11 @@ public partial class KnowledgeViewModel : ObservableObject
     public bool ShowRuleBar => RuleNeedsReview;
     public bool ShowEmptyGoSources => HasKb && !EmptyHasSources;
     public bool ShowEmptyGoOrganize => HasKb && EmptyHasSources;
-    public bool IsManualEditing => Workspace.IsKnowledgeRevision;
+
+    /// <summary>空态只在未打开任何文件时显示；从树里点开源文档后正文要可见。</summary>
+    public bool ShowEmptyOverlay => ShowEmpty && !HasCurrentPage;
     public bool HasManualProtection => HasCurrentPage && _reviews.IsManualProtected(SelectedKb, CurrentRelPath, Workspace.CurrentVersion);
-    public string ReadOnlyBadge => IsManualEditing ? "手动修订中" : "只读";
+    public string ReadOnlyBadge => "只读";
     public string PendingText => PendingCount > 0 ? $"有 {PendingCount} 项资料变更尚未整理" : "暂无待整理变更";
 
     private void OnMainPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -129,8 +136,6 @@ public partial class KnowledgeViewModel : ObservableObject
         }
         if (e.PropertyName is nameof(DocumentWorkspaceViewModel.Mode) or nameof(DocumentWorkspaceViewModel.Role))
         {
-            OnPropertyChanged(nameof(IsManualEditing));
-            OnPropertyChanged(nameof(ReadOnlyBadge));
             OnPropertyChanged(nameof(HasManualProtection));
         }
     }
@@ -221,9 +226,18 @@ public partial class KnowledgeViewModel : ObservableObject
         var expanded = new HashSet<string>(
             Flatten(_roots).Where(n => n.IsExpanded).Select(n => ChangeService.Normalize(n.RelPath)),
             StringComparer.OrdinalIgnoreCase);
-        foreach (var node in _knowledge.Tree(kb).OrderBy(n => n.RelPath.Equals("wiki/index.md", StringComparison.OrdinalIgnoreCase) ? 0 : n.IsFolder ? 1 : 2).ThenBy(n => n.IsFolder ? n.Name switch { "concepts" => 0, "entities" => 1, "sources" => 2, "queries" => 3, "synthesis" => 4, "comparisons" => 5, _ => 6 } : 0))
+        _roots.Clear();
+        // 源文档在前（用户只关心源文档）；打开“显示结构文件”后追加 wiki 目录树（知识首页置顶）
+        foreach (var source in _sources.List(kb))
         {
-            _roots.Add(new KnowledgeTreeNode(node));
+            _roots.Add(new KnowledgeTreeNode(new KnowledgeNode(source.Name, source.RelPath, false, source.Name, [], source.Size)));
+        }
+        if (ShowHiddenFiles)
+        {
+            foreach (var node in _knowledge.Tree(kb).OrderBy(n => n.RelPath.Equals("wiki/index.md", StringComparison.OrdinalIgnoreCase) ? 0 : n.IsFolder ? 1 : 2).ThenBy(n => n.IsFolder ? n.Name switch { "concepts" => 0, "entities" => 1, "sources" => 2, "queries" => 3, "synthesis" => 4, "comparisons" => 5, _ => 6 } : 0))
+            {
+                _roots.Add(new KnowledgeTreeNode(node));
+            }
         }
         if (expanded.Count > 0)
         {
@@ -237,9 +251,17 @@ public partial class KnowledgeViewModel : ObservableObject
 
     partial void OnSearchKeywordChanged(string value) => RebuildTree();
 
+    partial void OnShowHiddenFilesChanged(bool value)
+    {
+        // 开关切换即重建目录：源文档始终显示，wiki 结构按开关决定；偏好随应用配置记忆
+        _config.SetKnowledgeShowHidden(value);
+        if (!string.IsNullOrWhiteSpace(SelectedKb)) LoadTree(SelectedKb);
+    }
+
     partial void OnCurrentRelPathChanged(string value)
     {
         OnPropertyChanged(nameof(HasCurrentPage));
+        OnPropertyChanged(nameof(ShowEmptyOverlay));
         OnPropertyChanged(nameof(HasManualProtection));
     }
 
@@ -303,11 +325,24 @@ public partial class KnowledgeViewModel : ObservableObject
     public async Task OpenPageAsync(string rel, bool keepError = false)
     {
         if (string.IsNullOrWhiteSpace(SelectedKb) || string.IsNullOrWhiteSpace(rel)) return;
-        if (!await _unsaved.CanLeaveAsync()) return;
         var kb = SelectedKb;
         var seq = ++_loadSequence;
         IsLoading = true;
         if (!keepError) LoadError = "";
+        var normalized = ChangeService.Normalize(rel);
+        // 按路径分流：wiki/ 走知识只读；raw/sources/ 走源文档预览（图片/文档同样只读，编辑去资料页）
+        if (normalized.StartsWith("raw/sources/", StringComparison.OrdinalIgnoreCase))
+        {
+            if (seq != _loadSequence || kb != SelectedKb) return;
+            IsLoading = false;
+            Workspace.OpenSourceText(kb, normalized);
+            CurrentRelPath = normalized;
+            ParsePageReferences();
+            MarkTreeNodeSelected(normalized);
+            OnPropertyChanged(nameof(HasCurrentPage));
+            OnPropertyChanged(nameof(HasManualProtection));
+            return;
+        }
         // 01§4 SelectKnowledge：异步读明确路径；库切换/快速点击后按请求序号丢弃过期响应
         var read = await Task.Run(() =>
         {
@@ -451,30 +486,10 @@ public partial class KnowledgeViewModel : ObservableObject
         catch (Exception e) { _toast.ShowError("打开文件夹失败：" + e.Message); }
     }
 
-    /// <summary>高级入口：手动修订知识。默认工具栏没有编辑按钮。</summary>
-    [RelayCommand]
-    private void BeginManualRevision()
-    {
-        if (!HasCurrentPage)
-        {
-            _toast.ShowWarning("请先选择一个知识页");
-            return;
-        }
-        if (!Workspace.BeginKnowledgeRevision())
-        {
-            _toast.ShowWarning("此页面不允许手动修订");
-            return;
-        }
-        OnPropertyChanged(nameof(IsManualEditing));
-        OnPropertyChanged(nameof(ReadOnlyBadge));
-    }
-
     [RelayCommand]
     private async Task RefreshAsync()
     {
         if (string.IsNullOrWhiteSpace(SelectedKb) || !_main.HasKb) return;
-        // 01§4 Load/RefreshTree 可执行条件：草稿保护已通过——先过 D02 保护再扫描刷新，保护手动修订草稿
-        if (!await _unsaved.CanLeaveAsync()) return;
         _scanner.Scan(SelectedKb, recordChanges: true);
         var current = CurrentRelPath;
         LoadKb(SelectedKb);
@@ -486,7 +501,6 @@ public partial class KnowledgeViewModel : ObservableObject
     private async Task RetryLoadAsync()
     {
         if (string.IsNullOrWhiteSpace(SelectedKb) || !_main.HasKb) return;
-        if (!await _unsaved.CanLeaveAsync()) return;
         LoadKb(SelectedKb);
     }
 

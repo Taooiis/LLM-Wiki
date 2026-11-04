@@ -18,7 +18,7 @@ public enum AgentRunState
     Interrupted,
 }
 
-/// <summary>本机 Codex CLI 执行服务：单任务、真实进程、双管道、输出上限、取消与归属核实。</summary>
+/// <summary>本机 CLI 执行服务：单任务、真实进程、双管道、输出上限、取消与归属核实。</summary>
 public sealed class LocalAgentService
 {
     private readonly AgentProfileStore _store;
@@ -37,7 +37,10 @@ public sealed class LocalAgentService
     private long _outputBytes;
     private int _outputLines;
     private int _onOutput;
+    private long _lastUiRefreshMs;
     private bool _cancelRequested;
+    private ILocalAgentAdapter? _adapter;
+    private string _lastAiText = "";
 
     public LocalAgentService(AgentProfileStore? store = null)
     {
@@ -78,10 +81,13 @@ public sealed class LocalAgentService
     public async Task<(List<AgentCheck> Checks, string Version, bool LoggedIn)> DetectAsync(string executable, CancellationToken ct, string? adapterId = null)
         => await AgentTools.Adapter(adapterId ?? Profile.AdapterId).DetectAsync(executable, ct);
 
-    public async Task<(bool Success, string Detail, string Output)> ProbeAsync(string executable, CancellationToken ct, string? adapterId = null)
-        => await AgentTools.Adapter(adapterId ?? Profile.AdapterId).ProbeExecutionAsync(executable, ct);
+    public Task<List<string>> ListModelsAsync(string executable, CancellationToken ct, string? adapterId = null)
+        => AgentTools.Adapter(adapterId ?? Profile.AdapterId).ListModelsAsync(executable, ct);
 
-    public static string? FindExecutable() => CodexCliAdapter.FindExecutable();
+    public Task<(bool Success, string Detail, string Output)> ProbeAsync(string executable, CancellationToken ct, string? adapterId = null, string? model = null)
+        => AgentTools.Adapter(adapterId ?? Profile.AdapterId).ProbeExecutionAsync(executable, model, ct);
+
+    public static string? FindExecutable(string id) => AgentTools.FindExecutable(id);
 
     /// <summary>当前已验证的读取范围：首轮只把纯文本/结构化文本视为可读；Office/PDF/PPT/图片需另行验证。</summary>
     public bool CanReadSource(string relativePath)
@@ -126,13 +132,14 @@ public sealed class LocalAgentService
 
         try
         {
-            var psi = AgentTools.Adapter(Profile.AdapterId).BuildStartInfo(Profile.ExecutablePath, kbPath, allowWrite);
-            if (Profile.AdapterId == AgentTools.OpenCode)
-            {
-                var taskFile = Path.Combine(attemptsDir, attempt.Id + ".task.txt");
-                File.WriteAllText(taskFile, prompt, new UTF8Encoding(false));
-                psi.ArgumentList.Add("--file"); psi.ArgumentList.Add(taskFile);
-            }
+            // 适配器构建启动参数；模型选择来自档案（空 = 跟随 CLI 默认）
+            _adapter = AgentTools.Adapter(Profile.AdapterId);
+            _lastAiText = "";
+            var psi = _adapter.BuildStartInfo(Profile.ExecutablePath, kbPath, allowWrite, string.IsNullOrWhiteSpace(Profile.ModelId) ? null : Profile.ModelId);
+            // OpenCode 任务经临时任务文件传入（用后即删）
+            var taskFile = Path.Combine(attemptsDir, attempt.Id + ".task.txt");
+            File.WriteAllText(taskFile, prompt, new UTF8Encoding(false));
+            psi.ArgumentList.Add("--file"); psi.ArgumentList.Add(taskFile);
             var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
             process.OutputDataReceived += (_, e) => OnLine(e.Data, false);
             process.ErrorDataReceived += (_, e) => OnLine(e.Data, true);
@@ -140,8 +147,7 @@ public sealed class LocalAgentService
             {
                 error = "无法启动 " + AgentTools.Name(Profile.AdapterId) + " 进程。";
                 process.Dispose();
-                if (attempt.AdapterId == AgentTools.OpenCode)
-                    try { File.Delete(Path.Combine(attemptsDir, attempt.Id + ".task.txt")); } catch { }
+                try { File.Delete(Path.Combine(attemptsDir, attempt.Id + ".task.txt")); } catch { }
                 attempt.State = "failed";
                 attempt.Detail = error;
                 SaveAttempt(attemptsDir, attempt);
@@ -172,7 +178,6 @@ public sealed class LocalAgentService
             {
                 try
                 {
-                    if (attempt.AdapterId == CodexCliAdapter.AdapterId) await process.StandardInput.WriteAsync(prompt);
                     await process.StandardInput.FlushAsync();
                     process.StandardInput.Close();
                 }
@@ -187,8 +192,7 @@ public sealed class LocalAgentService
         }
         catch (Exception e)
         {
-            if (attempt.AdapterId == AgentTools.OpenCode)
-                try { File.Delete(Path.Combine(attemptsDir, attempt.Id + ".task.txt")); } catch { }
+            try { File.Delete(Path.Combine(attemptsDir, attempt.Id + ".task.txt")); } catch { }
             error = "启动本机工具失败：" + e.Message;
             attempt.State = "failed";
             attempt.Detail = error;
@@ -220,7 +224,7 @@ public sealed class LocalAgentService
         RaiseChanged();
     }
 
-    /// <summary>只结束能核实归属的本次进程树；不能误杀其他 Codex 会话。</summary>
+    /// <summary>只结束能核实归属的本次进程树；不能误杀其他 CLI 会话。</summary>
     public bool ForceKill(out string error)
     {
         error = "";
@@ -266,6 +270,8 @@ public sealed class LocalAgentService
             attempt.EndedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
             bool cancelRequested;
             lock (_gate) cancelRequested = _cancelRequested;
+            // AI 报告是"任务是否真完成"的第一手反馈；退出码只是兜底信号
+            var aiReport = string.IsNullOrWhiteSpace(_lastAiText) ? "" : CliProcess.Shorten(_lastAiText, 400);
             if (cancelRequested)
             {
                 // 用户请求过取消且进程随后退出：取消成功；已写入的文件不自动回滚。
@@ -275,12 +281,16 @@ public sealed class LocalAgentService
             else if (process.ExitCode == 0)
             {
                 attempt.State = "ended";
-                attempt.Detail = "外部程序已结束，请核对结果";
+                attempt.Detail = string.IsNullOrWhiteSpace(aiReport)
+                    ? "外部程序已结束，请核对结果"
+                    : "AI 报告：" + aiReport + " —— 请核对结果";
             }
             else
             {
                 attempt.State = "failed";
-                attempt.Detail = "外部程序异常结束，退出码 " + process.ExitCode;
+                attempt.Detail = string.IsNullOrWhiteSpace(aiReport)
+                    ? "外部程序异常结束，退出码 " + process.ExitCode
+                    : "退出码 " + process.ExitCode + "；AI 报告：" + aiReport;
             }
             SaveAttempt(attemptsDir, attempt);
             lock (_gate)
@@ -307,8 +317,7 @@ public sealed class LocalAgentService
         finally
         {
             try { process.Dispose(); } catch { }
-            if (attempt.AdapterId == AgentTools.OpenCode)
-                try { File.Delete(Path.Combine(attemptsDir, attempt.Id + ".task.txt")); } catch { }
+            try { File.Delete(Path.Combine(attemptsDir, attempt.Id + ".task.txt")); } catch { }
             RaiseChanged();
             try { Finished?.Invoke(attempt); } catch { }
         }
@@ -318,11 +327,23 @@ public sealed class LocalAgentService
     {
         if (string.IsNullOrEmpty(line)) return;
         LastEventAt = DateTime.Now;
+        string? aiText = null;
+        string? display;
+        if (stderr)
+        {
+            display = "[stderr] " + line;
+        }
+        else
+        {
+            aiText = _adapter?.ExtractAiText(line);
+            if (!string.IsNullOrWhiteSpace(aiText)) _lastAiText = aiText;
+            display = _adapter?.FormatOutputLine(line) ?? line;
+            if (display == null) return; // 流程框架事件，不上屏
+        }
+        bool raise;
         lock (_gate)
         {
-            if (++_onOutput % 8 == 0) RaiseChanged();
-            var prefix = stderr ? "[stderr] " : "";
-            var text = prefix + line + "\n";
+            var text = display + "\n";
             _output.Append(text);
             _outputBytes += Encoding.UTF8.GetByteCount(text);
             _outputLines++;
@@ -336,7 +357,13 @@ public sealed class LocalAgentService
                 _outputLines--;
                 OutputTruncated = true;
             }
+            // 首行输出立即上屏；之后按时间节流（200ms），避免流式输出刷爆 UI
+            _onOutput++;
+            var now = Environment.TickCount64;
+            raise = _onOutput == 1 || now - _lastUiRefreshMs >= 200;
+            if (raise) _lastUiRefreshMs = now;
         }
+        if (raise) RaiseChanged();
     }
 
     private static void SaveAttempt(string dir, AgentAttempt attempt)

@@ -365,8 +365,8 @@ public sealed class McpService
         return $"{t[..4]}••••••••{t[^4..]}";
     }
 
-    /// <summary>客户端配置：本机档含 remote HTTP 与 stdio；局域网档只含 remote HTTP。写入档额外带独立写令牌头。</summary>
-    public string ClientConfigJson(string? currentKb = null)
+    /// <summary>客户端配置：remote HTTP 条目（含端点与令牌头）。写入档额外带独立写令牌头。</summary>
+    public string ClientConfigJson()
     {
         // 开放局域网后配置携带真实 LAN 地址（否则其他设备连不上）；仅本机档保持回环
         var loopback = $"http://127.0.0.1:{DefaultPort}/mcp";
@@ -394,23 +394,6 @@ public sealed class McpService
         {
             ["llm-wiki"] = http,
         };
-
-        // 局域网客户端无法启动本机 stdio 进程，局域网档只给 HTTP 条目。
-        if (!AllowLan)
-        {
-            var kb = !string.IsNullOrWhiteSpace(BoundKb)
-                ? BoundKb
-                : !string.IsNullOrWhiteSpace(currentKb) ? currentKb : Context.CurrentKb;
-            servers["llm-wiki-stdio"] = new JsonObject
-            {
-                ["command"] = Path.Combine(AppContext.BaseDirectory, "LlmWiki.McpStdio.exe"),
-                ["args"] = new JsonArray
-                {
-                    "--kb",
-                    kb,
-                },
-            };
-        }
 
         var root = new JsonObject
         {

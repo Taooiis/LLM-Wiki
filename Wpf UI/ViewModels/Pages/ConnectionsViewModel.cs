@@ -113,7 +113,7 @@ public partial class ConnectionsViewModel : ObservableObject
         : "局域网地址（启动 MCP 服务后生效，仍需携带令牌）";
     public string McpClientConfigTitle => McpAllowLan
         ? "客户端配置（局域网 HTTP）"
-        : "客户端配置（HTTP remote + stdio）";
+        : "客户端配置（HTTP remote）";
     public string McpClientConfigDisplay => MaskTokens(McpClientConfig);
 
     partial void OnSelectedKbChanged(string value)
@@ -200,7 +200,7 @@ public partial class ConnectionsViewModel : ObservableObject
         McpAllowLan = _mcp.AllowLan;
         McpEndpoint = _mcp.Running ? _mcp.LocalEndpoint : "";
         McpLanEndpoints = new ObservableCollection<string>(_mcp.LanEndpoints());
-        McpClientConfig = _mcp.ClientConfigJson(SelectedKb);
+        McpClientConfig = _mcp.ClientConfigJson();
         McpReadTokenDisplay = TokensVisible ? _mcp.Token : Mask(_mcp.Token);
         McpWriteTokenDisplay = TokensVisible ? _mcp.WriteToken : Mask(_mcp.WriteToken);
         RecentCalls = new ObservableCollection<McpCallRecord>(_mcp.RecentCalls);
@@ -574,16 +574,6 @@ public partial class ConnectionsViewModel : ObservableObject
     }
 
     private bool CanCopyBoundary() => !string.IsNullOrWhiteSpace(BoundaryPrompt);
-
-    [RelayCommand]
-    private void OpenStdioFolder()
-    {
-        var exe = System.IO.Path.Combine(AppContext.BaseDirectory, "LlmWiki.McpStdio.exe");
-        var dir = System.IO.Path.GetDirectoryName(exe);
-        if (dir == null || !System.IO.Directory.Exists(dir)) return;
-        try { Process.Start(new ProcessStartInfo(dir) { UseShellExecute = true }); }
-        catch { }
-    }
 
     [RelayCommand]
     private void GoOrganize() => _main.NavigateTo("organize");

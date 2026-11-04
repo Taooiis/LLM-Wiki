@@ -17,7 +17,7 @@ public partial class ConnectionsPage
         InitializeComponent();
         _confirmDlg = (ConfirmationDialog)Resources["ConfirmDlg"];
         ViewModel.ConfirmAgentWrite = async () => await _confirmDlg.ShowAsync(
-            "允许本机 Codex CLI 在当前库目录写入？这是操作系统文件权限，不能强制限制为只写 wiki/；外部工具仍会执行自己的审批。",
+            "允许本机 OpenCode CLI 在当前库目录写入？这是操作系统文件权限，不能强制限制为只写 wiki/；外部工具仍会执行自己的审批。",
             "允许本机工具写入",
             "允许当前库目录写操作");
         ViewModel.ConfirmEnableMcpWrite = async () => await _confirmDlg.ShowAsync(

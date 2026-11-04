@@ -142,8 +142,8 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="程序路径" />
                         <ui:TextBox Grid.Column="1" Text="{Binding ViewModel.AgentPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="{Binding ViewModel.AgentPathHint}" AutomationProperties.Name="本机工具程序路径" />
-                        <ui:Button Grid.Column="2" Margin="8,0,0,0" Content="自动查找" Command="{Binding ViewModel.AutoFindAgentCommand}" ToolTipService.ToolTip="查找所选工具；结果先展示，确认后应用" AutomationProperties.Name="自动查找 Codex CLI" />
-                        <ui:Button Grid.Column="3" Margin="8,0,0,0" Content="浏览" Command="{Binding ViewModel.BrowseAgentPathCommand}" ToolTipService.ToolTip="选择本机 codex.exe 绝对路径" AutomationProperties.Name="浏览选择 Codex CLI 程序" />
+                        <ui:Button Grid.Column="2" Margin="8,0,0,0" Content="自动查找" Command="{Binding ViewModel.AutoFindAgentCommand}" ToolTipService.ToolTip="查找所选工具；结果先展示，确认后应用" AutomationProperties.Name="自动查找 OpenCode CLI" />
+                        <ui:Button Grid.Column="3" Margin="8,0,0,0" Content="浏览" Command="{Binding ViewModel.BrowseAgentPathCommand}" ToolTipService.ToolTip="选择本机 opencode.exe 绝对路径" AutomationProperties.Name="浏览选择 OpenCode CLI 程序" />
                       </Grid>
                       <Border Margin="0,0,0,8" Padding="10" CornerRadius="6" Background="{DynamicResource CardSurfaceBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1" Visibility="{Binding ViewModel.HasAgentCandidate, Converter={StaticResource BoolToVis}}">
                         <StackPanel>
@@ -169,7 +169,10 @@
                           <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="模型" />
-                        <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="使用外部工具已有配置" Foreground="{DynamicResource SecondaryTextBrush}" />
+                        <StackPanel Grid.Column="1">
+                          <ComboBox ItemsSource="{Binding ViewModel.AgentModels}" SelectedItem="{Binding ViewModel.AgentModelSelection, Mode=TwoWay}" IsEnabled="{Binding ViewModel.AgentBusy, Converter={StaticResource InverseBool}}" AutomationProperties.Name="任务执行模型" />
+                          <TextBlock Margin="0,4,0,0" FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="留空跟随 OpenCode 自己的默认模型；列表来自只读命令 opencode models，检测后自动填充。" TextWrapping="Wrap" />
+                        </StackPanel>
                       </Grid>
                       <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
@@ -188,7 +191,7 @@
                         <TextBlock Margin="0,4,0,0" FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="文件访问权限由操作系统和外部工具共同约束，不能强制仅限 wiki/。" TextWrapping="Wrap" />
                       </StackPanel>
                       <StackPanel Orientation="Horizontal">
-                        <ui:Button Content="检测安装与登录" Command="{Binding ViewModel.DetectAgentCommand}" ToolTipService.ToolTip="运行所选程序的 --version 与 exec --help，并查询外部登录状态" AutomationProperties.Name="检测安装与登录" Margin="0,0,8,0" />
+                        <ui:Button Content="检测安装与登录" Command="{Binding ViewModel.DetectAgentCommand}" ToolTipService.ToolTip="运行所选程序的 --version 与 run --help，并拉取可用模型列表" AutomationProperties.Name="检测安装与登录" Margin="0,0,8,0" />
                         <ui:Button Content="验证实际执行" Command="{Binding ViewModel.ProbeAgentCommand}" ToolTipService.ToolTip="在隔离临时目录做真实非交互测试；会使用已有账号和额度" AutomationProperties.Name="验证实际执行" Margin="0,0,8,0" />
                         <ui:Button Content="保存并使用" Appearance="Primary" Command="{Binding ViewModel.SaveAgentCommand}" ToolTipService.ToolTip="保存配置；只有所需能力实际通过才成为本机就绪" AutomationProperties.Name="保存并使用本机工具配置" />
                       </StackPanel>
@@ -226,46 +229,8 @@
                           </DataTemplate>
                         </ItemsControl.ItemTemplate>
                       </ItemsControl>
-                      <TextBlock Margin="0,8,0,4" Text="格式能力（独立验证，TXT 通过不代表其他格式已实测）" Foreground="{DynamicResource TextFillColorTertiaryBrush}" TextWrapping="Wrap" />
-                      <Grid Margin="0,0,0,2">
-                        <Grid.ColumnDefinitions>
-                          <ColumnDefinition Width="*" />
-                          <ColumnDefinition Width="Auto" />
-                          <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="格式" FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                        <TextBlock Grid.Column="1" Text="状态" Margin="12,0,0,0" FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                        <TextBlock Grid.Column="2" Text="最近验证" Margin="16,0,0,0" FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                      </Grid>
-                      <ItemsControl ItemsSource="{Binding ViewModel.AgentFormats}">
-                        <ItemsControl.ItemTemplate>
-                          <DataTemplate>
-                            <Grid Margin="0,3">
-                              <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                              </Grid.ColumnDefinitions>
-                              <TextBlock Grid.Column="0" Text="{Binding Format}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Detail, Mode=OneWay}" />
-                              <TextBlock Grid.Column="1" Text="{Binding Status}" Margin="12,0,0,0" ToolTip="{Binding Detail, Mode=OneWay}">
-                                <TextBlock.Style>
-                                  <Style TargetType="TextBlock">
-                                    <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}" />
-                                    <Style.Triggers>
-                                      <DataTrigger Binding="{Binding Status}" Value="已验证">
-                                        <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" />
-                                      </DataTrigger>
-                                    </Style.Triggers>
-                                  </Style>
-                                </TextBlock.Style>
-                              </TextBlock>
-                              <TextBlock Grid.Column="2" Text="{Binding LastVerified}" Margin="16,0,0,0" FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                            </Grid>
-                          </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                      </ItemsControl>
                       <TextBlock Margin="0,10,0,0" Text="{Binding ViewModel.AgentStatusText}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                      <ui:Button Margin="0,10,0,0" HorizontalAlignment="Left" Content="查看登录与使用说明" Command="{Binding ViewModel.OpenCodexHelpCommand}" ToolTipService.ToolTip="登录在 Codex 自己的界面完成，本应用不读取认证文件" AutomationProperties.Name="查看 Codex 登录说明" />
+                      <ui:Button Margin="0,10,0,0" HorizontalAlignment="Left" Content="查看登录与使用说明" Command="{Binding ViewModel.OpenAgentHelpCommand}" ToolTipService.ToolTip="登录在 OpenCode 自己的界面完成，本应用不读取认证文件" AutomationProperties.Name="查看 OpenCode 登录说明" />
                     </StackPanel>
                   </Border>
                 </Grid>
@@ -377,13 +342,6 @@
                   <ui:Button Content="复制客户端配置" Command="{Binding ViewModel.CopyMcpConfigCommand}" Margin="0,0,8,0" ToolTipService.ToolTip="复制客户端 JSON 配置（令牌已掩码，复制的是原文）" AutomationProperties.Name="复制 MCP 客户端配置" />
                   <ui:Button Content="{Binding ViewModel.TokenVisibilityText}" IsEnabled="{Binding ViewModel.McpRunning}" Command="{Binding ViewModel.ToggleTokensCommand}" ToolTipService.ToolTip="在掩码与明文之间切换令牌显示" AutomationProperties.Name="显示或隐藏客户端配置中的令牌" />
                 </StackPanel>
-              </StackPanel>
-            </ui:CardExpander>
-            <ui:CardExpander Margin="0,10,0,0" Padding="16" Background="{DynamicResource CardSurfaceBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1" Header="高级：stdio 本机进程" IsExpanded="False">
-              <StackPanel>
-                <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" Text="由外部客户端启动，退出桌面应用不一定停止该进程。首轮只读；授权库通过启动参数 --kb 指定，改配置后需重启客户端进程。" />
-                <TextBlock Margin="0,6,0,0" FontFamily="Consolas" TextWrapping="Wrap" Text="{Binding ViewModel.McpClientConfigDisplay, Mode=OneWay}" Visibility="{Binding ViewModel.BoundaryVisible, Converter={StaticResource BoolToVis}}" />
-                <ui:Button Margin="0,10,0,0" HorizontalAlignment="Left" Content="打开程序目录" Command="{Binding ViewModel.OpenStdioFolderCommand}" ToolTipService.ToolTip="打开 LlmWiki.McpStdio.exe 所在目录，便于在外部客户端中配置" AutomationProperties.Name="打开 stdio 程序目录" />
               </StackPanel>
             </ui:CardExpander>
           </StackPanel>

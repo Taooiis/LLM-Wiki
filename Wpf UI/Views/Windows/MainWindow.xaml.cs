@@ -25,6 +25,7 @@ public partial class MainWindow : INavigationWindow
 
     private readonly ISnackbarService _snackbarService;
     private readonly INavigationService _navigationService;
+    private readonly NotificationService _notifications;
     private readonly System.Windows.Threading.DispatcherTimer _statusTimer;
     private bool _closeConfirmed;
     private bool _exiting;
@@ -42,6 +43,7 @@ public partial class MainWindow : INavigationWindow
         ViewModel = viewModel;
         _snackbarService = snackbarService;
         _navigationService = navigationService;
+        _notifications = App.Services.GetService(typeof(NotificationService)) as NotificationService ?? new NotificationService();
         DataContext = this;
 
         AppThemeService.Apply(configService.Theme);
@@ -52,6 +54,23 @@ public partial class MainWindow : INavigationWindow
         _snackbarService.SetSnackbarPresenter(SnackbarPresenter);
         if (App.Services.GetService(typeof(ToastService)) is ToastService toast) toast.SetPresenter(SnackbarPresenter);
         ViewModel.ConfirmExit = ConfirmExitAsync;
+
+        // 全局通知中心：铃铛未读徽标 + 任务事件入列
+        _notifications.Changed += RefreshNotifyBadge;
+        if (App.Services.GetService(typeof(LocalAgentService)) is LocalAgentService agent)
+        {
+            agent.Finished += attempt =>
+            {
+                var level = attempt.State switch
+                {
+                    "failed" => "error",
+                    "cancelled" => "warning",
+                    _ => "success",
+                };
+                _notifications.Publish("task", level, "本机任务结束", attempt.Detail ?? "");
+            };
+        }
+        RefreshNotifyBadge();
 
         Closing += OnWindowClosing;
         // 托盘图标：优先使用内嵌的 ICO；若不存在则动态生成「书本」图标
@@ -352,6 +371,35 @@ public partial class MainWindow : INavigationWindow
     public INavigationView GetNavigation() => RootNavigation;
     public bool Navigate(Type pageType) => RootNavigation.Navigate(pageType);
     public void SetPageService(INavigationViewPageProvider navigationViewPageProvider) => RootNavigation.SetPageProviderService(navigationViewPageProvider);
+    /// <summary>铃铛点击：打开通知面板并渲染近 3 天消息，全部标记已读。</summary>
+    private void OnNotifyBellClick(object sender, RoutedEventArgs e)
+    {
+        RenderNotifyList();
+        _notifications.MarkAllRead();
+        NotifyPopup.IsOpen = true;
+    }
+
+    private void OnNotifyMarkAllReadClick(object sender, RoutedEventArgs e)
+    {
+        _notifications.MarkAllRead();
+        RenderNotifyList();
+    }
+
+    /// <summary>未读徽标：有未读时显示数字，否则隐藏。</summary>
+    private void RefreshNotifyBadge()
+    {
+        var unread = _notifications.UnreadCount;
+        NotifyBadgeText.Text = unread > 99 ? "99+" : unread.ToString();
+        NotifyBadge.Visibility = unread > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void RenderNotifyList()
+    {
+        var items = _notifications.Items;
+        NotifyList.ItemsSource = items;
+        NotifyEmptyHint.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     public void ShowWindow() => Show();
     public void CloseWindow() => Close();
 

@@ -57,7 +57,7 @@ public partial class OrganizePage
     {
         // D12 强制结束本次进程：520 宽、危险主按钮、初焦“继续等待”。
         // 提交后由 ForceKill 再核 PID、启动时间与程序身份归属；核验失败只提示、不结束进程。
-        var detail = $"工具：Codex CLI\n知识库：{ViewModel.SelectedKb}\n{ViewModel.AgentRunStatus}\n\n"
+        var detail = $"工具：OpenCode CLI\n知识库：{ViewModel.SelectedKb}\n{ViewModel.AgentRunStatus}\n\n"
                      + "只结束能够确认属于本次任务的进程；已经写入的文件不会自动回滚。";
         var confirmed = await _confirmDlg.ShowAsync(
             "再核进程归属后强制结束本次进程。",

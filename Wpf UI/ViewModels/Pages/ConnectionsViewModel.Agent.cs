@@ -11,32 +11,29 @@ public partial class ConnectionsViewModel
 {
     public Func<Task<bool>>? ConfirmAgentWrite { get; set; }
 
-    public ObservableCollection<string> AgentToolTypes { get; } = ["Codex CLI", "OpenCode CLI"];
-    [ObservableProperty] private string _selectedAgentTool = "Codex CLI";
+    /// <summary>下拉项来自注册表（AgentTools.Tools），UI 不写死任何具体工具。</summary>
+    public ObservableCollection<string> AgentToolTypes { get; } = [.. AgentTools.Tools.Select(t => t.DisplayName)];
+    [ObservableProperty] private string _selectedAgentTool = AgentTools.Name(AgentTools.OpenCode);
+    /// <summary>模型下拉首项：表示不传 --model，跟随 OpenCode 自己的默认配置。</summary>
+    public const string ModelFollowDefault = "跟随 CLI 默认";
+    public ObservableCollection<string> AgentModels { get; } = [ModelFollowDefault];
+    [ObservableProperty] private string _agentModelSelection = ModelFollowDefault;
     private readonly Dictionary<string, AgentProfile> _agentDrafts = new();
-    private static string ToolId(string? name) => name == "OpenCode CLI" ? AgentTools.OpenCode : CodexCliAdapter.AdapterId;
-    public string AgentAdapterId => ToolId(SelectedAgentTool);
-    public string AgentExecutableName => AgentAdapterId == AgentTools.OpenCode ? "opencode.exe" : "codex.exe";
+    public string AgentAdapterId => AgentTools.IdOf(SelectedAgentTool);
+    public string AgentExecutableName => AgentTools.Adapter(AgentAdapterId).ExecutableName;
     public string AgentConfigTitle => SelectedAgentTool + " 配置";
     public string AgentPathHint => "选择本机 " + AgentExecutableName;
     public string AgentIntegrationHint => "CLI 自动接收完整任务，账号与模型由外部工具管理；先检测，再验证实际执行。";
-    partial void OnSelectedAgentToolChanged(string? oldValue, string newValue)
-    {
-        if (_loadingAgentProfile) return;
-        _agentDrafts[ToolId(oldValue)] = CaptureAgentProfile(ToolId(oldValue));
-        AgentChecks.Clear(); AgentPendingPath = ""; AgentError = "";
-        RefreshAgentUi(_agentDrafts.GetValueOrDefault(ToolId(newValue)) ?? _agent.LoadProfile(ToolId(newValue)));
-    }
     private AgentProfile CaptureAgentProfile(string id)
     {
         var profile = _agent.LoadProfile(id);
         profile.AdapterId = id; profile.ExecutablePath = AgentPath; profile.VerifiedVersion = AgentVersion;
         profile.Detected = AgentDetected; profile.LoggedIn = AgentLoggedIn; profile.ExecutionVerified = AgentExecutionVerified;
         profile.AllowWorkspaceWrite = AgentAllowWrite; profile.LastCheckedAt = AgentLastVerifiedAt;
+        profile.ModelId = AgentModelSelection == ModelFollowDefault ? "" : AgentModelSelection;
         return profile;
     }
     public ObservableCollection<AgentCheckRow> AgentChecks { get; } = [];
-    public ObservableCollection<AgentFormatRow> AgentFormats { get; } = [];
 
     [ObservableProperty] private string _agentPath = "";
     [ObservableProperty] private string _agentVersion = "";
@@ -114,6 +111,9 @@ public partial class ConnectionsViewModel
             AgentLoggedIn = p.LoggedIn;
             AgentExecutionVerified = p.ExecutionVerified;
             AgentAllowWrite = p.AllowWorkspaceWrite;
+            // 档案模型回填下拉；列表尚未拉取时先追加该值，避免显示为空
+            AgentModelSelection = string.IsNullOrWhiteSpace(p.ModelId) ? ModelFollowDefault
+                : AgentModels.Contains(p.ModelId) ? p.ModelId : AppendModel(p.ModelId);
             AgentStatusText = SelectedAgentTool + (p.Ready ? " 已就绪" : " 未就绪");
             // 档案里的验证结果对应档案中的路径；档案未记录验证时间时诚实显示“—”。
             _lastVerifiedPath = p.ExecutionVerified ? p.ExecutablePath : "";
@@ -126,7 +126,6 @@ public partial class ConnectionsViewModel
                 AgentChecks.Add(new AgentCheckRow("登录", p.LoggedIn ? "已检测" : "未验证", p.LoggedIn ? "外部登录状态已记录" : "请在所选工具中完成登录/模型配置"));
                 AgentChecks.Add(new AgentCheckRow("非交互执行", p.ExecutionVerified ? "验证通过" : "未验证", p.ExecutionVerified ? "实际执行探测通过" : "请在连接页验证实际执行"));
             }
-            RebuildAgentFormats();
             OnPropertyChanged(nameof(SelectedAgentTool));
             OnPropertyChanged(nameof(AgentConfigTitle)); OnPropertyChanged(nameof(AgentPathHint));
             OnPropertyChanged(nameof(AgentIntegrationHint));
@@ -141,28 +140,14 @@ public partial class ConnectionsViewModel
         }
     }
 
-    /// <summary>
-    /// 格式能力逐项诚实展示（04§4 L51-53）：只有实际执行探测过的 TXT 标“已验证”；
-    /// Markdown/结构化数据/Office/PDF/图片不能由 TXT 结果推断，一律标“未验证”；
-    /// 每行带“最近验证”时间，未实测显示“—”。
-    /// </summary>
-    private void RebuildAgentFormats()
+    /// <summary>把档案中的模型 ID 追加进下拉（若不存在）并返回它，保证回填显示。</summary>
+    private string AppendModel(string modelId)
     {
-        AgentFormats.Clear();
-        var verified = AgentExecutionVerified;
-        var lastVerified = verified ? AgentLastVerifiedAt : "—";
-        AgentFormats.Add(new AgentFormatRow("TXT（纯文本）", "文件访问",
-            verified ? "已验证" : "未验证",
-            verified ? "已通过实际执行探测" : "需实际执行验证",
-            lastVerified));
-        AgentFormats.Add(new AgentFormatRow("Markdown", "文件访问", "未验证", "TXT 通过不代表 Markdown 已实测", "—"));
-        AgentFormats.Add(new AgentFormatRow("结构化数据（JSON/CSV 等）", "文件访问", "未验证", "需用不含敏感数据的小样本单独实测", "—"));
-        AgentFormats.Add(new AgentFormatRow("Word / Excel / PPT", "文件访问", "未验证", "Office 读取能力需单独验证", "—"));
-        AgentFormats.Add(new AgentFormatRow("PDF", "文件访问", "未验证", "文字提取与 OCR/视觉需分别验证", "—"));
-        AgentFormats.Add(new AgentFormatRow("图片（视觉/OCR）", "文件访问", "未验证", "视觉与 OCR 能力需单独验证", "—"));
+        if (!AgentModels.Contains(modelId)) AgentModels.Add(modelId);
+        return modelId;
     }
 
-    /// <summary>路径与上次验证路径不同：清空检测/登录/执行验证标志，格式能力随之回落为“未验证”。</summary>
+    /// <summary>路径与上次验证路径不同：清空检测/登录/执行验证标志。</summary>
     private void InvalidateAgentVerification()
     {
         if (string.Equals(AgentPath, _lastVerifiedPath, StringComparison.OrdinalIgnoreCase)) return;
@@ -170,7 +155,6 @@ public partial class ConnectionsViewModel
         AgentLoggedIn = false;
         AgentExecutionVerified = false;
         AgentChecks.Clear();
-        RebuildAgentFormats();
         AgentStatusText = "程序路径已变化，旧验证已过期，请重新检测与验证";
         OnPropertyChanged(nameof(AgentReady));
         OnPropertyChanged(nameof(AgentReadyText));
@@ -181,7 +165,7 @@ public partial class ConnectionsViewModel
     private bool CanBrowseAgentPath() => !AgentBusy;
     private bool CanAutoFindAgent() => !AgentBusy;
     private bool CanDetectAgent() => !AgentBusy && !string.IsNullOrWhiteSpace(AgentPath);
-    private bool CanProbeAgent() => !AgentBusy && AgentDetected && (AgentLoggedIn || AgentAdapterId == AgentTools.OpenCode);
+    private bool CanProbeAgent() => !AgentBusy && AgentDetected;
     private bool CanSaveAgent() => !AgentBusy && !_agent.IsRunning;
     private bool CanApplyAgentCandidate() => !string.IsNullOrWhiteSpace(AgentPendingPath);
 
@@ -277,7 +261,18 @@ public partial class ConnectionsViewModel
             AgentStatusText = AgentDetected
                 ? (AgentLoggedIn ? "已检测，等待实际执行验证" : "已检测，登录与模型尚未验证")
                 : "检测未通过";
-            RebuildAgentFormats();
+            // 安装检测通过后拉取模型列表，填充下拉（失败不阻塞检测流程）
+            if (AgentDetected)
+            {
+                var models = await _agent.ListModelsAsync(AgentPath, CancellationToken.None, AgentAdapterId);
+                AgentModels.Clear();
+                AgentModels.Add(ModelFollowDefault);
+                foreach (var m in models) AgentModels.Add(m);
+                if (AgentModels.Count == 1)
+                    AgentChecks.Add(new AgentCheckRow("模型列表", "未通过", "opencode models 未返回任何模型；请检查 OpenCode 登录状态。"));
+                // 当前选择不在新列表中（例如 CLI 模型已下线）则回落为跟随默认
+                if (!AgentModels.Contains(AgentModelSelection)) AgentModelSelection = ModelFollowDefault;
+            }
             OnPropertyChanged(nameof(AgentReady));
         }
         finally
@@ -290,18 +285,19 @@ public partial class ConnectionsViewModel
     private async Task ProbeAgentAsync()
     {
         if (AgentBusy) return;
-        if (!AgentDetected || (!AgentLoggedIn && AgentAdapterId != AgentTools.OpenCode))
+        if (!AgentDetected)
         {
-            AgentError = "请先通过安装与登录检测，再验证实际执行。";
+            AgentError = "请先通过安装检测，再验证实际执行。";
             return;
         }
         AgentBusy = true;
         AgentError = "";
         try
         {
-            var result = await _agent.ProbeAsync(AgentPath, CancellationToken.None, AgentAdapterId);
+            var model = AgentModelSelection == ModelFollowDefault ? null : AgentModelSelection;
+            var result = await _agent.ProbeAsync(AgentPath, CancellationToken.None, AgentAdapterId, model);
             AgentExecutionVerified = result.Success;
-            if (AgentAdapterId == AgentTools.OpenCode) AgentLoggedIn = result.Success;
+            AgentLoggedIn = result.Success;
             if (result.Success)
             {
                 _lastVerifiedPath = AgentPath;
@@ -310,7 +306,6 @@ public partial class ConnectionsViewModel
             AgentChecks.Add(new AgentCheckRow("实际执行", result.Success ? "验证通过" : "未通过", result.Detail));
             AgentStatusText = result.Success ? "实际执行验证通过" : "实际执行验证失败";
             if (!result.Success) AgentError = result.Detail;
-            RebuildAgentFormats();
             OnPropertyChanged(nameof(AgentReady));
         }
         finally
@@ -335,7 +330,6 @@ public partial class ConnectionsViewModel
             AgentLoggedIn = false;
             AgentExecutionVerified = false;
             AgentStatusText = "程序路径已变化，已按未验证保存；请重新检测与验证";
-            RebuildAgentFormats();
             OnPropertyChanged(nameof(AgentReady));
             OnPropertyChanged(nameof(AgentReadyText));
         }
@@ -358,7 +352,7 @@ public partial class ConnectionsViewModel
     }
 
     [RelayCommand]
-    private void OpenCodexHelp() => _toast.Show(
+    private void OpenAgentHelp() => _toast.Show(
         SelectedAgentTool,
         "请在所选工具自己的界面完成登录和模型配置；应用不读取认证文件。OpenCode 可使用 opencode auth login。");
 }
@@ -366,10 +360,4 @@ public partial class ConnectionsViewModel
 public sealed record AgentCheckRow(string Label, string Status, string Detail)
 {
     public bool IsOk => Status is "通过" or "已验证" or "验证通过" or "已检测";
-}
-
-/// <summary>格式能力行：Status 仅“已验证/未验证/不支持”；LastVerified 为“最近验证”时间，未实测为“—”（04§4）。</summary>
-public sealed record AgentFormatRow(string Format, string Access, string Status, string Detail, string LastVerified = "—")
-{
-    public bool IsOk => Status == "已验证";
 }
