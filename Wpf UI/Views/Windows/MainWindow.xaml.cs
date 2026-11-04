@@ -24,8 +24,10 @@ public partial class MainWindow : INavigationWindow
     private readonly INavigationService _navigationService;
     private readonly System.Windows.Threading.DispatcherTimer _statusTimer;
     private bool _closeConfirmed;
+    private bool _exiting;
     private bool _syncingSearch;
     private bool _allowNavigation;
+    private bool _hiddenNoticeShown;
 
     public MainWindow(
         MainWindowViewModel viewModel,
@@ -49,6 +51,8 @@ public partial class MainWindow : INavigationWindow
         ViewModel.ConfirmExit = ConfirmExitAsync;
 
         Closing += OnWindowClosing;
+        // 托盘图标在 XAML 中声明；这里显式创建（关闭效率模式，避免整个进程降为 ecoQoS）
+        TrayIcon.ForceCreate(false);
 
         _statusTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _statusTimer.Tick += (_, _) => ViewModel.RefreshStatusBar();
@@ -269,10 +273,56 @@ public partial class MainWindow : INavigationWindow
     {
         if (_closeConfirmed) return;
         e.Cancel = true;
+        // 托盘模式：点关闭先隐藏到托盘，真正退出只从托盘菜单发起。
+        if (!_exiting)
+        {
+            Hide();
+            NotifyHiddenOnce();
+            return;
+        }
         // D13：草稿与本机任务合并退出保护（00§9.4）。
-        if (!await ViewModel.CanExitAsync()) return;
+        if (!await ViewModel.CanExitAsync())
+        {
+            _exiting = false;
+            return;
+        }
         _closeConfirmed = true;
         Close();
+    }
+
+    /// <summary>从托盘恢复主窗；先前置再取消置顶，确保窗口确实回到前台。</summary>
+    private void RestoreFromTray()
+    {
+        if (!IsVisible) Show();
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+
+        Topmost = true;
+        Activate();
+        Topmost = false;
+        Focus();
+    }
+
+    private void OnTrayDoubleClick(object sender, RoutedEventArgs e) => RestoreFromTray();
+
+    private void OnTrayOpen(object sender, RoutedEventArgs e) => RestoreFromTray();
+
+    /// <summary>托盘菜单“退出”：先恢复窗口，让退出保护对话框有 Owner，再走统一关闭流程（D13）。</summary>
+    private void OnTrayExit(object sender, RoutedEventArgs e)
+    {
+        RestoreFromTray();
+        _exiting = true;
+        Close();
+    }
+
+    /// <summary>首次隐藏到托盘时提示一次，之后不再打扰。</summary>
+    private void NotifyHiddenOnce()
+    {
+        if (_hiddenNoticeShown) return;
+        _hiddenNoticeShown = true;
+        TrayIcon.ShowNotification(
+            "LLM Wiki",
+            "已收起到系统托盘。双击图标恢复窗口，右键可退出。",
+            H.NotifyIcon.Core.NotificationIcon.Info);
     }
 
     #region INavigationWindow
@@ -290,7 +340,8 @@ public partial class MainWindow : INavigationWindow
     protected override void OnClosed(EventArgs e)
     {
         _statusTimer.Stop();
+        TrayIcon.Dispose();
         base.OnClosed(e);
-        Application.Current.Shutdown();
+        System.Windows.Application.Current.Shutdown();
     }
 }

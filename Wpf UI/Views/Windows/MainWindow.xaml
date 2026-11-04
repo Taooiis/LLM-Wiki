@@ -4,6 +4,7 @@
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
   xmlns:local="clr-namespace:LLM_Wiki.Views.Windows"
+  xmlns:tb="clr-namespace:H.NotifyIcon;assembly=H.NotifyIcon.Wpf"
   xmlns:controls="clr-namespace:LLM_Wiki.Controls"
   xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
   xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
@@ -219,5 +220,26 @@
     </Grid>
 
     <ui:ContentDialogHost x:Name="RootDialogHost" Grid.Row="0" Grid.RowSpan="4" />
+
+    <!--
+      系统托盘：XAML 声明可让右键菜单继承 WPF-UI 的 ContextMenu/MenuItem 样式，
+      深浅色跟随 Application.Resources 的主题字典切换；图标与 exe/桌面快捷方式同源。
+    -->
+    <tb:TaskbarIcon
+      x:Name="TrayIcon"
+      Grid.Row="0"
+      Grid.RowSpan="4"
+      IconSource="pack://application:,,,/Assets/tray-32.png"
+      NoLeftClickDelay="True"
+      ToolTipText="LLM Wiki"
+      TrayLeftMouseDoubleClick="OnTrayDoubleClick">
+      <tb:TaskbarIcon.ContextMenu>
+        <ContextMenu>
+          <MenuItem Click="OnTrayOpen" Header="打开 LLM Wiki" />
+          <Separator />
+          <MenuItem Click="OnTrayExit" Header="退出" />
+        </ContextMenu>
+      </tb:TaskbarIcon.ContextMenu>
+    </tb:TaskbarIcon>
   </Grid>
 </ui:FluentWindow>

@@ -10,6 +10,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!-- 托盘使用 WPF 原生 H.NotifyIcon：菜单跟随 WPF-UI 主题，事件在 WPF UI 线程派发 -->
+
   <ItemGroup>
     <Content Include="wpfui-icon.ico" />
   </ItemGroup>
@@ -28,6 +30,7 @@
   </Target>
 
   <ItemGroup>
+    <PackageReference Include="H.NotifyIcon.Wpf" Version="2.4.1" />
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
     <PackageReference Include="WPF-UI" Version="4.3.0" />
@@ -52,6 +55,9 @@
   <ItemGroup>
     <Resource Include="Assets\wpfui-icon-256.png" />
     <Resource Include="Assets\wpfui-icon-1024.png" />
+    <!-- 托盘专用小尺寸：避免 256px 缩到 16/24px 时发虚 -->
+    <Resource Include="Assets\tray-32.png" />
+    <Resource Include="Assets\tray-48.png" />
   </ItemGroup>
 
 </Project>
