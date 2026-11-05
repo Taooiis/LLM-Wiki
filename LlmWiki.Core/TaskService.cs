@@ -14,7 +14,8 @@ public sealed class TaskService(
     ScanService scanner,
     SourceService sources,
     ReviewService reviews,
-    PromptComposer prompts)
+    PromptComposer prompts,
+    OperationStore operations)
 {
     public const int KeepEndedTasks = 50;
     public static readonly TimeSpan KeepEndedDays = TimeSpan.FromDays(30);
@@ -79,9 +80,7 @@ public sealed class TaskService(
         var kind = scope == TaskScope.Pending ? TaskProtocol.IncrementalIngest : TaskProtocol.BatchIngest;
         var task = NewTask(kb, TaskKind.Update, scope, kind, transport);
         task.Items = items;
-        task.WikiBaseline = [.. WikiSnapshot(kb)];
-        task.Prompt = prompts.ComposeUpdate(task, transport ?? "file");
-        return SaveAndReuse(kb, task);
+        return FinalizeTask(task, transport);
     }
 
     public OrganizeTask CreateCheckTask(string kb, string subKind, string? transport = "file")
@@ -100,9 +99,18 @@ public sealed class TaskService(
                     ChangeHash = c.Hash,
                 })];
         }
-        task.WikiBaseline = [.. WikiSnapshot(kb)];
-        task.Prompt = prompts.ComposeCheck(task, transport ?? "file");
-        return SaveAndReuse(kb, task);
+        return FinalizeTask(task, transport);
+    }
+
+    /// <summary>
+    /// 任务创建的固定骨架:冻结知识基线 → 按协议组合指令 → 保存(相同快照复用)。
+    /// 调用方只装配差异(Kind/Scope/Protocol/Items);新增任务类型复用此骨架。
+    /// </summary>
+    private OrganizeTask FinalizeTask(OrganizeTask task, string? transport)
+    {
+        task.WikiBaseline = [.. WikiSnapshot(task.Kb)];
+        task.Prompt = prompts.ComposeFor(task, transport ?? "file");
+        return SaveAndReuse(task.Kb, task);
     }
 
     private OrganizeTask NewTask(string kb, TaskKind kind, TaskScope scope, string protocol, string? transport)
@@ -203,7 +211,7 @@ public sealed class TaskService(
             .Select(i => i.RelPath)
             .ToList();
 
-        var op = OperationStoreFor(task.Kb).Begin(task.Kb, "task.confirm", task.Id, "", "", $"确认 {confirmable.Count} 项");
+        var op = operations.Begin(task.Kb, "task.confirm", task.Id, "", "", $"确认 {confirmable.Count} 项");
         var result = changes.Confirm(task.Kb, [.. confirmable.Select(i => new ConfirmItem(i.RelPath, i.Action, i.ChangeHash, i.SourceHash))]);
         foreach (var item in confirmable)
         {
@@ -229,7 +237,7 @@ public sealed class TaskService(
             ? TaskState.Confirmed
             : TaskState.PartiallyConfirmed;
         Save(task);
-        OperationStoreFor(task.Kb).Complete(task.Kb, op);
+        operations.Complete(task.Kb, op);
 
         return new TaskConfirmResult(
             true,
@@ -416,8 +424,6 @@ public sealed class TaskService(
         return null;
     }
 
-    private OperationStore OperationStoreFor(string kb) => new(config);
-
     private string Root(string kb) => Path.Combine(config.WikisDir, kb);
 
     private static string FileHash(string path)
@@ -426,7 +432,21 @@ public sealed class TaskService(
         catch { return ""; }
     }
 
+    // Cleanup 全量反序列化所有任务文件,代价随任务数增长;间隔收在 TuningOptions.TaskCleanupInterval
+    private static readonly Dictionary<string, DateTime> _lastCleanupAt = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly object _cleanupGate = new();
+
     private void Cleanup(string kb)
+    {
+        lock (_cleanupGate)
+        {
+            if (_lastCleanupAt.TryGetValue(kb, out var last) && DateTime.UtcNow - last < TuningOptions.TaskCleanupInterval) return;
+            _lastCleanupAt[kb] = DateTime.UtcNow;
+        }
+        CleanupNow(kb);
+    }
+
+    private void CleanupNow(string kb)
     {
         var dir = Paths(kb).TasksDir;
         if (!Directory.Exists(dir)) return;

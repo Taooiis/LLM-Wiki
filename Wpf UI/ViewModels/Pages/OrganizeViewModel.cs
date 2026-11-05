@@ -584,22 +584,72 @@ public partial class OrganizeViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void RefreshPending()
+    private async Task RefreshPendingAsync()
     {
         if (string.IsNullOrWhiteSpace(SelectedKb)) return;
-        _scanner.Scan(SelectedKb, recordChanges: true);
-        ReloadPending();
-        if (CurrentTask != null)
+        IsBusy = true;
+        try
         {
-            CurrentTask = _tasks.RefreshAndSave(CurrentTask);
-            RebuildFromTask(CurrentTask);
+            var kb = SelectedKb;
+            // 扫描(枚举 + 哈希)与任务刷新在后台线程;UI 线程只重建集合与状态
+            if (!await ScanKbInBackgroundAsync(kb)) return;
+            ReloadPending();
+            if (CurrentTask != null)
+            {
+                var stale = CurrentTask;
+                CurrentTask = await Task.Run(() => _tasks.RefreshAndSave(stale));
+                RebuildFromTask(CurrentTask);
+            }
+            ReadTasks();
+            _toast.ShowSuccess("已刷新待整理清单");
         }
-        ReadTasks();
-        _toast.ShowSuccess("已刷新待整理清单");
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    // ── 进入整理页自动刷新待整理清单 ──────────────────────────────────────
+    // 仅在页面获得视口(点击"整理"进入)时刷新一次:后台扫描并回填清单;
+    // 静默进行(不弹提示、不动正在核对的 CurrentTask),防重入,agent 运行或用户操作中跳过。
+    private bool _isAutoRefreshing;
+
+    /// <summary>由页面 IsVisibleChanged 调用:每次进入整理页(获得视口)刷新一次。</summary>
+    public void OnPageVisibilityChanged(bool visible)
+    {
+        if (visible) _ = AutoRefreshPendingAsync();
+    }
+
+    private async Task AutoRefreshPendingAsync()
+    {
+        if (_isAutoRefreshing || IsBusy || IsAgentRunning) return;
+        var kb = SelectedKb;
+        if (string.IsNullOrWhiteSpace(kb) || !_main.HasKb) return;
+        _isAutoRefreshing = true;
+        try
+        {
+            if (await ScanKbInBackgroundAsync(kb)) ReloadPending();
+        }
+        finally
+        {
+            _isAutoRefreshing = false;
+        }
+    }
+
+    /// <summary>后台全量扫描;返回是否成功且期间未切换知识库。手动刷新与自动刷新共用。</summary>
+    private async Task<bool> ScanKbInBackgroundAsync(string kb)
+    {
+        // 全量扫描(枚举 + 哈希)在后台线程;UI 线程只重建集合
+        await Task.Run(() =>
+        {
+            try { _scanner.Scan(kb, recordChanges: true); }
+            catch { /* 后台扫描失败静默;手动刷新按钮有明确反馈 */ }
+        });
+        return SelectedKb.Equals(kb, StringComparison.Ordinal);
     }
 
     [RelayCommand]
-    private void ViewChanges()
+    private async Task ViewChangesAsync()
     {
         if (CurrentTask == null)
         {
@@ -613,19 +663,21 @@ public partial class OrganizeViewModel : ObservableObject
         }
         CurrentTask = _tasks.RefreshAndSave(CurrentTask);
         RebuildFromTask(CurrentTask);
-        LoadWikiChanges(CurrentTask);
         ShowResult = true;
         NotifyReviewState();
+        await LoadWikiChangesAsync(CurrentTask);
         // 明确反馈：变化列表在左栏核对区，右栏按钮点击后必须给结论
         _toast.Show("查看本次变化", WikiChanges.Count == 0
             ? "没有检测到知识文件变化"
             : $"检测到 {WikiChanges.Count} 项知识文件变化，已在左侧“本次知识变化”展开");
     }
 
-    private void LoadWikiChanges(OrganizeTask task)
+    private async Task LoadWikiChangesAsync(OrganizeTask task)
     {
+        // 全库 wiki 快照(逐文件 SHA256)在后台线程;UI 线程只重建列表
+        var wikiChanges = await Task.Run(() => _tasks.ReviewWikiChanges(task.Kb, task.WikiBaseline));
         WikiChanges.Clear();
-        foreach (var change in _tasks.ReviewWikiChanges(task.Kb, task.WikiBaseline))
+        foreach (var change in wikiChanges)
             WikiChanges.Add(new WikiChangeRow(change));
         OnPropertyChanged(nameof(HasWikiChanges));
         ResultSummary = WikiChanges.Count == 0
@@ -693,7 +745,7 @@ public partial class OrganizeViewModel : ObservableObject
             }
             try
             {
-                RefreshAfterConfirm();
+                await RefreshAfterConfirmAsync();
                 ConfirmShowStale = false;
             }
             catch
@@ -706,16 +758,16 @@ public partial class OrganizeViewModel : ObservableObject
         {
             IsBusy = false;
         }
-        await Task.CompletedTask;
     }
 
-    private void RefreshAfterConfirm()
+    private async Task RefreshAfterConfirmAsync()
     {
         if (CurrentTask != null)
         {
-            CurrentTask = _tasks.Load(CurrentTask.Id) ?? CurrentTask;
+            var stale = CurrentTask;
+            CurrentTask = await Task.Run(() => _tasks.Load(stale.Id) ?? stale);
             RebuildFromTask(CurrentTask);
-            LoadWikiChanges(CurrentTask);
+            await LoadWikiChangesAsync(CurrentTask);
         }
         ReloadPending();
         ReadTasks();
@@ -724,11 +776,11 @@ public partial class OrganizeViewModel : ObservableObject
 
     /// <summary>“确认已保存，显示待刷新”的重试：只重新加载显示，不重复提交确认（03§11 L147）。</summary>
     [RelayCommand]
-    private void RetryShowAfterConfirm()
+    private async Task RetryShowAfterConfirmAsync()
     {
         try
         {
-            RefreshAfterConfirm();
+            await RefreshAfterConfirmAsync();
             ConfirmShowStale = false;
             _toast.ShowSuccess("已刷新显示；确认结果保持不变");
         }
@@ -740,7 +792,7 @@ public partial class OrganizeViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void LoadTask(OrganizeTask? task)
+    private async Task LoadTaskAsync(OrganizeTask? task)
     {
         if (task == null) return;
         var loaded = _tasks.Load(task.Id);
@@ -751,13 +803,13 @@ public partial class OrganizeViewModel : ObservableObject
         }
         CurrentTask = _tasks.RefreshAndSave(loaded);
         SetCurrentTask(CurrentTask);
-        LoadWikiChanges(CurrentTask);
         ShowResult = true;
         ActiveTab = CurrentTask.Kind switch
         {
             TaskKind.Check => 1,
             _ => 0,
         };
+        await LoadWikiChangesAsync(CurrentTask);
         _toast.ShowSuccess("已恢复任务，可继续核对");
     }
 
@@ -766,7 +818,7 @@ public partial class OrganizeViewModel : ObservableObject
     /// 用户声明已在外部执行后进入核对（MarkNeedsReview → NeedsReview 态），复用既有核对流程。
     /// </summary>
     [RelayCommand]
-    private void MarkExecutedExternally(OrganizeTask? task)
+    private async Task MarkExecutedExternallyAsync(OrganizeTask? task)
     {
         var target = task ?? CurrentTask;
         if (target == null) return;
@@ -786,13 +838,13 @@ public partial class OrganizeViewModel : ObservableObject
         ShowPreview = false;
         TaskStatusText = "已记录“我已在外部执行”；请核对结果后勾选确认。";
         RebuildFromTask(CurrentTask);
-        LoadWikiChanges(CurrentTask);
         ShowResult = true;
         ActiveTab = CurrentTask.Kind switch
         {
             TaskKind.Check => 1,
             _ => 0,
         };
+        await LoadWikiChangesAsync(CurrentTask);
         NotifyReviewState();
         ReadTasks();
         _toast.ShowSuccess("已进入核对；请确认外部执行结果后勾选确认");
@@ -875,7 +927,7 @@ public partial class OrganizeViewModel : ObservableObject
     private void ReadTasks() => ReloadTasks();
 }
 
-public partial class PendingChangeRow : ObservableObject
+public partial class PendingChangeRow : SelectableRow
 {
     public PendingChangeRow(Change change) => Change = change;
     public Change Change { get; }
@@ -901,10 +953,9 @@ public partial class PendingChangeRow : ObservableObject
         "删除" => "删除",
         _ => Change.Action,
     };
-    [ObservableProperty] private bool _isSelected;
 }
 
-public partial class SourceChoiceRow : ObservableObject
+public partial class SourceChoiceRow : SelectableRow
 {
     public SourceChoiceRow(SourceInfo source) => Source = source;
     public SourceInfo Source { get; }
@@ -912,10 +963,9 @@ public partial class SourceChoiceRow : ObservableObject
     public string RelPath => Source.RelPath;
     public string TypeBadge => Source.TypeBadge;
     public string MetaText => Source.TypeText + " · " + Source.SizeText;
-    [ObservableProperty] private bool _isSelected;
 }
 
-public partial class TaskItemRow : ObservableObject
+public partial class TaskItemRow : SelectableRow
 {
     public TaskItemRow(TaskItem item) => Item = item;
     public TaskItem Item { get; }
@@ -927,7 +977,6 @@ public partial class TaskItemRow : ObservableObject
     public bool CanSelect => Item.CanSelect;
     public bool CanClearChange => Item.ConfirmClearsChange;
     public bool IsChanged => !string.IsNullOrEmpty(Item.InvalidReason);
-    [ObservableProperty] private bool _isSelected;
     public string NoteText => Item.Note ?? "";
 }
 

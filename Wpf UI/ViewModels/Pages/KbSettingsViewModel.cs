@@ -620,7 +620,7 @@ public partial class KbSettingsViewModel : ObservableObject, IUnsavedChangesGuar
 /// 知识库管理列表的一行：名称、是否当前库、是否勾选待删除。
 /// 勾选变化通过回调通知父 ViewModel 刷新批量删除按钮状态。
 /// </summary>
-public partial class KbRowViewModel : ObservableObject
+public partial class KbRowViewModel : SelectableRow
 {
     private readonly Action _onSelectionChanged;
 
@@ -633,11 +633,10 @@ public partial class KbRowViewModel : ObservableObject
     public string Name { get; }
 
     [ObservableProperty] private bool _isCurrent;
-    [ObservableProperty] private bool _isSelected;
 
     /// <summary>当前库禁用“切换”按钮。</summary>
     public bool IsNotCurrent => !IsCurrent;
 
     partial void OnIsCurrentChanged(bool value) => OnPropertyChanged(nameof(IsNotCurrent));
-    partial void OnIsSelectedChanged(bool value) => _onSelectionChanged();
+    protected override void OnSelectedChanged(bool value) => _onSelectionChanged();
 }

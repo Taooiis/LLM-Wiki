@@ -30,7 +30,9 @@ public sealed class LocalAgentService
         RaiseChanged();
     }
     private readonly object _gate = new();
-    private readonly StringBuilder _output = new();
+    private readonly Queue<string> _lines = new();
+    // 输出文本缓存:200ms 一次的 UI 拉取不再重复拼接最多 1MB 字符串
+    private string? _outputCache;
     private Process? _process;
     private DateTime _processStartedAt;
     private string _processPath = "";
@@ -53,7 +55,15 @@ public sealed class LocalAgentService
     public string StatusText { get; private set; } = "空闲";
     public string OutputText
     {
-        get { lock (_gate) return _output.ToString(); }
+        get
+        {
+            lock (_gate)
+            {
+                // 缓存未失效直接返回;仅在新行进入或截断后重建一次拼接结果
+                if (_outputCache == null) _outputCache = string.Join("\n", _lines) + (_lines.Count > 0 ? "\n" : "");
+                return _outputCache;
+            }
+        }
     }
     public bool OutputTruncated { get; private set; }
     public DateTime LastEventAt { get; private set; } = DateTime.Now;
@@ -156,7 +166,8 @@ public sealed class LocalAgentService
 
             lock (_gate)
             {
-                _output.Clear();
+                _lines.Clear();
+                _outputCache = null;
                 _outputBytes = 0;
                 _outputLines = 0;
                 OutputTruncated = false;
@@ -343,24 +354,22 @@ public sealed class LocalAgentService
         bool raise;
         lock (_gate)
         {
-            var text = display + "\n";
-            _output.Append(text);
-            _outputBytes += Encoding.UTF8.GetByteCount(text);
+            // 每行入队;超限从头部出队(O(1)),替代旧实现"逐行整体 ToString"的 O(n²) 截断
+            _lines.Enqueue(display);
+            _outputBytes += Encoding.UTF8.GetByteCount(display) + 1;
             _outputLines++;
-            while (_outputLines > 5000 || _outputBytes > 1024 * 1024)
+            _outputCache = null;
+            while (_outputLines > TuningOptions.AgentOutputMaxLines || _outputBytes > TuningOptions.AgentOutputMaxBytes)
             {
-                var content = _output.ToString();
-                var cut = content.IndexOf('\n');
-                if (cut < 0) break;
-                _output.Remove(0, cut + 1);
-                _outputBytes -= Encoding.UTF8.GetByteCount(content[..(cut + 1)]);
+                if (_lines.Count == 0) break;
+                _outputBytes -= Encoding.UTF8.GetByteCount(_lines.Dequeue()) + 1;
                 _outputLines--;
                 OutputTruncated = true;
             }
             // 首行输出立即上屏；之后按时间节流（200ms），避免流式输出刷爆 UI
             _onOutput++;
             var now = Environment.TickCount64;
-            raise = _onOutput == 1 || now - _lastUiRefreshMs >= 200;
+            raise = _onOutput == 1 || now - _lastUiRefreshMs >= TuningOptions.AgentOutputUiThrottleMs;
             if (raise) _lastUiRefreshMs = now;
         }
         if (raise) RaiseChanged();

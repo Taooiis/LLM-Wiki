@@ -63,12 +63,7 @@ public partial class OrganizeViewModel
         OnPropertyChanged(nameof(HasAttemptOutput));
     }
 
-    private void OnAgentChanged()
-    {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher == null || dispatcher.CheckAccess()) RefreshAgentState();
-        else dispatcher.BeginInvoke(RefreshAgentState);
-    }
+    private void OnAgentChanged() => Ui.Run(RefreshAgentState);
 
     private void RefreshAgentState()
     {
@@ -111,12 +106,17 @@ public partial class OrganizeViewModel
 
     private void OnAgentFinished(AgentAttempt attempt)
     {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher == null || dispatcher.CheckAccess()) FinishAgent(attempt);
-        else dispatcher.BeginInvoke(() => FinishAgent(attempt));
+        Ui.Run(() => RunFinishAgent(attempt));
     }
 
-    private void FinishAgent(AgentAttempt attempt)
+    /// <summary>事件回调入口:async void 仅在此薄包装;异常不外泄到事件源。</summary>
+    private async void RunFinishAgent(AgentAttempt attempt)
+    {
+        try { await FinishAgentAsync(attempt); }
+        catch (Exception e) { System.Diagnostics.Debug.WriteLine(e); }
+    }
+
+    private async Task FinishAgentAsync(AgentAttempt attempt)
     {
         RefreshAgentState();
         StopRunFeedback();
@@ -131,8 +131,8 @@ public partial class OrganizeViewModel
         AgentEndedNotice = true;
         OnPropertyChanged(nameof(HasAttemptOutput));
         RebuildFromTask(CurrentTask);
-        LoadWikiChanges(CurrentTask);
         ShowResult = true;
+        await LoadWikiChangesAsync(CurrentTask);
         ReloadPending();
         ReadTasks();
         _toast.ShowWarning(attempt.Detail ?? "外部程序已结束，请核对结果");

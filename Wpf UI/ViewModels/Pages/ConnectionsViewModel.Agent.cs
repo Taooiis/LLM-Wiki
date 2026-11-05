@@ -85,12 +85,7 @@ public partial class ConnectionsViewModel
     public string AgentPermissionText => AgentAllowWrite ? "允许当前库目录写操作" : "只读";
     public string AgentReadyText => AgentReady ? "本机工具已就绪：" + SelectedAgentTool : "本机工具未就绪";
 
-    private void OnAgentChanged()
-    {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher == null || dispatcher.CheckAccess()) RefreshAgentUi();
-        else dispatcher.BeginInvoke(RefreshAgentUi);
-    }
+    private void OnAgentChanged() => Ui.Run(() => RefreshAgentUi());
 
     public void LoadAgentProfile()
     {

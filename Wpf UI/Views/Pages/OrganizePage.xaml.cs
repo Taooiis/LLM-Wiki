@@ -17,6 +17,8 @@ public partial class OrganizePage
         InitializeComponent();
         _confirmDlg = (ConfirmationDialog)Resources["ConfirmDlg"];
         ViewModel.MarkVisited();
+        // 进入整理页(获得视口)时自动刷新一次待整理清单;离开页面不做事
+        IsVisibleChanged += (_, e) => ViewModel.OnPageVisibilityChanged(e.NewValue is true);
     }
 
     private void OnSelectAllClick(object sender, RoutedEventArgs e)

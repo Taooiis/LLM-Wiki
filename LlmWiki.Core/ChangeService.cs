@@ -46,6 +46,43 @@ public sealed class ChangeService
     }
 
     /// <summary>恢复一条旧记录；已有同路径记录时保留较新的，不覆盖。</summary>
+    /// <summary>
+    /// 批量登记变更:一次锁、一次读、一次写。扫描可能产生成百条变化,
+    /// 逐条 Record 会把 IO 放大成"每条一次 读-改-写";合并后只写盘一次。
+    /// 与 Record 相同:同路径同动作同哈希不刷新时间。
+    /// </summary>
+    public void RecordBatch(string kb, IEnumerable<(string Rel, string Action, string Hash)> items)
+    {
+        var paths = Paths(kb);
+        paths.EnsureStateDirs();
+        using var _ = FileLock.Acquire(Path.Combine(paths.Hidden, "changes.lock"));
+        var list = ChangeStore.Load(paths.Root);
+        var index = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < list.Count; i++) index[Normalize(list[i].File)] = i;
+
+        foreach (var (relRaw, action, hash) in items)
+        {
+            var normalized = Normalize(relRaw);
+            var hashValue = hash ?? "";
+            if (index.TryGetValue(normalized, out var i))
+            {
+                var existing = list[i];
+                if (existing.Action == action
+                    && string.Equals(existing.Hash ?? "", hashValue, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue; // 同版本重复扫描不刷新时间
+                }
+                list[i] = new Change(normalized, action, LogWriter.Now, hashValue);
+            }
+            else
+            {
+                index[normalized] = list.Count;
+                list.Add(new Change(normalized, action, LogWriter.Now, hashValue));
+            }
+        }
+        ChangeStore.SaveAll(paths.Root, list);
+    }
+
     public void Reinstate(string kb, Change change)
     {
         var paths = Paths(kb);
@@ -141,6 +178,28 @@ public sealed class ChangeService
 
     public static string Normalize(string rel) => rel.Replace('\\', '/').TrimStart('/');
 
+    // 状态栏每 2 秒轮询 + agent 输出事件都会问待整理数;文件未变化时直接返回缓存计数,
+    // 避免全程反复读盘和反序列化 changes.json。
+    private string _countCacheKey = "";
+    private DateTime _countCacheMtimeUtc;
+    private int _countCacheCount;
+
+    public int CountCached(string kb)
+    {
+        if (string.IsNullOrWhiteSpace(kb)) return 0;
+        var path = new KbPaths(Path.Combine(_config.WikisDir, kb)).Changes;
+        DateTime mtime;
+        try { mtime = File.GetLastWriteTimeUtc(path); }
+        catch { return 0; }
+        if (kb.Equals(_countCacheKey, StringComparison.Ordinal) && mtime == _countCacheMtimeUtc)
+            return _countCacheCount;
+        var count = Load(kb).Count;
+        _countCacheKey = kb;
+        _countCacheMtimeUtc = mtime;
+        _countCacheCount = count;
+        return count;
+    }
+
     private KbPaths Paths(string kb) => new(Path.Combine(_config.WikisDir, kb));
 }
 
@@ -155,7 +214,7 @@ public sealed class FileLock : IDisposable
 
     private FileLock(FileStream? stream) => _stream = stream;
 
-    public static FileLock Acquire(string lockPath, int timeoutMs = 4000)
+    public static FileLock Acquire(string lockPath, int timeoutMs = TuningOptions.FileLockTimeoutMs)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(lockPath)!);
         var deadline = Environment.TickCount64 + timeoutMs;
@@ -168,7 +227,7 @@ public sealed class FileLock : IDisposable
             }
             catch (IOException) when (Environment.TickCount64 < deadline)
             {
-                Thread.Sleep(80);
+                Thread.Sleep(TuningOptions.FileLockRetryMs);
             }
             catch (IOException)
             {

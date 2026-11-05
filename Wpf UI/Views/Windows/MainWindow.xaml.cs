@@ -94,7 +94,7 @@ public partial class MainWindow : INavigationWindow
         // 显式创建托盘图标（关闭效率模式）
         TrayIcon.ForceCreate(false);
 
-        _statusTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        _statusTimer = new System.Windows.Threading.DispatcherTimer { Interval = TuningOptions.StatusBarInterval };
         _statusTimer.Tick += (_, _) => ViewModel.RefreshStatusBar();
         _statusTimer.Start();
         ViewModel.RefreshStatusBar();

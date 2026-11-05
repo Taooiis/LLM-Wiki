@@ -589,7 +589,7 @@ public partial class SourceViewModel : ObservableObject
     public void MarkVisited() => _main.RememberPage("sources");
 }
 
-public partial class SourceRow : ObservableObject
+public partial class SourceRow : SelectableRow
 {
     public SourceRow(SourceInfo source) => Source = source;
 
@@ -599,8 +599,6 @@ public partial class SourceRow : ObservableObject
     public string TypeText => Source.TypeText;
     public string MetaText => $"{Source.TypeText} · {Source.SizeText} · {Source.ModifiedText}";
     public string TypeBadge => Source.TypeBadge;
-
-    [ObservableProperty] private bool _isSelected;
 
     public bool MatchesType(string filter)
         => filter is null or "全部" || filter == Source.CategoryText;

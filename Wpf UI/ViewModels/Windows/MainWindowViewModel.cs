@@ -231,12 +231,7 @@ public partial class MainWindowViewModel : ObservableObject
         RefreshStatusBar();
     }
 
-    private void OnShareServiceChanged()
-    {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher == null || dispatcher.CheckAccess()) RefreshStatusBar();
-        else dispatcher.BeginInvoke(RefreshStatusBar);
-    }
+    private void OnShareServiceChanged() => Ui.Run(RefreshStatusBar);
 
     partial void OnCurrentKbChanged(string value)
     {
@@ -248,7 +243,8 @@ public partial class MainWindowViewModel : ObservableObject
 
     public void RefreshStatusBar()
     {
-        PendingCount = string.IsNullOrWhiteSpace(CurrentKb) ? 0 : _changes.Load(CurrentKb).Count;
+        // CountCached:changes.json 未变化时直接用缓存计数(状态栏 2 秒轮询 + agent 事件共用)
+        PendingCount = string.IsNullOrWhiteSpace(CurrentKb) ? 0 : _changes.CountCached(CurrentKb);
         StatusPending = PendingCount > 0 ? $"{PendingCount} 项待整理" : "暂无待整理";
         StatusStorage = _config.WikisDir;
         StatusDirectory = !string.IsNullOrEmpty(StorageError) ? "目录不可访问"
@@ -259,8 +255,13 @@ public partial class MainWindowViewModel : ObservableObject
         UpdateNavBadge();
     }
 
+    // 徽标只在计数变化时才重设 Content:每 2 秒重建 NavigationViewItem 内容会让导航栏持续重绘
+    private int _lastBadgeCount = -1;
+
     private void UpdateNavBadge()
     {
+        if (PendingCount == _lastBadgeCount) return;
+        _lastBadgeCount = PendingCount;
         foreach (var item in MenuItems.OfType<NavigationViewItem>())
         {
             if (item.TargetPageType != typeof(OrganizePage)) continue;

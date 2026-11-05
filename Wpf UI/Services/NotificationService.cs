@@ -196,12 +196,7 @@ public sealed class NotificationService
         return new HashSet<string>(ids);
     }
 
-    private void RaiseChanged()
-    {
-        var dispatcher = Application.Current?.Dispatcher;
-        if (dispatcher == null || dispatcher.CheckAccess()) Changed?.Invoke();
-        else dispatcher.BeginInvoke(Changed);
-    }
+    private void RaiseChanged() => Ui.Run(() => Changed?.Invoke());
 
     public event Action? Changed;
 }

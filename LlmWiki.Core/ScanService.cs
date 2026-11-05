@@ -95,15 +95,18 @@ public sealed class ScanService(ConfigService config, ChangeService changes, Rev
 
         if (recordChanges)
         {
+            // 批量登记:一次锁+读+写,替代逐条 Record 的 N+1 写盘
+            var batch = new List<(string Rel, string Action, string Hash)>(added.Count + modified.Count + deleted.Count);
             foreach (var rel in added)
-                changes.Record(kb, rel, "新增", now[rel].Hash);
+                batch.Add((rel, "新增", now[rel].Hash));
             foreach (var rel in modified)
-                changes.Record(kb, rel, "修改", now[rel].Hash);
+                batch.Add((rel, "修改", now[rel].Hash));
             foreach (var rel in deleted)
             {
                 previous!.Files.TryGetValue(rel, out var old);
-                changes.Record(kb, rel, "删除", old?.Hash ?? "");
+                batch.Add((rel, "删除", old?.Hash ?? ""));
             }
+            changes.RecordBatch(kb, batch);
         }
 
         return new ScanResult(
@@ -181,7 +184,7 @@ public sealed class ScanService(ConfigService config, ChangeService changes, Rev
                     Hash = hash,
                 };
             }
-            Thread.Sleep(80);
+            Thread.Sleep(TuningOptions.ScanUnstableRetryMs);
         }
         return null;
     }

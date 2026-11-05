@@ -177,7 +177,6 @@ public partial class AppSettingsViewModel : ObservableObject
     private void OnAgentChanged()
     {
         // 本机任务起止影响“应用路径”可用性（06§4/D11），需在 UI 线程刷新状态。
-        var dispatcher = Application.Current?.Dispatcher;
         void Refresh()
         {
             // 任务结束后清掉“任务运行中”的就地错误，按输入重新校验。
@@ -188,8 +187,7 @@ public partial class AppSettingsViewModel : ObservableObject
             }
             SetStatus(_statusText, _statusCanApply);
         }
-        if (dispatcher == null || dispatcher.CheckAccess()) Refresh();
-        else dispatcher.BeginInvoke(Refresh);
+        Ui.Run(Refresh);
     }
 
     [RelayCommand]

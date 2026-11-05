@@ -60,9 +60,7 @@ namespace LLM_Wiki.Services
         /// </summary>
         public void Show(string title, string message, ControlAppearance appearance, TimeSpan timeout)
         {
-            var dispatcher = Application.Current?.Dispatcher;
-            if (dispatcher != null && !dispatcher.CheckAccess())
-            { dispatcher.BeginInvoke(() => Show(title, message, appearance, timeout)); return; }
+            if (!Ui.IsUi) { Ui.Run(() => Show(title, message, appearance, timeout)); return; }
             var key = title + "\n" + message;
             if (key == _lastNotice && DateTime.UtcNow - _lastNoticeAt < TimeSpan.FromSeconds(2)) return;
             _lastNotice = key; _lastNoticeAt = DateTime.UtcNow;
@@ -84,9 +82,7 @@ namespace LLM_Wiki.Services
             object? actionParameter = null,
             TimeSpan? timeout = null)
         {
-            var dispatcher = Application.Current?.Dispatcher;
-            if (dispatcher != null && !dispatcher.CheckAccess())
-            { dispatcher.BeginInvoke(() => ShowWithAction(title, message, appearance, actionLabel, actionCommand, actionParameter, timeout)); return; }
+            if (!Ui.IsUi) { Ui.Run(() => ShowWithAction(title, message, appearance, actionLabel, actionCommand, actionParameter, timeout)); return; }
             if (_presenter == null) { Show(title, message, appearance, timeout ?? TimeSpan.FromSeconds(8)); return; }
             var button = new Wpf.Ui.Controls.Button { Content = actionLabel, Appearance = ControlAppearance.Transparent, VerticalAlignment = VerticalAlignment.Center };
             button.Click += (_, _) =>

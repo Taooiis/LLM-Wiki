@@ -146,30 +146,15 @@ public partial class ConnectionsViewModel : ObservableObject
         NotifyServiceCommands();
     }
 
-    private void OnShareChanged()
-    {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher == null || dispatcher.CheckAccess()) RefreshShare();
-        else dispatcher.BeginInvoke(RefreshShare);
-    }
+    private void OnShareChanged() => Ui.Run(RefreshShare);
 
-    private void OnMcpChanged()
-    {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher == null || dispatcher.CheckAccess()) RefreshMcp();
-        else dispatcher.BeginInvoke(RefreshMcp);
-    }
+    private void OnMcpChanged() => Ui.Run(RefreshMcp);
 
     public void MarkVisited() => _main.RememberPage("connections");
 
     public void RefreshShare()
     {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher != null && !dispatcher.CheckAccess())
-        {
-            dispatcher.BeginInvoke(RefreshShare);
-            return;
-        }
+        if (!Ui.IsUi) { Ui.Run(RefreshShare); return; }
         SelectedKb = _main.CurrentKb;
         ShareRunning = _share.Running;
         ShareBoundKb = _share.BoundKb;
@@ -189,12 +174,7 @@ public partial class ConnectionsViewModel : ObservableObject
 
     public void RefreshMcp()
     {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher != null && !dispatcher.CheckAccess())
-        {
-            dispatcher.BeginInvoke(RefreshMcp);
-            return;
-        }
+        if (!Ui.IsUi) { Ui.Run(RefreshMcp); return; }
         McpRunning = _mcp.Running;
         McpWriteEnabled = _mcp.Running && _mcp.Policy.WriteEnabled;
         McpAllowLan = _mcp.AllowLan;
