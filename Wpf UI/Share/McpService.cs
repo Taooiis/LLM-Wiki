@@ -79,7 +79,7 @@ public sealed class McpService
 
     public bool Running => _app != null;
 
-    /// <summary>本次 MCP 会话绑定的库；不随桌面当前库切换。</summary>
+    /// <summary>本次 MCP 会话绑定的库；桌面切库时经 <see cref="SwitchKb"/> 热切换跟随。</summary>
     public string BoundKb { get; private set; } = "";
 
     public int Port { get; private set; } = DefaultPort;
@@ -271,6 +271,22 @@ public sealed class McpService
     }
 
     public void Stop() => StopAsync().GetAwaiter().GetResult();
+
+    /// <summary>
+    /// MCP 绑定库跟随桌面当前库热切换：只原子更新授权与上下文，
+    /// 不重启 Kestrel、令牌不变、Agent 连接不断，下一次工具调用即访问新库。
+    /// 服务未运行或新库无效时不动作；库不存在保持原绑定，由调用方 UI 呈现真实状态。
+    /// </summary>
+    public void SwitchKb(string kb)
+    {
+        if (!Running) return;
+        if (string.IsNullOrWhiteSpace(kb) || !Directory.Exists(Path.Combine(_config.WikisDir, kb))) return;
+        if (BoundKb.Equals(kb, StringComparison.OrdinalIgnoreCase)) return;
+        BoundKb = kb;
+        Policy.AuthorizedKb = kb;
+        Context.CurrentKb = kb;
+        RaiseChanged();
+    }
 
     /// <summary><see cref="Stop"/> 的异步版本：等待后台清理完成，不阻塞调用方 UI 线程。</summary>
     public async Task StopAsync()

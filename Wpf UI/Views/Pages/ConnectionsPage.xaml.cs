@@ -39,14 +39,6 @@ public partial class ConnectionsPage
             "保持原范围",
             danger: false,
             dialogWidth: 640);
-        ViewModel.ConfirmReplaceMcpRange = async () => await _confirmDlg.ShowAsync(
-            "更换 MCP 授权库将停止当前 MCP 服务并以新库重启。",
-            "更换正在对外服务的库",
-            "更换并重启服务",
-            "保持原范围",
-            danger: false,
-            dialogWidth: 640,
-            detail: "旧连接与已建立的会话将失效；不影响其他独立服务（如浏览分享）。");
         ViewModel.ConfirmEnableLan = async kb => await _confirmDlg.ShowAsync(
             $"授权库：{kb}\n监听范围将从仅本机回环改为局域网地址。仅限可信网络使用，客户端仍需令牌；不会连带开启写入。",
             "允许局域网访问此 MCP 服务？",

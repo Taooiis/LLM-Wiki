@@ -57,7 +57,6 @@ public partial class ConnectionsViewModel : ObservableObject
     public Func<string, Task<bool>>? ConfirmRegeneratePin { get; set; }
     public Func<string, Task<bool>>? ConfirmRegenerateToken { get; set; }
     public Func<string, Task<bool>>? ConfirmReplaceShareRange { get; set; }
-    public Func<Task<bool>>? ConfirmReplaceMcpRange { get; set; }
     public Func<string, Task<bool>>? ConfirmEnableLan { get; set; }
 
     [ObservableProperty] private int _activeTab;
@@ -89,7 +88,6 @@ public partial class ConnectionsViewModel : ObservableObject
 
     public bool HasKb => _main.HasKb;
     public bool ShareBoundElsewhere => ShareRunning && !ShareBoundKb.Equals(SelectedKb, StringComparison.OrdinalIgnoreCase);
-    public bool McpBoundElsewhere => McpRunning && !_mcp.BoundKb.Equals(SelectedKb, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>端口输入是否合法（0-65535；0 = 系统分配）。为空或越界时启动按钮禁用（字段反馈）。</summary>
     public bool SharePortValid => SharePortInput is >= 0 and <= 65535;
@@ -141,6 +139,10 @@ public partial class ConnectionsViewModel : ObservableObject
         SelectedKb = _main.CurrentKb;
         RefreshShare();
         RefreshMcp();
+        // MCP 绑定库已随当前库热切换：提示新绑定与真实权限档，写档跨库保持需明确可见
+        if (_mcp.Running && !string.IsNullOrWhiteSpace(_mcp.BoundKb))
+            _toast.ShowSuccess($"MCP 已跟随切换到：{_mcp.BoundKb}"
+                + (_mcp.Policy.WriteEnabled ? "（写入档仍开启）" : "（只读）"));
         BoundaryPrompt = string.IsNullOrWhiteSpace(SelectedKb) ? "" : _prompts.ComposeBoundary(SelectedKb, _main.CurrentKbRoot);
         OnPropertyChanged(nameof(HasKb));
         NotifyServiceCommands();
@@ -195,7 +197,6 @@ public partial class ConnectionsViewModel : ObservableObject
         OnPropertyChanged(nameof(McpLanHint));
         OnPropertyChanged(nameof(McpClientConfigTitle));
         OnPropertyChanged(nameof(McpStatusHint));
-        OnPropertyChanged(nameof(McpBoundElsewhere));
         OnPropertyChanged(nameof(ShareBoundElsewhere));
     }
 
@@ -211,7 +212,6 @@ public partial class ConnectionsViewModel : ObservableObject
         OpenShareAddressCommand.NotifyCanExecuteChanged();
         StartMcpReadOnlyCommand.NotifyCanExecuteChanged();
         StopMcpCommand.NotifyCanExecuteChanged();
-        ReplaceMcpRangeCommand.NotifyCanExecuteChanged();
         ToggleMcpWriteCommand.NotifyCanExecuteChanged();
         ToggleMcpLanCommand.NotifyCanExecuteChanged();
         RegenerateReadTokenCommand.NotifyCanExecuteChanged();
@@ -242,7 +242,6 @@ public partial class ConnectionsViewModel : ObservableObject
     private bool CanUseShareAddress() => ShareRunning;
     private bool CanStartMcpReadOnly() => HasKb && !McpRunning && !McpBusy;
     private bool CanStopMcp() => McpRunning && !McpBusy;
-    private bool CanReplaceMcpRange() => McpBoundElsewhere && !McpBusy;
     private bool CanToggleMcpWrite() => McpRunning && !McpBusy;
     private bool CanToggleMcpLan() => !McpBusy && (McpRunning || HasKb);
     private bool CanRotateTokens() => McpRunning;
@@ -385,32 +384,7 @@ public partial class ConnectionsViewModel : ObservableObject
         }
     }
 
-    /// <summary>D10：运行时更换 MCP 授权库，先确认再停止并以新库重启（04§11.1 L171）。</summary>
-    [RelayCommand(CanExecute = nameof(CanReplaceMcpRange))]
-    private async Task ReplaceMcpRangeAsync()
-    {
-        if (!HasKb) return;
-        if (ConfirmReplaceMcpRange != null && !await ConfirmReplaceMcpRange()) return;
-        McpBusy = true;
-        try
-        {
-            if (await _mcp.SetModeAsync(_main.CurrentKb, McpMode.ReadOnly))
-            {
-                RefreshMcp();
-                _toast.ShowSuccess("MCP 已改为绑定：" + _main.CurrentKb + "（只读）");
-            }
-            else
-            {
-                // 停止后新范围启动失败：显示已停止与真实错误，不假称恢复原服务。
-                RefreshMcp();
-                _toast.ShowError("更换绑定库失败：" + _mcp.LastError);
-            }
-        }
-        finally
-        {
-            McpBusy = false;
-        }
-    }
+
 
     [RelayCommand(CanExecute = nameof(CanToggleMcpWrite))]
     private async Task ToggleMcpWriteAsync()

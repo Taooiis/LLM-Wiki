@@ -203,6 +203,8 @@ public partial class MainWindowViewModel : ObservableObject
     public void SetCurrentKb(string kb)
     {
         if (string.Equals(CurrentKb, kb, StringComparison.Ordinal)) return;
+        // MCP 绑定库跟随当前库热切换；先于 CurrentKb 赋值，UI 首次刷新即读到新绑定
+        _mcp.SwitchKb(kb);
         CurrentKb = kb;
         _config.SetLastKb(kb);
         UpdateKbState();
