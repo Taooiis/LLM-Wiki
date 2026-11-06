@@ -26,7 +26,7 @@ html { scrollbar-color: var(--border-strong) var(--bg); }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: #C7D2E0; border-radius: 8px; border: 3px solid transparent; background-clip: content-box; }
 ::-webkit-scrollbar-thumb:hover { background-color: #A9B9CE; }
-body { margin: 0; min-height: 100dvh; display: flex; flex-direction: column; background: var(--bg); color: var(--text-1); font-family: var(--font-ui); font-size: var(--fs-md); line-height: 1.6; -webkit-font-smoothing: antialiased; caret-color: var(--accent); }
+body { margin: 0; height: 100dvh; display: flex; flex-direction: column; background: var(--bg); color: var(--text-1); font-family: var(--font-ui); font-size: var(--fs-md); line-height: 1.6; -webkit-font-smoothing: antialiased; caret-color: var(--accent); }
 ::selection { background: color-mix(in srgb, var(--accent) 20%, transparent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 h1, h2 { margin: 0; font-weight: 650; letter-spacing: -0.01em; overflow-wrap: break-word; text-wrap: balance; }
@@ -45,7 +45,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .bar select:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
 .bar select:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.pane { flex: 1; display: flex; align-items: stretch; height: calc(100dvh - 96px); }
+/* 头部（横幅+选择栏）不参与滚动；pane 占满剩余高度，min-height:0 让内部滚动生效而不是撑破整页 */
+.pane { flex: 1; display: flex; align-items: stretch; min-height: 0; }
 .tree { flex: 0 0 280px; overflow-y: auto; border-right: 1px solid var(--border); padding: var(--sp-4); background: var(--surface); }
 .tree h2 { font-size: var(--fs-xs); font-weight: 600; color: var(--text-3); margin: 0 0 var(--sp-2); }
 .tree ul { list-style: none; padding-left: 14px; margin: var(--sp-1) 0; border-left: 1px solid var(--border); }
@@ -55,6 +56,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tree a { color: var(--text-1); text-decoration: none; cursor: pointer; }
 .tree a:hover { color: var(--accent-text); }
 .tree a:active { color: var(--accent); }
+.tree input[type="search"] { width: 100%; margin: 0 0 var(--sp-2); min-height: 32px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--text-1); font-size: var(--fs-2); transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out); }
+.tree input[type="search"]:hover { border-color: var(--border-hover); }
+.tree input[type="search"]:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+.tree mark { background: #FFE9A8; color: inherit; border-radius: 2px; padding: 0 1px; }
 
 .doc { flex: 1; overflow-y: auto; padding: var(--sp-8); }
 .doc-inner { max-width: 760px; margin-inline: auto; line-height: 1.75; }
@@ -63,11 +68,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .doc h3 { font-size: var(--fs-lg); font-weight: 650; margin: var(--sp-4) 0 var(--sp-2); }
 .doc h4, .doc h5, .doc h6 { font-size: var(--fs-md); font-weight: 600; margin: var(--sp-3) 0 var(--sp-2); }
 .doc a { color: var(--accent-text); }
+.doc .dl { display: inline-block; padding: 5px 14px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--accent-text); text-decoration: none; font-size: var(--fs-2); font-weight: 500; transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out); }
+.doc .dl:hover { border-color: var(--accent); background: var(--accent-subtle); }
 .doc li { margin: var(--sp-1) 0; }
 .empty { color: var(--text-3); text-align: center; padding: var(--sp-6) var(--sp-4); font-size: var(--fs-2); }
 
 @media (max-width: 48rem) {
-  .pane { flex-direction: column; height: auto; }
+  body { height: auto; } /* 窄屏恢复整页滚动：单列布局下双栏独立滚动反而难用 */
+  .pane { flex-direction: column; }
   .tree { flex: none; max-height: 40dvh; border-right: 0; border-bottom: 1px solid var(--border); }
   .doc { padding: var(--sp-4); }
 }
@@ -84,6 +92,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 <div class="pane">
   <nav class="tree" aria-label="目录">
     <h2>目录</h2>
+    <input id="treeSearch" type="search" placeholder="按文件名筛选…" aria-label="按文件名筛选目录" oninput="onSearch(this.value)">
     <div id="tree" class="empty">先选择知识库</div>
   </nav>
   <article class="doc" id="doc"><div class="doc-inner"><p class="empty">选择知识库浏览内容</p></div></article>
@@ -121,21 +130,57 @@ function renderMarkdown(md) {
   return '<div class="doc-inner">' + html + '</div>';
 }
 
-function renderItems(nodes, base) {
+// 树节点路径一律用服务端返回的 rel（相对库根，含 raw/sources/ 前缀）；
+// 以前用 base+n.name 自拼会丢前缀，被服务端白名单 400 拒掉，正文渲染成空白。
+function renderItems(nodes, kw) {
   return (nodes || []).map(n => n.type === 'dir'
-    ? '<li>' + esc(n.name) + (n.children && n.children.length ? renderChildren(n.children, base + n.name + '/') : '') + '</li>'
-    : '<li><a tabindex="0" data-path="' + esc(base + n.name) + '" onclick="openFile(this.dataset.path)">' + esc(n.name) + '</a></li>'
+    ? '<li>' + esc(n.name) + (n.children && n.children.length ? renderChildren(n.children, kw) : '') + '</li>'
+    : '<li><a tabindex="0" data-path="' + esc(n.rel || '') + '" onclick="openFile(this.dataset.path)">' + hi(n.name, kw) + '</a></li>'
   ).join('');
 }
 
-function renderChildren(nodes, base) {
-  return '<ul>' + renderItems(nodes, base) + '</ul>';
+function renderChildren(nodes, kw) {
+  return '<ul>' + renderItems(nodes, kw) + '</ul>';
 }
 
-function renderTree(nodes) {
+// —— 按文件名模糊筛选（纯前端：树已整体在内存，无需服务端接口）——
+let searchKw = '';
+
+// 保留命中文件及其父目录链；目录本身不参与匹配，空关键字返回原树
+function filterTree(nodes, kw) {
+  if (!kw) return nodes;
+  kw = kw.toLowerCase(); // 与文件名的 toLowerCase 配对，不依赖调用方先归一化
+  const out = [];
+  for (const n of nodes || []) {
+    if (n.type === 'dir') {
+      const kids = filterTree(n.children, kw);
+      if (kids.length) out.push({ ...n, children: kids });
+    } else if (n.name.toLowerCase().includes(kw)) {
+      out.push(n);
+    }
+  }
+  return out;
+}
+
+// 文件名高亮：先 esc 再替换转义后的关键字，不破坏 HTML 转义；正则特殊字符需转义
+function hi(name, kw) {
+  const e = esc(name);
+  const k = esc(kw).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return k ? e.replace(new RegExp(k, 'gi'), m => '<mark>' + m + '</mark>') : e;
+}
+
+function onSearch(v) {
+  searchKw = v;
+  renderTree();
+}
+
+function renderTree() {
   const el = document.getElementById('tree');
   if (!treeData.length) { el.innerHTML = '<div class="empty">本库目录为空</div>'; return; }
-  el.innerHTML = '<ul>' + renderItems(nodes, '') + '</ul>';
+  const kw = searchKw.trim().toLowerCase();
+  const nodes = kw ? filterTree(treeData, kw) : treeData;
+  if (!nodes.length) { el.innerHTML = '<div class="empty">没有匹配“' + esc(searchKw.trim()) + '”的文档</div>'; return; }
+  el.innerHTML = '<ul>' + renderItems(nodes, kw) + '</ul>';
 }
 
 function onKb() {
@@ -146,21 +191,41 @@ function onKb() {
   fetch('/api/tree?kb=' + encodeURIComponent(k))
     .then(gate)
     .then(r => r.json())
-    .then(d => { treeData = d.tree || []; renderTree(treeData); })
+    .then(d => { treeData = d.tree || []; renderTree(); })
     .catch(() => { document.getElementById('tree').innerHTML = '<div class="empty">目录加载失败，请刷新重试</div>'; });
+}
+
+// 与服务端 SourceRules.IsText（SourceFormatRegistry EditAsText）对齐：这些格式直接预览，其余显示原件信息+下载
+const TEXT_EXTS = ['md','markdown','txt','log','csv','tsv','json','jsonl','xml','yaml','yml','toml','ini'];
+
+function dlUrl(k, name) {
+  return '/download?kb=' + encodeURIComponent(k) + '&path=' + encodeURIComponent(name);
 }
 
 function openFile(name) {
   const k = document.getElementById('kbSelect').value;
-  const lower = name.toLowerCase();
-  if (lower.endsWith('.docx') || lower.endsWith('.xlsx')) {
-    location.href = '/download?kb=' + encodeURIComponent(k) + '&path=' + encodeURIComponent(name);
+  const doc = document.getElementById('doc');
+  const ext = name.split('.').pop().toLowerCase();
+  // 非文本格式：无已验证网页预览器 → 按设计显示原件信息与下载（不转换、不注入页面）
+  if (!TEXT_EXTS.includes(ext)) {
+    doc.innerHTML = '<div class="doc-inner"><h1>' + esc(name) + '</h1>'
+      + '<p class="empty">该格式暂不支持网页预览，可下载原件查看。</p>'
+      + '<p><a class="dl" href="' + dlUrl(k, name) + '">下载原件</a></p></div>';
     return;
   }
+  doc.innerHTML = '<div class="doc-inner"><div class="empty">加载中…</div></div>';
   fetch('/api/file?kb=' + encodeURIComponent(k) + '&path=' + encodeURIComponent(name))
     .then(gate)
-    .then(r => r.text())
-    .then(md => { document.getElementById('doc').innerHTML = renderMarkdown(md); })
+    .then(r => {
+      // 400/404 不能静默当成空内容渲染（否则正文无提示地变空白）
+      if (!r.ok) throw new Error('http-' + r.status);
+      return r.text();
+    })
+    .then(md => {
+      // 正文顶部放下载入口：分享范围内所有源文档都提供原格式下载
+      document.getElementById('doc').innerHTML = renderMarkdown(md)
+        .replace('<div class="doc-inner">', '<div class="doc-inner"><p><a class="dl" href="' + dlUrl(k, name) + '">下载原件</a></p>');
+    })
     .catch(() => { document.getElementById('doc').innerHTML = '<div class="doc-inner"><div class="empty">文件读取失败，请刷新重试</div></div>'; });
 }
 

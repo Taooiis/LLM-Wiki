@@ -189,6 +189,9 @@ public partial class MainWindow : INavigationWindow
 
     private void OnStatusTaskClick(object sender, RoutedEventArgs e) => ViewModel.NavigateTo("organize");
 
+    /// <summary>状态栏浏览分享 / MCP 入口：跳连接与分享页（服务启停都在那里）。</summary>
+    private void OnStatusConnectionsClick(object sender, RoutedEventArgs e) => ViewModel.NavigateTo("connections");
+
     private void OnTopSearchKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Enter)

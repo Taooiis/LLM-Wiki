@@ -76,6 +76,7 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string _statusStorage = "";
     [ObservableProperty] private string _statusDirectory = "目录正常";
     [ObservableProperty] private string _statusShare = "浏览分享：关闭";
+    [ObservableProperty] private string _statusMcp = "MCP：关闭";
     [ObservableProperty] private string _statusAi = "AI：未连接";
     [ObservableProperty] private string _storageError = "";
     [ObservableProperty] private string _statusPending = "";
@@ -253,6 +254,8 @@ public partial class MainWindowViewModel : ObservableObject
             : HasKb ? "目录正常"
             : string.IsNullOrWhiteSpace(CurrentKb) ? "未选择知识库" : "目录不可访问";
         StatusShare = _share.Running ? $"浏览分享：{_share.BoundKb}" : "浏览分享：关闭";
+        // MCP 状态：无 Changed 事件，靠状态栏 2 秒轮询刷新（启停只在连接页操作，延迟可接受）
+        StatusMcp = _mcp.Running ? $"MCP：{_mcp.BoundKb}" : "MCP：关闭";
         StatusAi = _agent.IsRunning ? "本机任务：运行中" : "本机任务：空闲";
         UpdateNavBadge();
     }

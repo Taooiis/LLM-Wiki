@@ -146,6 +146,8 @@
           <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="*" />
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
@@ -157,12 +159,30 @@
         <TextBlock Grid.Column="1" Margin="20,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
           <Run Text="{Binding ViewModel.StatusPending, Mode=OneWay}" />
         </TextBlock>
-        <TextBlock Grid.Column="2" Margin="20,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-          <Run Text="{Binding ViewModel.StatusShare, Mode=OneWay}" />
-        </TextBlock>
-        <!-- 本机任务入口：可点，跳转整理页任务（00§6 状态栏） -->
+        <!-- 浏览分享 / MCP：常驻服务状态，点击跳连接与分享页（设计 04§8：范围变化全局可见） -->
+        <ui:Button
+          Grid.Column="2"
+          Margin="20,0,0,0"
+          Padding="4,0"
+          HorizontalAlignment="Left"
+          VerticalAlignment="Center"
+          Appearance="Transparent"
+          Content="{Binding ViewModel.StatusShare, Mode=OneWay}"
+          Click="OnStatusConnectionsClick"
+          ToolTip="浏览分享服务状态（连接与分享页）" />
         <ui:Button
           Grid.Column="3"
+          Margin="20,0,0,0"
+          Padding="4,0"
+          HorizontalAlignment="Left"
+          VerticalAlignment="Center"
+          Appearance="Transparent"
+          Content="{Binding ViewModel.StatusMcp, Mode=OneWay}"
+          Click="OnStatusConnectionsClick"
+          ToolTip="MCP 连接状态（连接与分享页）" />
+        <!-- 本机任务入口：可点，跳转整理页任务（00§6 状态栏） -->
+        <ui:Button
+          Grid.Column="4"
           Margin="20,0,0,0"
           Padding="4,0"
           HorizontalAlignment="Left"
@@ -171,7 +191,7 @@
           Content="{Binding ViewModel.StatusAi, Mode=OneWay}"
           Click="OnStatusTaskClick"
           ToolTip="查看本机任务（整理页）" />
-        <TextBlock Grid.Column="4" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="{Binding ViewModel.AppVersion, Mode=OneWay}" />
+        <TextBlock Grid.Column="6" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="{Binding ViewModel.AppVersion, Mode=OneWay}" />
       </Grid>
     </Border>
 
